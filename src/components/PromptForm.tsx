@@ -11,7 +11,6 @@ import { Button } from "@/components/ui/button"
 import {
   Form,
   FormControl,
-  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -253,9 +252,6 @@ export function PromptForm() {
                         {...field} 
                       />
                     </FormControl>
-                    <FormDescription className="text-gray-500 dark:text-gray-400">
-                      Be detailed about what you want to generate.
-                    </FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -330,12 +326,6 @@ export function PromptForm() {
                   )}
                 </Button>
               </div>
-              
-              {pendingGenerations.length > 0 && (
-                <div className="mt-2 text-sm text-blue-600 dark:text-blue-400 text-center">
-                  {pendingGenerations.length} {pendingGenerations.length === 1 ? 'generation' : 'generations'} in progress
-                </div>
-              )}
             </form>
           </Form>
         </div>
