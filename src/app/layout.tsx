@@ -4,6 +4,8 @@ import "./globals.css";
 import { NavBar } from "@/components/NavBar";
 import { GenerationProvider } from "@/context/GenerationContext";
 import { Toaster } from "@/components/ui/sonner";
+import { ThemeProvider } from "@/components/theme-provider";
+import { ModeToggle } from "@/components/mode-toggle";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -18,17 +20,28 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <body className={inter.className}>
-        <GenerationProvider>
-          <div className="flex min-h-screen flex-col">
-            <NavBar />
-            <main className="flex-1">
-              {children}
-            </main>
-          </div>
-          <Toaster />
-        </GenerationProvider>
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="system"
+          enableSystem
+          disableTransitionOnChange
+        >
+          <GenerationProvider>
+            <div className="fixed top-6 right-6 z-[100] pointer-events-auto">
+              <ModeToggle />
+            </div>
+            
+            <div className="flex min-h-screen flex-col relative">
+              <NavBar />
+              <main className="flex-1">
+                {children}
+              </main>
+            </div>
+            <Toaster />
+          </GenerationProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

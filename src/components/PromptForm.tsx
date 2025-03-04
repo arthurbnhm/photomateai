@@ -208,16 +208,16 @@ export function PromptForm() {
     <div className="w-full mb-8">
       <h2 className="text-2xl font-bold mb-6">Generate Image</h2>
       
-      <div className="w-full bg-white border border-gray-200 rounded-xl overflow-hidden shadow-lg">
+      <div className="w-full bg-card border border-border rounded-xl overflow-hidden shadow-lg">
         {hasPendingGenerationsOnReload && (
-          <div className="m-5 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+          <div className="m-5 p-3 bg-yellow-50 dark:bg-yellow-950 border border-yellow-200 dark:border-yellow-800 rounded-lg">
             <div className="flex items-start">
               <AlertCircle className="h-5 w-5 text-yellow-500 mt-0.5 mr-2" />
               <div>
-                <p className="text-sm text-yellow-800">
+                <p className="text-sm text-yellow-800 dark:text-yellow-300">
                   Some image generations were in progress when the page was reloaded.
                 </p>
-                <p className="text-xs text-yellow-600 mt-1">
+                <p className="text-xs text-yellow-600 dark:text-yellow-400 mt-1">
                   These generations might not complete. You can continue to create new images.
                 </p>
                 <div className="mt-2">
@@ -244,11 +244,11 @@ export function PromptForm() {
                 name="prompt"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="text-gray-800">Prompt</FormLabel>
+                    <FormLabel className="text-foreground">Prompt</FormLabel>
                     <FormControl>
                       <Input 
                         placeholder="Describe your image..." 
-                        className="bg-white border-gray-300" 
+                        className="bg-background border-input" 
                         {...field} 
                       />
                     </FormControl>
@@ -264,10 +264,10 @@ export function PromptForm() {
                     name="aspectRatio"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel className="text-gray-800">Aspect Ratio</FormLabel>
+                        <FormLabel className="text-foreground">Aspect Ratio</FormLabel>
                         <Select onValueChange={field.onChange} defaultValue={field.value}>
                           <FormControl>
-                            <SelectTrigger className="bg-white border-gray-300">
+                            <SelectTrigger className="bg-background border-input">
                               <SelectValue placeholder="Select aspect ratio" />
                             </SelectTrigger>
                           </FormControl>
@@ -289,17 +289,16 @@ export function PromptForm() {
                     name="outputFormat"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel className="text-gray-800">Format</FormLabel>
+                        <FormLabel className="text-foreground">Format</FormLabel>
                         <Select onValueChange={field.onChange} defaultValue={field.value}>
                           <FormControl>
-                            <SelectTrigger className="bg-white border-gray-300">
+                            <SelectTrigger className="bg-background border-input">
                               <SelectValue placeholder="Select format" />
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
                             <SelectItem value="png">PNG</SelectItem>
                             <SelectItem value="jpg">JPG</SelectItem>
-                            <SelectItem value="webp">WebP</SelectItem>
                           </SelectContent>
                         </Select>
                         <FormMessage />
@@ -310,17 +309,14 @@ export function PromptForm() {
                 
                 <Button 
                   type="submit" 
-                  className="w-full md:w-auto md:px-8 bg-black hover:bg-gray-900 text-white"
+                  className="w-full md:w-auto"
                   disabled={submitting}
                 >
                   {submitting ? (
-                    <span className="flex items-center gap-2">
-                      <svg className="w-4 h-4 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                      </svg>
-                      <span>Generating</span>
-                    </span>
+                    <>
+                      <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                      Generating...
+                    </>
                   ) : (
                     "Generate Image"
                   )}
@@ -332,42 +328,12 @@ export function PromptForm() {
       </div>
       
       {error && (
-        <div className="w-full bg-red-50 border border-red-200 rounded-lg p-4 mt-4">
-          <div className="flex items-start">
-            <div className="flex-shrink-0">
-              <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-              </svg>
-            </div>
-            <div className="ml-3">
-              <h3 className="text-sm font-medium text-red-800">Error generating image</h3>
-              <div className="mt-2 text-sm text-red-700 whitespace-pre-wrap">
-                {error}
-              </div>
-              {errorDetails && (
-                <div className="mt-2 text-xs text-red-600 whitespace-pre-wrap">
-                  {errorDetails}
-                </div>
-              )}
-              <div className="mt-4">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    setError(null);
-                    setErrorDetails(null);
-                    form.handleSubmit(onSubmit)();
-                  }}
-                  className="inline-flex items-center"
-                  disabled={submitting}
-                >
-                  <RefreshCw className="mr-2 h-4 w-4" />
-                  Retry
-                </Button>
-              </div>
-            </div>
-          </div>
+        <div className="mt-4 p-4 bg-destructive/10 border border-destructive/20 rounded-lg">
+          <h3 className="text-lg font-semibold text-destructive mb-1">Error</h3>
+          <p className="text-sm text-destructive/90">{error}</p>
+          {errorDetails && (
+            <p className="text-xs text-destructive/80 mt-1">{errorDetails}</p>
+          )}
         </div>
       )}
     </div>
