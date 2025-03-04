@@ -171,7 +171,7 @@ export function ImageHistory() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.3 }}
               >
-                <Card className="overflow-hidden border-indigo-200 dark:border-indigo-800 shadow-md hover:shadow-lg transition-shadow duration-300">
+                <Card className="overflow-hidden border-primary/20 shadow-md hover:shadow-lg transition-shadow duration-300">
                   <CardHeader className="p-4 pb-0 space-y-0">
                     {/* All controls in a single horizontal line */}
                     <div className="flex items-center justify-between gap-3">
@@ -193,12 +193,12 @@ export function ImageHistory() {
                           {generation.potentiallyStalled ? (
                             <>
                               <span className="inline-block w-2.5 h-2.5 bg-amber-500 rounded-full animate-pulse"></span>
-                              <span className="text-sm font-medium text-amber-600">Stalled</span>
+                              <span className="text-sm font-medium text-amber-500">Stalled</span>
                             </>
                           ) : (
                             <>
-                              <span className="inline-block w-2.5 h-2.5 bg-indigo-500 rounded-full animate-pulse"></span>
-                              <span className="text-sm font-medium text-indigo-600">Generating</span>
+                              <span className="inline-block w-2.5 h-2.5 bg-primary rounded-full animate-pulse"></span>
+                              <span className="text-sm font-medium text-primary">Generating</span>
                             </>
                           )}
                         </div>
@@ -210,7 +210,7 @@ export function ImageHistory() {
                               e.stopPropagation();
                               clearPendingGeneration(generation.id);
                             }}
-                            className="ml-2 text-xs font-medium px-2 py-1 bg-red-50 dark:bg-red-950 text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 rounded-md transition-colors duration-200 cursor-pointer"
+                            className="ml-2 text-xs font-medium px-2 py-1 bg-destructive/10 text-destructive hover:bg-destructive/20 hover:text-destructive rounded-md transition-colors duration-200 cursor-pointer"
                           >
                             Clear
                           </button>
@@ -228,11 +228,11 @@ export function ImageHistory() {
                       {Array.from({ length: 4 }).map((_, index) => (
                         <div 
                           key={index} 
-                          className="aspect-square bg-gradient-to-br from-indigo-50 to-purple-50 dark:from-indigo-950 dark:to-purple-950 rounded-lg flex items-center justify-center shadow-sm overflow-hidden"
+                          className="aspect-square bg-gradient-to-br from-primary/5 to-primary/10 rounded-lg flex items-center justify-center shadow-sm overflow-hidden"
                         >
                           <div className="relative w-full h-full flex items-center justify-center">
-                            <div className="absolute inset-0 bg-gradient-to-br from-indigo-100/50 to-purple-100/50 dark:from-indigo-900/50 dark:to-purple-900/50 animate-pulse"></div>
-                            <svg className="w-10 h-10 animate-spin text-indigo-500 dark:text-indigo-400 relative z-10" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <div className="absolute inset-0 bg-gradient-to-br from-primary/10 to-primary/20 animate-pulse"></div>
+                            <svg className="w-10 h-10 animate-spin text-primary relative z-10" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                             </svg>
@@ -249,9 +249,9 @@ export function ImageHistory() {
       )}
       
       {!isLoading && error ? (
-        <div className="bg-red-50 dark:bg-red-950/50 border border-red-200 dark:border-red-800 rounded-lg p-4">
-          <p className="text-red-800 dark:text-red-300">{error}</p>
-          <p className="text-sm text-red-600 dark:text-red-400 mt-2">Using client-side history as fallback.</p>
+        <div className="bg-destructive/10 border border-destructive/30 rounded-lg p-4">
+          <p className="text-destructive">{error}</p>
+          <p className="text-sm text-destructive/80 mt-2">Using client-side history as fallback.</p>
         </div>
       ) : !isLoading && generations.length === 0 && pendingGenerations.length === 0 ? (
         <div className="bg-muted/50 border border-border rounded-lg p-6 text-center">
@@ -269,7 +269,7 @@ export function ImageHistory() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.3 }}
             >
-              <Card className="overflow-hidden border-border shadow-md hover:shadow-lg transition-shadow duration-300">
+              <Card className="overflow-hidden border-primary/20 shadow-md hover:shadow-lg transition-shadow duration-300">
                 <CardHeader className="p-4 pb-0 space-y-0">
                   {/* All controls in a single horizontal line */}
                   <div className="flex items-center justify-between gap-3">
@@ -292,11 +292,11 @@ export function ImageHistory() {
                         size="sm"
                         onClick={() => handleDelete(generation.id)}
                         disabled={isDeleting === generation.id}
-                        className="flex items-center gap-1.5 ml-2 hover:bg-red-50 dark:hover:bg-red-950 hover:text-red-600 dark:hover:text-red-400 disabled:opacity-70"
+                        className="flex items-center gap-1.5 ml-2 hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30 disabled:opacity-70"
                       >
                         {isDeleting === generation.id ? (
                           <>
-                            <svg className="animate-spin h-4 w-4 mr-1.5 text-red-500 dark:text-red-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <svg className="animate-spin h-4 w-4 mr-1.5 text-destructive" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                             </svg>
@@ -328,7 +328,7 @@ export function ImageHistory() {
                         key={index} 
                         className="aspect-square relative overflow-hidden rounded-lg shadow-sm hover:shadow-md transition-all duration-300 group"
                       >
-                        <div className="absolute inset-0 bg-gradient-to-br from-violet-500/10 to-indigo-500/10 dark:from-violet-500/20 dark:to-indigo-500/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-10"></div>
+                        <div className="absolute inset-0 bg-gradient-to-br from-primary/10 to-primary/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-10"></div>
                         <img 
                           src={image} 
                           alt={`Generated image ${index + 1} for "${generation.prompt}"`}
