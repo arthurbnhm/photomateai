@@ -8,6 +8,7 @@ import { toast } from "sonner"
 import { Toaster } from "@/components/ui/sonner"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { motion } from "framer-motion"
+import { Skeleton } from "@/components/ui/skeleton"
 
 type ImageGeneration = {
   id: string
@@ -25,6 +26,35 @@ export function ImageHistory() {
   const [useClientHistory, setUseClientHistory] = useState(false)
   const [hasRestoredPending, setHasRestoredPending] = useState(false)
   const [isDeleting, setIsDeleting] = useState<string | null>(null)
+  const [elapsedTimes, setElapsedTimes] = useState<Record<string, number>>({})
+
+  // Update elapsed time every second
+  useEffect(() => {
+    if (pendingGenerations.length === 0) return;
+
+    const updateElapsedTimes = () => {
+      const now = Date.now();
+      const times: Record<string, number> = {};
+
+      pendingGenerations.forEach(gen => {
+        if (gen.startTime) {
+          const startTime = new Date(gen.startTime).getTime();
+          const elapsedSeconds = Math.floor((now - startTime) / 1000);
+          times[gen.id] = elapsedSeconds;
+        }
+      });
+
+      setElapsedTimes(times);
+    };
+
+    // Update immediately
+    updateElapsedTimes();
+
+    // Then update every second
+    const interval = setInterval(updateElapsedTimes, 1000);
+    
+    return () => clearInterval(interval);
+  }, [pendingGenerations]);
 
   // Check for stale generations on initial load
   useEffect(() => {
@@ -160,9 +190,6 @@ export function ImageHistory() {
       {/* Pending generations section */}
       {pendingGenerations.length > 0 && (
         <div className="mb-8">
-          <h3 className="text-lg font-medium mb-4 text-indigo-600">
-            Currently Generating
-          </h3>
           <div className="space-y-6">
             {pendingGenerations.map((generation) => (
               <motion.div
@@ -199,6 +226,11 @@ export function ImageHistory() {
                             <>
                               <span className="inline-block w-2.5 h-2.5 bg-primary rounded-full animate-pulse"></span>
                               <span className="text-sm font-medium text-primary">Generating</span>
+                              {elapsedTimes[generation.id] !== undefined && (
+                                <span className="text-xs text-muted-foreground ml-1">
+                                  ({elapsedTimes[generation.id]}s)
+                                </span>
+                              )}
                             </>
                           )}
                         </div>
@@ -226,18 +258,10 @@ export function ImageHistory() {
                   <CardContent className="p-4 pt-4">
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                       {Array.from({ length: 4 }).map((_, index) => (
-                        <div 
+                        <Skeleton 
                           key={index} 
-                          className="aspect-square bg-gradient-to-br from-primary/5 to-primary/10 rounded-lg flex items-center justify-center shadow-sm overflow-hidden"
-                        >
-                          <div className="relative w-full h-full flex items-center justify-center">
-                            <div className="absolute inset-0 bg-gradient-to-br from-primary/10 to-primary/20 animate-pulse"></div>
-                            <svg className="w-10 h-10 animate-spin text-primary relative z-10" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                            </svg>
-                          </div>
-                        </div>
+                          className="aspect-square rounded-lg"
+                        />
                       ))}
                     </div>
                   </CardContent>
@@ -269,7 +293,7 @@ export function ImageHistory() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.3 }}
             >
-              <Card className="overflow-hidden border-primary/20 shadow-md hover:shadow-lg transition-shadow duration-300">
+              <Card className="overflow-hidden border-border shadow-md hover:shadow-lg transition-shadow duration-300">
                 <CardHeader className="p-4 pb-0 space-y-0">
                   {/* All controls in a single horizontal line */}
                   <div className="flex items-center justify-between gap-3">
@@ -292,22 +316,24 @@ export function ImageHistory() {
                         size="sm"
                         onClick={() => handleDelete(generation.id)}
                         disabled={isDeleting === generation.id}
-                        className="flex items-center gap-1.5 ml-2 hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30 disabled:opacity-70"
+                        className="flex items-center gap-1.5"
                       >
                         {isDeleting === generation.id ? (
                           <>
-                            <svg className="animate-spin h-4 w-4 mr-1.5 text-destructive" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-primary" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                             </svg>
-                            Deleting
+                            Deleting...
                           </>
                         ) : (
                           <>
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                              <path d="M3 6h18"></path>
-                              <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path>
-                              <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-trash-2">
+                              <path d="M3 6h18"/>
+                              <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/>
+                              <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>
+                              <line x1="10" x2="10" y1="11" y2="17"/>
+                              <line x1="14" x2="14" y1="11" y2="17"/>
                             </svg>
                             Delete
                           </>
