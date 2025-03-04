@@ -3,15 +3,15 @@ import Link from "next/link";
 
 export default function Home() {
   return (
-    <div className="flex flex-col min-h-screen">
+    <div className="flex flex-col min-h-screen pb-20 sm:pb-0">
       {/* Hero Section */}
-      <section className="flex-1 flex flex-col items-center justify-center px-4 py-20 md:py-32 text-center relative overflow-hidden">
+      <section className="flex-1 flex flex-col items-center justify-center px-4 py-16 md:py-32 text-center relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-b from-background/5 via-background/50 to-background z-0"></div>
         
         {/* Background decorative elements */}
         <div className="absolute top-0 left-0 right-0 h-[500px] bg-gradient-to-br from-purple-500/20 to-blue-500/20 blur-3xl opacity-50 -z-10"></div>
         
-        <div className="max-w-4xl mx-auto z-10">
+        <div className="max-w-4xl mx-auto z-10 mt-4 sm:mt-0">
           <h1 className="text-4xl md:text-6xl font-bold mb-6 bg-clip-text text-transparent bg-gradient-to-r from-purple-600 to-blue-600">
             Create Stunning AI Images
           </h1>

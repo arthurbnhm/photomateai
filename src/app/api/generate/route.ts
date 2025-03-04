@@ -118,7 +118,7 @@ export async function POST(request: NextRequest) {
       if (finalPrediction.status === "succeeded" && Array.isArray(finalPrediction.output)) {
         try {
           // Import the addToHistory function
-          const { addToHistory } = await import('../history/route');
+          const { addToHistory } = await import('../history/utils');
           
           console.log('Images to save to history:', finalPrediction.output);
           

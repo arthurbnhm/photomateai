@@ -1,41 +1,9 @@
 import { NextResponse } from 'next/server';
-
-// Define the type for image generation history
-type ImageGeneration = {
-  id: string;
-  prompt: string;
-  timestamp: string;
-  images: string[];
-  aspectRatio: string;
-};
-
-// In-memory storage for development purposes
-// In a production app, this would be a database
-let imageHistory: ImageGeneration[] = [];
-
-// Function to add a new generation to history
-export function addToHistory(generation: ImageGeneration) {
-  console.log('Adding to server history:', generation);
-  
-  // Validate the generation object
-  if (!generation.id || !generation.prompt || !generation.timestamp || !Array.isArray(generation.images)) {
-    console.error('Invalid generation object:', generation);
-    return null;
-  }
-  
-  // Add to the beginning of the array
-  imageHistory.unshift(generation);
-  
-  // Keep only the last 10 generations
-  imageHistory = imageHistory.slice(0, 10);
-  
-  console.log('Current server history length:', imageHistory.length);
-  
-  return generation;
-}
+import { addToHistory, getHistory, deleteFromHistory, type ImageGeneration } from './utils';
 
 export async function GET() {
   try {
+    const imageHistory = getHistory();
     console.log('Returning server history with', imageHistory.length, 'items');
     return NextResponse.json(imageHistory);
   } catch (error) {
@@ -59,7 +27,7 @@ export async function POST(request: Request) {
       );
     }
     
-    const newGeneration = {
+    const newGeneration: ImageGeneration = {
       id: body.id || Date.now().toString(),
       prompt: body.prompt,
       timestamp: body.timestamp || new Date().toISOString(),
@@ -100,21 +68,17 @@ export async function DELETE(request: Request) {
       );
     }
     
-    // Find the index of the generation with the given ID
-    const index = imageHistory.findIndex(gen => gen.id === id);
+    // Delete the generation from history
+    const success = deleteFromHistory(id);
     
-    if (index === -1) {
+    if (!success) {
       // Instead of returning a 404, we'll return a success response
       // This is because the client might be trying to delete a generation
       // that only exists in client history
       console.log(`Generation with ID ${id} not found in server history, but reporting success`);
-      return NextResponse.json({ success: true });
+    } else {
+      console.log(`Deleted generation with ID ${id}`);
     }
-    
-    // Remove the generation from the history
-    imageHistory.splice(index, 1);
-    
-    console.log(`Deleted generation with ID ${id}. Remaining: ${imageHistory.length}`);
     
     return NextResponse.json({ success: true });
   } catch (error) {

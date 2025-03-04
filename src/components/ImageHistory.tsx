@@ -6,6 +6,8 @@ import { LoadingIndicator } from "@/components/ui/loading-indicator"
 import { Button } from "@/components/ui/button"
 import { toast } from "sonner"
 import { Toaster } from "@/components/ui/sonner"
+import { Card, CardContent, CardHeader } from "@/components/ui/card"
+import { motion } from "framer-motion"
 
 type ImageGeneration = {
   id: string
@@ -158,80 +160,89 @@ export function ImageHistory() {
       {/* Pending generations section */}
       {pendingGenerations.length > 0 && (
         <div className="mb-8">
-          <h3 className="text-lg font-medium mb-4 text-blue-600 dark:text-blue-400">
+          <h3 className="text-lg font-medium mb-4 text-indigo-600 dark:text-indigo-400">
             Currently Generating
           </h3>
-          <div className="space-y-8">
+          <div className="space-y-6">
             {pendingGenerations.map((generation) => (
-              <div 
-                key={generation.id} 
-                className="bg-white dark:bg-gray-800 border border-blue-200 dark:border-blue-800 rounded-xl overflow-hidden shadow-lg"
+              <motion.div
+                key={generation.id}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.3 }}
               >
-                <div className="p-4">
-                  {/* All controls in a single horizontal line */}
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-2">
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
-                        onClick={() => copyPromptToClipboard(generation.prompt)}
-                        className="flex items-center gap-1.5"
-                      >
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-clipboard">
-                          <rect width="8" height="4" x="8" y="2" rx="1" ry="1"/>
-                          <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>
-                        </svg>
-                        Copy Prompt
-                      </Button>
-                      
-                      <div className="flex items-center gap-2 ml-2">
-                        {generation.potentiallyStalled ? (
-                          <>
-                            <span className="inline-block w-2.5 h-2.5 bg-yellow-500 rounded-full animate-pulse"></span>
-                            <span className="text-sm font-medium text-yellow-600 dark:text-yellow-400">Stalled</span>
-                          </>
-                        ) : (
-                          <>
-                            <span className="inline-block w-2.5 h-2.5 bg-blue-500 rounded-full animate-pulse"></span>
-                            <span className="text-sm font-medium text-blue-600 dark:text-blue-400">Generating</span>
-                          </>
+                <Card className="overflow-hidden border-indigo-200 dark:border-indigo-800 shadow-md hover:shadow-lg transition-shadow duration-300">
+                  <CardHeader className="p-4 pb-0 space-y-0">
+                    {/* All controls in a single horizontal line */}
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-2">
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          onClick={() => copyPromptToClipboard(generation.prompt)}
+                          className="flex items-center gap-1.5 bg-white dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-clipboard">
+                            <rect width="8" height="4" x="8" y="2" rx="1" ry="1"/>
+                            <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>
+                          </svg>
+                          Copy Prompt
+                        </Button>
+                        
+                        <div className="flex items-center gap-2 ml-2">
+                          {generation.potentiallyStalled ? (
+                            <>
+                              <span className="inline-block w-2.5 h-2.5 bg-amber-500 rounded-full animate-pulse"></span>
+                              <span className="text-sm font-medium text-amber-600 dark:text-amber-400">Stalled</span>
+                            </>
+                          ) : (
+                            <>
+                              <span className="inline-block w-2.5 h-2.5 bg-indigo-500 rounded-full animate-pulse"></span>
+                              <span className="text-sm font-medium text-indigo-600 dark:text-indigo-400">Generating</span>
+                            </>
+                          )}
+                        </div>
+                        
+                        {generation.potentiallyStalled && (
+                          <button 
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              clearPendingGeneration(generation.id);
+                            }}
+                            className="ml-2 text-xs font-medium px-2 py-1 bg-red-50 dark:bg-red-900/20 text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 rounded-md transition-colors duration-200 cursor-pointer"
+                          >
+                            Clear
+                          </button>
                         )}
                       </div>
                       
-                      {generation.potentiallyStalled && (
-                        <button 
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            clearPendingGeneration(generation.id);
-                          }}
-                          className="ml-2 text-xs font-medium px-2 py-1 bg-red-50 dark:bg-red-900/20 text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 rounded-md transition-colors duration-200 cursor-pointer"
+                      <span className="text-xs font-medium px-3 py-1.5 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-300 rounded-full">
+                        {generation.aspectRatio}
+                      </span>
+                    </div>
+                  </CardHeader>
+                  
+                  <CardContent className="p-4 pt-4">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                      {Array.from({ length: 4 }).map((_, index) => (
+                        <div 
+                          key={index} 
+                          className="aspect-square bg-gradient-to-br from-indigo-50 to-purple-50 dark:from-indigo-950/30 dark:to-purple-950/30 rounded-lg flex items-center justify-center shadow-sm overflow-hidden"
                         >
-                          Clear
-                        </button>
-                      )}
+                          <div className="relative w-full h-full flex items-center justify-center">
+                            <div className="absolute inset-0 bg-gradient-to-br from-indigo-100/50 to-purple-100/50 dark:from-indigo-900/10 dark:to-purple-900/10 animate-pulse"></div>
+                            <svg className="w-10 h-10 animate-spin text-indigo-500 relative z-10" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                    
-                    <span className="text-xs font-medium px-3 py-1.5 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 rounded-full">
-                      {generation.aspectRatio}
-                    </span>
-                  </div>
-                </div>
-                
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 p-3">
-                  {Array.from({ length: 4 }).map((_, index) => (
-                    <div 
-                      key={index} 
-                      className="aspect-square bg-white dark:bg-gray-800 rounded-lg flex items-center justify-center shadow-sm"
-                    >
-                      <svg className="w-10 h-10 animate-spin text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                      </svg>
-                    </div>
-                  ))}
-                </div>
-              </div>
+                  </CardContent>
+                </Card>
+              </motion.div>
             ))}
           </div>
         </div>
@@ -250,78 +261,86 @@ export function ImageHistory() {
           </p>
         </div>
       ) : !isLoading && (
-        <div className="space-y-8">
+        <div className="space-y-6">
           {generations.map((generation) => (
-            <div 
-              key={generation.id} 
-              className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden shadow-lg"
+            <motion.div
+              key={generation.id}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3 }}
             >
-              <div className="p-4">
-                {/* All controls in a single horizontal line */}
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-2">
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
-                      onClick={() => copyPromptToClipboard(generation.prompt)}
-                      className="flex items-center gap-1.5"
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-clipboard">
-                        <rect width="8" height="4" x="8" y="2" rx="1" ry="1"/>
-                        <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>
-                      </svg>
-                      Copy Prompt
-                    </Button>
+              <Card className="overflow-hidden border-gray-200 dark:border-gray-700 shadow-md hover:shadow-lg transition-shadow duration-300">
+                <CardHeader className="p-4 pb-0 space-y-0">
+                  {/* All controls in a single horizontal line */}
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2">
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={() => copyPromptToClipboard(generation.prompt)}
+                        className="flex items-center gap-1.5 bg-white dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-clipboard">
+                          <rect width="8" height="4" x="8" y="2" rx="1" ry="1"/>
+                          <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>
+                        </svg>
+                        Copy Prompt
+                      </Button>
+                      
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => handleDelete(generation.id)}
+                        disabled={isDeleting === generation.id}
+                        className="flex items-center gap-1.5 ml-2 bg-white dark:bg-gray-800 hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-600 dark:hover:text-red-400 disabled:opacity-70"
+                      >
+                        {isDeleting === generation.id ? (
+                          <>
+                            <svg className="animate-spin h-4 w-4 mr-1.5 text-red-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            Deleting
+                          </>
+                        ) : (
+                          <>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M3 6h18"></path>
+                              <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path>
+                              <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
+                            </svg>
+                            Delete
+                          </>
+                        )}
+                      </Button>
+                    </div>
                     
-                    <Button 
-                      variant="outline" 
-                      size="sm"
-                      onClick={() => handleDelete(generation.id)}
-                      disabled={isDeleting === generation.id}
-                      className="flex items-center gap-1.5 ml-2"
-                    >
-                      {isDeleting === generation.id ? (
-                        <>
-                          <svg className="animate-spin h-4 w-4 mr-1.5 text-red-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                          </svg>
-                          Deleting
-                        </>
-                      ) : (
-                        <>
-                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M3 6h18"></path>
-                            <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path>
-                            <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
-                          </svg>
-                          Delete
-                        </>
-                      )}
-                    </Button>
+                    <span className="text-xs font-medium px-3 py-1.5 bg-violet-50 dark:bg-violet-900/20 text-violet-700 dark:text-violet-300 rounded-full">
+                      {generation.aspectRatio}
+                    </span>
                   </div>
-                  
-                  <span className="text-xs font-medium px-3 py-1.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-full">
-                    {generation.aspectRatio}
-                  </span>
-                </div>
-              </div>
-              
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 p-3">
-                {generation.images.map((image, index) => (
-                  <div 
-                    key={index} 
-                    className="aspect-square relative overflow-hidden rounded-lg shadow-sm hover:shadow-md transition-shadow duration-200"
-                  >
-                    <img 
-                      src={image} 
-                      alt={`Generated image ${index + 1} for "${generation.prompt}"`}
-                      className="w-full h-full object-cover hover:scale-105 transition-transform duration-300"
-                    />
+                </CardHeader>
+                
+                <CardContent className="p-4 pt-4">
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    {generation.images.map((image, index) => (
+                      <div 
+                        key={index} 
+                        className="aspect-square relative overflow-hidden rounded-lg shadow-sm hover:shadow-md transition-all duration-300 group"
+                      >
+                        <div className="absolute inset-0 bg-gradient-to-br from-violet-500/10 to-indigo-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-10"></div>
+                        <img 
+                          src={image} 
+                          alt={`Generated image ${index + 1} for "${generation.prompt}"`}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                          loading="lazy"
+                        />
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-            </div>
+                </CardContent>
+              </Card>
+            </motion.div>
           ))}
         </div>
       )}
