@@ -160,7 +160,7 @@ export function ImageHistory() {
       {/* Pending generations section */}
       {pendingGenerations.length > 0 && (
         <div className="mb-8">
-          <h3 className="text-lg font-medium mb-4 text-indigo-600 dark:text-indigo-400">
+          <h3 className="text-lg font-medium mb-4 text-indigo-600">
             Currently Generating
           </h3>
           <div className="space-y-6">
@@ -171,7 +171,7 @@ export function ImageHistory() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.3 }}
               >
-                <Card className="overflow-hidden border-indigo-200 dark:border-indigo-800 shadow-md hover:shadow-lg transition-shadow duration-300">
+                <Card className="overflow-hidden border-indigo-200 shadow-md hover:shadow-lg transition-shadow duration-300">
                   <CardHeader className="p-4 pb-0 space-y-0">
                     {/* All controls in a single horizontal line */}
                     <div className="flex items-center justify-between gap-3">
@@ -180,7 +180,7 @@ export function ImageHistory() {
                           variant="outline" 
                           size="sm" 
                           onClick={() => copyPromptToClipboard(generation.prompt)}
-                          className="flex items-center gap-1.5 bg-white dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700"
+                          className="flex items-center gap-1.5 bg-white hover:bg-gray-100"
                         >
                           <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-clipboard">
                             <rect width="8" height="4" x="8" y="2" rx="1" ry="1"/>
@@ -193,12 +193,12 @@ export function ImageHistory() {
                           {generation.potentiallyStalled ? (
                             <>
                               <span className="inline-block w-2.5 h-2.5 bg-amber-500 rounded-full animate-pulse"></span>
-                              <span className="text-sm font-medium text-amber-600 dark:text-amber-400">Stalled</span>
+                              <span className="text-sm font-medium text-amber-600">Stalled</span>
                             </>
                           ) : (
                             <>
                               <span className="inline-block w-2.5 h-2.5 bg-indigo-500 rounded-full animate-pulse"></span>
-                              <span className="text-sm font-medium text-indigo-600 dark:text-indigo-400">Generating</span>
+                              <span className="text-sm font-medium text-indigo-600">Generating</span>
                             </>
                           )}
                         </div>
@@ -210,14 +210,14 @@ export function ImageHistory() {
                               e.stopPropagation();
                               clearPendingGeneration(generation.id);
                             }}
-                            className="ml-2 text-xs font-medium px-2 py-1 bg-red-50 dark:bg-red-900/20 text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 rounded-md transition-colors duration-200 cursor-pointer"
+                            className="ml-2 text-xs font-medium px-2 py-1 bg-red-50 text-red-600 hover:text-red-700 rounded-md transition-colors duration-200 cursor-pointer"
                           >
                             Clear
                           </button>
                         )}
                       </div>
                       
-                      <span className="text-xs font-medium px-3 py-1.5 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-300 rounded-full">
+                      <span className="text-xs font-medium px-3 py-1.5 bg-indigo-50 rounded-full">
                         {generation.aspectRatio}
                       </span>
                     </div>
@@ -228,10 +228,10 @@ export function ImageHistory() {
                       {Array.from({ length: 4 }).map((_, index) => (
                         <div 
                           key={index} 
-                          className="aspect-square bg-gradient-to-br from-indigo-50 to-purple-50 dark:from-indigo-950/30 dark:to-purple-950/30 rounded-lg flex items-center justify-center shadow-sm overflow-hidden"
+                          className="aspect-square bg-gradient-to-br from-indigo-50 to-purple-50 rounded-lg flex items-center justify-center shadow-sm overflow-hidden"
                         >
                           <div className="relative w-full h-full flex items-center justify-center">
-                            <div className="absolute inset-0 bg-gradient-to-br from-indigo-100/50 to-purple-100/50 dark:from-indigo-900/10 dark:to-purple-900/10 animate-pulse"></div>
+                            <div className="absolute inset-0 bg-gradient-to-br from-indigo-100/50 to-purple-100/50 animate-pulse"></div>
                             <svg className="w-10 h-10 animate-spin text-indigo-500 relative z-10" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
@@ -249,14 +249,14 @@ export function ImageHistory() {
       )}
       
       {!isLoading && error ? (
-        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
-          <p className="text-red-800 dark:text-red-200">{error}</p>
-          <p className="text-sm text-red-600 dark:text-red-400 mt-2">Using client-side history as fallback.</p>
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+          <p className="text-red-800">{error}</p>
+          <p className="text-sm text-red-600 mt-2">Using client-side history as fallback.</p>
         </div>
       ) : !isLoading && generations.length === 0 && pendingGenerations.length === 0 ? (
-        <div className="bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6 text-center">
-          <p className="text-gray-600 dark:text-gray-300">No images generated yet.</p>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
+        <div className="bg-gray-50 border border-gray-200 rounded-lg p-6 text-center">
+          <p className="text-gray-600">No images generated yet.</p>
+          <p className="text-sm text-gray-500 mt-2">
             Use the form above to create your first image!
           </p>
         </div>
@@ -269,7 +269,7 @@ export function ImageHistory() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.3 }}
             >
-              <Card className="overflow-hidden border-gray-200 dark:border-gray-700 shadow-md hover:shadow-lg transition-shadow duration-300">
+              <Card className="overflow-hidden border-gray-200 shadow-md hover:shadow-lg transition-shadow duration-300">
                 <CardHeader className="p-4 pb-0 space-y-0">
                   {/* All controls in a single horizontal line */}
                   <div className="flex items-center justify-between gap-3">
@@ -278,7 +278,7 @@ export function ImageHistory() {
                         variant="outline" 
                         size="sm" 
                         onClick={() => copyPromptToClipboard(generation.prompt)}
-                        className="flex items-center gap-1.5 bg-white dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700"
+                        className="flex items-center gap-1.5 bg-white hover:bg-gray-100"
                       >
                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-clipboard">
                           <rect width="8" height="4" x="8" y="2" rx="1" ry="1"/>
@@ -292,7 +292,7 @@ export function ImageHistory() {
                         size="sm"
                         onClick={() => handleDelete(generation.id)}
                         disabled={isDeleting === generation.id}
-                        className="flex items-center gap-1.5 ml-2 bg-white dark:bg-gray-800 hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-600 dark:hover:text-red-400 disabled:opacity-70"
+                        className="flex items-center gap-1.5 ml-2 bg-white hover:bg-red-50 hover:text-red-600 disabled:opacity-70"
                       >
                         {isDeleting === generation.id ? (
                           <>
@@ -315,7 +315,7 @@ export function ImageHistory() {
                       </Button>
                     </div>
                     
-                    <span className="text-xs font-medium px-3 py-1.5 bg-violet-50 dark:bg-violet-900/20 text-violet-700 dark:text-violet-300 rounded-full">
+                    <span className="text-xs font-medium px-3 py-1.5 bg-violet-50 rounded-full">
                       {generation.aspectRatio}
                     </span>
                   </div>

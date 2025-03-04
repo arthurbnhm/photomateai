@@ -208,16 +208,16 @@ export function PromptForm() {
     <div className="w-full mb-8">
       <h2 className="text-2xl font-bold mb-6">Generate Image</h2>
       
-      <div className="w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden shadow-lg">
+      <div className="w-full bg-white border border-gray-200 rounded-xl overflow-hidden shadow-lg">
         {hasPendingGenerationsOnReload && (
-          <div className="m-5 p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
+          <div className="m-5 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
             <div className="flex items-start">
               <AlertCircle className="h-5 w-5 text-yellow-500 mt-0.5 mr-2" />
               <div>
-                <p className="text-sm text-yellow-800 dark:text-yellow-200">
+                <p className="text-sm text-yellow-800">
                   Some image generations were in progress when the page was reloaded.
                 </p>
-                <p className="text-xs text-yellow-600 dark:text-yellow-400 mt-1">
+                <p className="text-xs text-yellow-600 mt-1">
                   These generations might not complete. You can continue to create new images.
                 </p>
                 <div className="mt-2">
@@ -244,11 +244,11 @@ export function PromptForm() {
                 name="prompt"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="text-gray-800 dark:text-gray-200">Prompt</FormLabel>
+                    <FormLabel className="text-gray-800">Prompt</FormLabel>
                     <FormControl>
                       <Input 
                         placeholder="Describe your image..." 
-                        className="bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-700" 
+                        className="bg-white border-gray-300" 
                         {...field} 
                       />
                     </FormControl>
@@ -264,10 +264,10 @@ export function PromptForm() {
                     name="aspectRatio"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel className="text-gray-800 dark:text-gray-200">Aspect Ratio</FormLabel>
+                        <FormLabel className="text-gray-800">Aspect Ratio</FormLabel>
                         <Select onValueChange={field.onChange} defaultValue={field.value}>
                           <FormControl>
-                            <SelectTrigger className="bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-700">
+                            <SelectTrigger className="bg-white border-gray-300">
                               <SelectValue placeholder="Select aspect ratio" />
                             </SelectTrigger>
                           </FormControl>
@@ -289,10 +289,10 @@ export function PromptForm() {
                     name="outputFormat"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel className="text-gray-800 dark:text-gray-200">Format</FormLabel>
+                        <FormLabel className="text-gray-800">Format</FormLabel>
                         <Select onValueChange={field.onChange} defaultValue={field.value}>
                           <FormControl>
-                            <SelectTrigger className="bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-700">
+                            <SelectTrigger className="bg-white border-gray-300">
                               <SelectValue placeholder="Select format" />
                             </SelectTrigger>
                           </FormControl>
@@ -332,7 +332,7 @@ export function PromptForm() {
       </div>
       
       {error && (
-        <div className="w-full bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 mt-4">
+        <div className="w-full bg-red-50 border border-red-200 rounded-lg p-4 mt-4">
           <div className="flex items-start">
             <div className="flex-shrink-0">
               <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
@@ -340,12 +340,12 @@ export function PromptForm() {
               </svg>
             </div>
             <div className="ml-3">
-              <h3 className="text-sm font-medium text-red-800 dark:text-red-200">Error generating image</h3>
-              <div className="mt-2 text-sm text-red-700 dark:text-red-300 whitespace-pre-wrap">
+              <h3 className="text-sm font-medium text-red-800">Error generating image</h3>
+              <div className="mt-2 text-sm text-red-700 whitespace-pre-wrap">
                 {error}
               </div>
               {errorDetails && (
-                <div className="mt-2 text-xs text-red-600 dark:text-red-400 whitespace-pre-wrap">
+                <div className="mt-2 text-xs text-red-600 whitespace-pre-wrap">
                   {errorDetails}
                 </div>
               )}

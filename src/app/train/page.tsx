@@ -340,7 +340,7 @@ export default function TrainPage() {
 
   return (
     <div 
-      className="flex flex-col min-h-screen p-8 pb-28 sm:pb-20 gap-8 sm:p-20 font-[family-name:var(--font-geist-sans)] relative"
+      className="flex flex-col min-h-screen p-8 pb-28 sm:pb-20 gap-8 sm:p-20 bg-background"
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDragEnd={handleDragEnd}
@@ -348,45 +348,42 @@ export default function TrainPage() {
     >
       {/* Overlay that appears when dragging image files over the page */}
       {isDraggingImages && (
-        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center">
-          <div className="text-center p-8 rounded-lg max-w-xl">
-            <div className="mb-6 bg-primary/10 p-6 rounded-full inline-flex">
-              <svg 
-                xmlns="http://www.w3.org/2000/svg" 
-                width="48" 
-                height="48" 
-                viewBox="0 0 24 24" 
-                fill="none" 
-                stroke="currentColor" 
-                strokeWidth="2" 
-                strokeLinecap="round" 
-                strokeLinejoin="round" 
-                className="text-primary"
-              >
-                <path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"></path>
-                <path d="M12 12v9"></path>
-                <path d="m16 16-4-4-4 4"></path>
+        <div 
+          className="fixed inset-0 bg-black/20 backdrop-blur-sm z-50 flex items-center justify-center"
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDragEnd={handleDragEnd}
+          onDrop={handleDrop}
+        >
+          <div className="bg-white p-8 rounded-xl shadow-2xl max-w-md w-full text-center">
+            <div className="mb-4 w-16 h-16 bg-indigo-100 rounded-full flex items-center justify-center mx-auto">
+              <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-indigo-600">
+                <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7"></path>
+                <line x1="16" x2="22" y1="5" y2="5"></line>
+                <line x1="19" x2="19" y1="2" y2="8"></line>
+                <circle cx="9" cy="9" r="2"></circle>
+                <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"></path>
               </svg>
             </div>
-            <h2 className="text-3xl font-bold mb-2">Drop Your Images Here</h2>
-            <p className="text-muted-foreground text-lg">
-              Release to upload up to 10 images for your AI model
+            <h3 className="text-xl font-bold mb-2">Drop Images Here</h3>
+            <p className="text-gray-600">
+              Drop your images to add them to your training set
             </p>
           </div>
         </div>
       )}
 
       <header className="w-full max-w-4xl mx-auto text-center mt-8 sm:mt-6">
-        <h1 className="text-3xl sm:text-4xl font-bold mb-2">Train Your AI Model</h1>
-        <p className="text-muted-foreground">Create and train your AI model with your own images</p>
+        <h1 className="text-3xl sm:text-4xl font-bold mb-2">Train Your Custom Model</h1>
+        <p className="text-muted-foreground">Upload your images to create a personalized AI model</p>
       </header>
       
       <main className="flex-1 w-full max-w-4xl mx-auto flex flex-col gap-8 z-10 mt-4">
         {trainingStatus ? (
-          <div className="bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-900 rounded-lg p-6 text-center">
+          <div className="bg-green-50 border border-green-200 rounded-lg p-6 text-center">
             <h2 className="text-xl font-semibold mb-2">Training Started!</h2>
             <p className="mb-4">Your model is now training. This may take a while to complete.</p>
-            <div className="bg-white dark:bg-gray-800 rounded-md p-4 mb-4 text-left">
+            <div className="bg-white rounded-md p-4 mb-4 text-left">
               <p><span className="font-medium">Training ID:</span> {trainingStatus.id}</p>
               <p><span className="font-medium">Status:</span> {trainingStatus.status}</p>
             </div>
@@ -431,7 +428,7 @@ export default function TrainPage() {
                   </p>
                 )}
                 {actualModelName && !nameError && (
-                  <p className="text-xs text-green-600 dark:text-green-400 mt-1">
+                  <p className="text-xs text-green-600 mt-1">
                     Model will be created as: <span className="font-mono">{actualModelName}</span>
                   </p>
                 )}
@@ -516,15 +513,15 @@ export default function TrainPage() {
                 </div>
               )}
               
-              {isProcessing && (
+              {isProcessing && uploadProgress > 0 && (
                 <div className="mt-4">
                   <div className="flex justify-between mb-1">
-                    <span className="text-sm font-medium">Processing...</span>
+                    <span className="text-sm font-medium">Uploading images...</span>
                     <span className="text-sm font-medium">{uploadProgress}%</span>
                   </div>
-                  <div className="w-full bg-gray-200 rounded-full h-2.5 dark:bg-gray-700">
+                  <div className="w-full bg-gray-200 rounded-full h-2.5">
                     <div 
-                      className="bg-primary h-2.5 rounded-full transition-all duration-300" 
+                      className="bg-indigo-600 h-2.5 rounded-full" 
                       style={{ width: `${uploadProgress}%` }}
                     ></div>
                   </div>
