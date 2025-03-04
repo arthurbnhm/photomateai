@@ -349,15 +349,15 @@ export default function TrainPage() {
       {/* Overlay that appears when dragging image files over the page */}
       {isDraggingImages && (
         <div 
-          className="fixed inset-0 bg-black/20 backdrop-blur-sm z-50 flex items-center justify-center"
+          className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center"
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onDragEnd={handleDragEnd}
           onDrop={handleDrop}
         >
-          <div className="bg-white p-8 rounded-xl shadow-2xl max-w-md w-full text-center">
-            <div className="mb-4 w-16 h-16 bg-indigo-100 rounded-full flex items-center justify-center mx-auto">
-              <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-indigo-600">
+          <div className="bg-card p-8 rounded-xl shadow-2xl max-w-md w-full text-center">
+            <div className="mb-4 w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto">
+              <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-primary">
                 <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7"></path>
                 <line x1="16" x2="22" y1="5" y2="5"></line>
                 <line x1="19" x2="19" y1="2" y2="8"></line>
@@ -366,7 +366,7 @@ export default function TrainPage() {
               </svg>
             </div>
             <h3 className="text-xl font-bold mb-2">Drop Images Here</h3>
-            <p className="text-gray-600">
+            <p className="text-muted-foreground">
               Drop your images to add them to your training set
             </p>
           </div>
@@ -380,10 +380,10 @@ export default function TrainPage() {
       
       <main className="flex-1 w-full max-w-4xl mx-auto flex flex-col gap-8 z-10 mt-4">
         {trainingStatus ? (
-          <div className="bg-green-50 border border-green-200 rounded-lg p-6 text-center">
+          <div className="bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-900 rounded-lg p-6 text-center">
             <h2 className="text-xl font-semibold mb-2">Training Started!</h2>
             <p className="mb-4">Your model is now training. This may take a while to complete.</p>
-            <div className="bg-white rounded-md p-4 mb-4 text-left">
+            <div className="bg-card rounded-md p-4 mb-4 text-left">
               <p><span className="font-medium">Training ID:</span> {trainingStatus.id}</p>
               <p><span className="font-medium">Status:</span> {trainingStatus.status}</p>
             </div>
@@ -487,7 +487,7 @@ export default function TrainPage() {
                             <button
                               type="button"
                               onClick={() => removeImage(index)}
-                              className="absolute top-1 right-1 bg-black/70 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                              className="absolute top-1 right-1 bg-background/80 dark:bg-foreground/20 text-foreground dark:text-background rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
                               aria-label="Remove image"
                             >
                               <svg 
@@ -519,9 +519,9 @@ export default function TrainPage() {
                     <span className="text-sm font-medium">Uploading images...</span>
                     <span className="text-sm font-medium">{uploadProgress}%</span>
                   </div>
-                  <div className="w-full bg-gray-200 rounded-full h-2.5">
+                  <div className="w-full bg-muted rounded-full h-2.5">
                     <div 
-                      className="bg-indigo-600 h-2.5 rounded-full" 
+                      className="bg-primary h-2.5 rounded-full" 
                       style={{ width: `${uploadProgress}%` }}
                     ></div>
                   </div>
@@ -538,7 +538,7 @@ export default function TrainPage() {
               {isProcessing ? (
                 <span className="flex items-center justify-center">
                   <svg 
-                    className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" 
+                    className="animate-spin -ml-1 mr-3 h-5 w-5 text-primary-foreground" 
                     xmlns="http://www.w3.org/2000/svg" 
                     fill="none" 
                     viewBox="0 0 24 24"
