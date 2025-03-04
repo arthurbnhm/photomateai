@@ -217,7 +217,7 @@ export function ImageHistory() {
                         )}
                       </div>
                       
-                      <span className="text-xs font-medium px-3 py-1.5 bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 rounded-full">
+                      <span className="text-xs font-medium px-3 py-1.5 bg-primary/10 text-primary rounded-full border border-primary/20">
                         {generation.aspectRatio}
                       </span>
                     </div>
@@ -315,7 +315,7 @@ export function ImageHistory() {
                       </Button>
                     </div>
                     
-                    <span className="text-xs font-medium px-3 py-1.5 bg-violet-50 dark:bg-violet-950 text-violet-600 dark:text-violet-400 rounded-full">
+                    <span className="text-xs font-medium px-3 py-1.5 bg-primary/10 text-primary rounded-full border border-primary/20">
                       {generation.aspectRatio}
                     </span>
                   </div>

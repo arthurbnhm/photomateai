@@ -26,7 +26,7 @@ export default function RootLayout({
           attribute="class"
           defaultTheme="system"
           enableSystem
-          disableTransitionOnChange
+          disableTransitionOnChange={false}
         >
           <GenerationProvider>
             <div className="fixed top-6 right-6 z-[100] pointer-events-auto">
