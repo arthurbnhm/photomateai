@@ -35,8 +35,38 @@ export async function POST(request: NextRequest) {
     console.log('Cancelling prediction:', predictionId);
 
     try {
+      // First, check if this is a prediction ID or a replicate ID
+      let replicateId = predictionId;
+      
+      // If it's a UUID format (prediction ID), look up the replicate_id
+      if (predictionId.includes('-')) {
+        const { data: prediction, error } = await supabase
+          .from('predictions')
+          .select('replicate_id')
+          .eq('id', predictionId)
+          .maybeSingle();
+          
+        if (error) {
+          console.error('Error looking up prediction:', error);
+          return NextResponse.json(
+            { error: 'Failed to find prediction', details: error.message },
+            { status: 500 }
+          );
+        }
+        
+        if (!prediction || !prediction.replicate_id) {
+          console.error('No replicate_id found for prediction:', predictionId);
+          return NextResponse.json(
+            { error: 'No replicate_id found for this prediction' },
+            { status: 404 }
+          );
+        }
+        
+        replicateId = prediction.replicate_id;
+      }
+
       // Cancel the prediction using Replicate API
-      const response = await replicate.predictions.cancel(predictionId);
+      const response = await replicate.predictions.cancel(replicateId);
       console.log('Prediction cancelled successfully:', response);
 
       // Update the prediction in Supabase
@@ -47,7 +77,7 @@ export async function POST(request: NextRequest) {
           is_cancelled: true,
           completed_at: new Date().toISOString()
         })
-        .eq('replicate_id', predictionId);
+        .eq('replicate_id', replicateId);
 
       if (updateError) {
         console.error('Error updating prediction in Supabase:', updateError);
@@ -56,15 +86,15 @@ export async function POST(request: NextRequest) {
         const { data: existingPrediction, error: lookupError } = await supabase
           .from('predictions')
           .select('id, replicate_id')
-          .eq('replicate_id', predictionId)
+          .eq('replicate_id', replicateId)
           .maybeSingle();
           
         if (lookupError) {
           console.error('Error looking up prediction:', lookupError);
         } else if (!existingPrediction) {
-          console.log(`No prediction found with replicate_id: ${predictionId}. It might not be in the database yet.`);
+          console.log(`No prediction found with replicate_id: ${replicateId}. It might not be in the database yet.`);
         } else {
-          console.log(`Found prediction with replicate_id: ${predictionId}, but failed to update it.`);
+          console.log(`Found prediction with replicate_id: ${replicateId}, but failed to update it.`);
         }
         
         // Return success anyway since we successfully cancelled the prediction in Replicate
@@ -88,6 +118,9 @@ export async function POST(request: NextRequest) {
       try {
         console.log('Attempting to mark prediction as cancelled in database despite Replicate API error');
         
+        // Determine which field to use for the query
+        const field = predictionId.includes('-') ? 'id' : 'replicate_id';
+        
         const { error: fallbackUpdateError } = await supabase
           .from('predictions')
           .update({ 
@@ -95,7 +128,7 @@ export async function POST(request: NextRequest) {
             is_cancelled: true,
             completed_at: new Date().toISOString()
           })
-          .eq('replicate_id', predictionId);
+          .eq(field, predictionId);
           
         if (!fallbackUpdateError) {
           console.log('Successfully marked prediction as cancelled in database');

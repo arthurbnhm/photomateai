@@ -79,6 +79,7 @@ export function ImageHistory({
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [isDeleting, setIsDeleting] = useState<string | null>(null)
+  const [isCancelling, setIsCancelling] = useState<string | null>(null)
   const [elapsedTimes, setElapsedTimes] = useState<Record<string, number>>({})
   const [isMounted, setIsMounted] = useState(false)
 
@@ -519,14 +520,14 @@ export function ImageHistory({
   // Function to delete a generation
   const deleteGeneration = async (id: string): Promise<boolean> => {
     try {
-      const supabase = createSupabaseClient();
-      const { error } = await supabase
-        .from('predictions')
-        .delete()
-        .eq('id', id);
+      // Call the history API endpoint to delete the record
+      const response = await fetch(`/api/history?id=${id}`, {
+        method: 'DELETE',
+      });
       
-      if (error) {
-        console.error('Error deleting from Supabase:', error);
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error('Error deleting from API:', errorData);
         return false;
       }
       
@@ -538,6 +539,46 @@ export function ImageHistory({
       return true;
     } catch (error) {
       console.error('Error deleting generation:', error);
+      return false;
+    }
+  };
+
+  // Function to cancel a pending generation
+  const cancelGeneration = async (id: string, replicateId?: string): Promise<boolean> => {
+    try {
+      // Call the cancel API endpoint with either the replicate_id or the prediction id
+      const predictionId = replicateId || id;
+      
+      const response = await fetch('/api/cancel', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ predictionId }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error('Error cancelling prediction:', errorData);
+        return false;
+      }
+
+      // Remove from pending generations
+      clearPendingGeneration(id);
+      
+      // Update local state if it exists in generations
+      const existingIndex = generations.findIndex(gen => gen.id === id);
+      if (existingIndex >= 0) {
+        const updatedGenerations = [...generations];
+        // Mark as cancelled in the UI
+        updatedGenerations.splice(existingIndex, 1);
+        setGenerations(updatedGenerations);
+        localStorage.setItem(CACHE_KEY, JSON.stringify(updatedGenerations));
+      }
+      
+      return true;
+    } catch (error) {
+      console.error('Error cancelling generation:', error);
       return false;
     }
   };
@@ -620,33 +661,27 @@ export function ImageHistory({
 
   const handleDelete = async (id: string) => {
     try {
-      setIsDeleting(id);
-      
       // First check if this is a pending generation
       const isPending = pendingGenerations.some(gen => gen.id === id);
       
       if (isPending) {
-        // For pending generations, first check if it exists in the database
-        const supabase = createSupabaseClient();
-        const { data, error } = await supabase
-          .from('predictions')
-          .select('id')
-          .eq('id', id)
-          .maybeSingle();
+        // For pending generations, we should cancel instead of delete
+        setIsCancelling(id);
+        const pendingGen = pendingGenerations.find(gen => gen.id === id);
+        const success = await cancelGeneration(id, pendingGen?.replicate_id);
         
-        if (error) {
-          console.error('Error checking prediction existence:', error);
+        if (success) {
+          toast.success('Generation cancelled successfully');
+        } else {
+          toast.error('Failed to cancel generation');
         }
         
-        // If it doesn't exist in the database, just clear it from UI
-        if (!data) {
-          clearPendingGeneration(id);
-          toast.success('Generation cleared from UI');
-          return;
-        }
+        setIsCancelling('');
+        return;
       }
       
       // If we get here, try to delete from database
+      setIsDeleting(id);
       const success = await deleteGeneration(id);
       
       if (success) {
@@ -790,10 +825,10 @@ export function ImageHistory({
                                 e.stopPropagation();
                                 handleDelete(generation.id);
                               }}
-                              disabled={isDeleting === generation.id}
+                              disabled={isCancelling === generation.id}
                               className="ml-2 text-xs font-medium px-2 py-1 bg-destructive/10 text-destructive hover:bg-destructive/20 hover:text-destructive rounded-md transition-colors duration-200 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                             >
-                              {isDeleting === generation.id ? 'Deleting...' : 'Delete'}
+                              {isCancelling === generation.id ? 'Cancelling...' : 'Cancel'}
                             </button>
                           )}
                         </div>

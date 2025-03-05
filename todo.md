@@ -7,27 +7,28 @@
 - ✅ Add progress indicator for ongoing trainings
 - Fix the training progress (seems hardcoded) and merge with the list
 - Implement supabase real-time subscription
+- Add a description? I'm looking to fix the genre issue
+
 # Create
 
 - Animate image to videos
 - Add more customization options for model training
 - ✅ List available models for use
 - ✅ Integrate webhooks with real-time image updates
-- Generate multiple images at a time
-- Delete the images
-- Don't delete the supabase row, just set is_deleted to true and filter
+- ✅ Generate multiple images at a time
+- ✅ Delete the images
+- ✅ Don't delete the supabase row, just set is_deleted to true and filter
 - Use model name from user and modelname-id for replicate
-- cancel/route.ts should handle both training and image generation cancelation
-- rework cancel / delete button for image generations
+- ✅ cancel/route.ts should handle both training and image generation cancelation
+- ✅ rework cancel / delete button for image generations
+- Default to a model for image geneneration
 
 # App
 
 - Let the user choose colors
 - Rework the navigation bar to something more native
 - Remove things related to current debugging
-- Work on the errors
 - ✅ Improve UI for model management
-- Add dashboard with training statistics
 - Implement better error handling and user feedback
 - Seperate train.tsx into components
 

@@ -164,21 +164,21 @@ export async function DELETE(request: Request) {
     // Initialize Supabase client
     const supabase = createSupabaseAdmin();
     
-    // Delete from Supabase
-    const { error: deleteError } = await supabase
+    // Soft delete by updating is_deleted to true
+    const { error: updateError } = await supabase
       .from('predictions')
-      .delete()
+      .update({ is_deleted: true })
       .eq('id', id);
     
-    if (deleteError) {
-      console.error('Error deleting from Supabase:', deleteError);
+    if (updateError) {
+      console.error('Error updating prediction in Supabase:', updateError);
       return NextResponse.json(
-        { error: 'Failed to delete from database' },
+        { error: 'Failed to mark prediction as deleted' },
         { status: 500 }
       );
     }
     
-    console.log(`Deleted generation with ID ${id} from Supabase`);
+    console.log(`Marked generation with ID ${id} as deleted in Supabase`);
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('Error deleting from image history:', error);
