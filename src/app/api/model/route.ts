@@ -19,7 +19,7 @@ export async function POST(request: NextRequest) {
       return await handleFileUpload(request);
     }
 
-    const { action, modelName, owner, modelOwner, visibility, hardware, zipUrl } = await request.json();
+    const { action, modelName, owner, modelOwner, visibility, hardware, zipUrl, trainingId } = await request.json();
 
     // Check if API token is available
     const apiToken = process.env.REPLICATE_API_TOKEN;
@@ -45,6 +45,8 @@ export async function POST(request: NextRequest) {
         return await trainModel(modelOwner || owner, modelName, zipUrl);
       case 'initBucket':
         return await initializeBucket();
+      case 'cancel':
+        return await cancelTraining(trainingId);
       default:
         return NextResponse.json(
           { error: 'Invalid action', success: false },
@@ -99,27 +101,62 @@ async function createModel(modelName: string, owner: string, visibility: Visibil
     hardware: hardware || 'gpu-t4'
   });
 
-  // Create the model in Replicate
-  const model = await replicate.models.create(
-    owner, 
-    modelName,
-    {
-      visibility: visibility || 'private',
-      hardware: hardware || 'gpu-t4'
-    }
-  );
+  try {
+    // Create the model in Replicate
+    const model = await replicate.models.create(
+      owner, 
+      modelName,
+      {
+        visibility: visibility || 'private',
+        hardware: hardware || 'gpu-t4'
+      }
+    );
 
-  console.log('Model created successfully:', model);
+    console.log('Model created successfully:', model);
 
-  return NextResponse.json({
-    success: true,
-    model: {
-      name: model.name,
-      owner: model.owner,
-      url: `https://replicate.com/${model.owner}/${model.name}`,
-      visibility: model.visibility,
+    // Initialize Supabase client
+    const supabase = createSupabaseAdmin();
+
+    // Store the model in Supabase
+    const { data: modelData, error: modelError } = await supabase
+      .from('models')
+      .insert({
+        name: modelName,
+        owner: owner,
+        replicate_owner: model.owner,
+        replicate_name: model.name,
+        visibility: model.visibility,
+        hardware: hardware || 'gpu-t4',
+        status: 'created'
+      })
+      .select()
+      .single();
+
+    if (modelError) {
+      console.error('Error storing model in Supabase:', modelError);
+      // Continue anyway since the model was created in Replicate
     }
-  });
+
+    return NextResponse.json({
+      success: true,
+      model: {
+        id: modelData?.id || null,
+        name: model.name,
+        owner: model.owner,
+        url: `https://replicate.com/${model.owner}/${model.name}`,
+        visibility: model.visibility,
+      }
+    });
+  } catch (error) {
+    console.error('Error creating model:', error);
+    return NextResponse.json(
+      { 
+        error: error instanceof Error ? error.message : 'Failed to create model',
+        success: false
+      },
+      { status: 500 }
+    );
+  }
 }
 
 // Train a model using Replicate
@@ -137,44 +174,106 @@ async function trainModel(modelOwner: string, modelName: string, zipUrl: string)
     zipUrl
   });
 
-  // Create the training in Replicate
-  const training = await replicate.trainings.create(
-    "ostris",
-    "flux-dev-lora-trainer",
-    "b6af14222e6bd9be257cbc1ea4afda3cd0503e1133083b9d1de0364d8568e6ef",
-    {
-      // Set the destination model
-      destination: `${modelOwner}/${modelName}`,
-      input: {
-        steps: 1000,
-        lora_rank: 16,
-        optimizer: "adamw8bit",
-        batch_size: 1,
-        resolution: "512,768,1024",
-        autocaption: true,
-        input_images: zipUrl,
-        trigger_word: "TOK",
-        learning_rate: 0.0004,
-        wandb_project: "flux_train_replicate",
-        wandb_save_interval: 100,
-        caption_dropout_rate: 0.05,
-        cache_latents_to_disk: false,
-        wandb_sample_interval: 100,
-        gradient_checkpointing: false
+  try {
+    // Initialize Supabase client
+    const supabase = createSupabaseAdmin();
+
+    // Find the model in Supabase
+    const { data: modelData, error: modelError } = await supabase
+      .from('models')
+      .select('*')
+      .eq('replicate_owner', modelOwner)
+      .eq('replicate_name', modelName)
+      .single();
+
+    if (modelError) {
+      console.error('Error finding model in Supabase:', modelError);
+      return NextResponse.json(
+        { error: 'Model not found in database', success: false },
+        { status: 404 }
+      );
+    }
+
+    // Define training parameters
+    const trainingParams = {
+      steps: 3,
+      lora_rank: 16,
+      optimizer: "adamw8bit",
+      batch_size: 1,
+      resolution: "512,768,1024",
+      autocaption: true,
+      input_images: zipUrl,
+      trigger_word: "TOK",
+      learning_rate: 0.0004,
+      wandb_project: "flux_train_replicate",
+      wandb_save_interval: 100,
+      caption_dropout_rate: 0.05,
+      cache_latents_to_disk: false,
+      wandb_sample_interval: 100,
+      gradient_checkpointing: false
+    };
+
+    // Create the training in Replicate
+    const training = await replicate.trainings.create(
+      "ostris",
+      "flux-dev-lora-trainer",
+      "b6af14222e6bd9be257cbc1ea4afda3cd0503e1133083b9d1de0364d8568e6ef",
+      {
+        // Set the destination model
+        destination: `${modelOwner}/${modelName}`,
+        input: trainingParams,
+        // Add webhook configuration with ngrok URL
+        webhook: "https://4805-2a01-e0a-301-d300-fdc3-35f9-17aa-dd13.ngrok-free.app/api/webhook",
+        webhook_events_filter: ["start", "output", "completed"]
       }
-    }
-  );
+    );
 
-  console.log('Training created successfully:', training);
+    console.log('Training created successfully:', training);
 
-  return NextResponse.json({
-    success: true,
-    training: {
-      id: training.id,
-      status: training.status,
-      url: `https://replicate.com/p/${training.id}`
+    // Store the training in Supabase
+    const { error: trainingError } = await supabase
+      .from('trainings')
+      .insert({
+        model_id: modelData.id,
+        replicate_training_id: training.id,
+        status: training.status,
+        zip_url: zipUrl,
+        input_params: trainingParams
+      });
+
+    if (trainingError) {
+      console.error('Error storing training in Supabase:', trainingError);
+      // Continue anyway since the training was created in Replicate
     }
-  });
+
+    // Update the model status
+    const { error: updateError } = await supabase
+      .from('models')
+      .update({ status: 'training' })
+      .eq('id', modelData.id);
+
+    if (updateError) {
+      console.error('Error updating model status in Supabase:', updateError);
+    }
+
+    return NextResponse.json({
+      success: true,
+      training: {
+        id: training.id,
+        status: training.status,
+        url: `https://replicate.com/p/${training.id}`
+      }
+    });
+  } catch (error) {
+    console.error('Error training model:', error);
+    return NextResponse.json(
+      { 
+        error: error instanceof Error ? error.message : 'Failed to train model',
+        success: false
+      },
+      { status: 500 }
+    );
+  }
 }
 
 // Initialize the storage bucket
@@ -257,6 +356,19 @@ async function handleFileUpload(request: NextRequest) {
     // Initialize Supabase client with admin privileges
     const supabase = createSupabaseAdmin();
     
+    // Find the model in Supabase
+    const { data: modelData, error: modelError } = await supabase
+      .from('models')
+      .select('*')
+      .eq('replicate_owner', modelOwner)
+      .eq('replicate_name', modelName)
+      .single();
+
+    if (modelError) {
+      console.error('Error finding model in Supabase:', modelError);
+      // Continue anyway since we can still upload the files
+    }
+    
     // Create a zip file directly
     const zip = new JSZip();
     
@@ -300,6 +412,21 @@ async function handleFileUpload(request: NextRequest) {
     
     console.log(`Zip file uploaded: ${publicUrl.publicUrl}`);
 
+    // Update the model with the zip URL if we found the model
+    if (modelData) {
+      const { error: updateError } = await supabase
+        .from('models')
+        .update({ 
+          status: 'files_uploaded'
+        })
+        .eq('id', modelData.id);
+
+      if (updateError) {
+        console.error('Error updating model in Supabase:', updateError);
+        // Continue anyway since the files were uploaded
+      }
+    }
+
     return NextResponse.json({
       success: true,
       zipUrl: publicUrl.publicUrl,
@@ -321,4 +448,107 @@ async function handleFileUpload(request: NextRequest) {
 function getFileExtension(filename: string): string {
   const lastDotIndex = filename.lastIndexOf('.');
   return lastDotIndex !== -1 ? filename.substring(lastDotIndex) : '';
+}
+
+// Cancel a training in Replicate
+async function cancelTraining(trainingId: string) {
+  if (!trainingId) {
+    return NextResponse.json(
+      { error: 'Training ID is required', success: false },
+      { status: 400 }
+    );
+  }
+
+  console.log('Cancelling training with ID:', trainingId);
+
+  try {
+    // Cancel the training in Replicate
+    // Note: Despite the API docs indicating training_id should be a number,
+    // the Replicate Node.js client expects a string. Let's use it as is
+    // but add more detailed error logging if it fails.
+    console.log('Calling replicate.trainings.cancel with ID:', trainingId);
+    const response = await replicate.trainings.cancel(trainingId);
+
+    console.log('Training cancelled successfully, response:', JSON.stringify(response, null, 2));
+
+    // Initialize Supabase client
+    const supabase = createSupabaseAdmin();
+
+    // Find the training in Supabase
+    const { data: trainingData, error: trainingError } = await supabase
+      .from('trainings')
+      .select('*, models!inner(*)')
+      .eq('replicate_training_id', trainingId)
+      .single();
+
+    if (trainingError) {
+      console.error('Error finding training in Supabase:', trainingError);
+      return NextResponse.json(
+        { 
+          error: 'Training not found in database, but was cancelled in Replicate',
+          success: true,
+          training: {
+            id: trainingId,
+            status: 'canceled'
+          }
+        }
+      );
+    }
+
+    console.log('Found training in database:', JSON.stringify(trainingData, null, 2));
+
+    // Update the training status in Supabase
+    const { error: updateTrainingError } = await supabase
+      .from('trainings')
+      .update({ 
+        status: 'canceled',
+        is_cancelled: true,
+        completed_at: new Date().toISOString()
+      })
+      .eq('replicate_training_id', trainingId);
+
+    if (updateTrainingError) {
+      console.error('Error updating training status in Supabase:', updateTrainingError);
+    } else {
+      console.log('Successfully updated training status in Supabase');
+    }
+
+    // Check if this is the only active training for the model
+    const { data: activeTrainings, error: activeTrainingsError } = await supabase
+      .from('trainings')
+      .select('id')
+      .eq('model_id', trainingData.model_id)
+      .in('status', ['training', 'starting', 'created', 'queued'])
+      .neq('replicate_training_id', trainingId);
+
+    if (!activeTrainingsError && (!activeTrainings || activeTrainings.length === 0)) {
+      // Update the model status if this was the only active training
+      const { error: updateModelError } = await supabase
+        .from('models')
+        .update({ status: 'training_failed' })
+        .eq('id', trainingData.model_id);
+
+      if (updateModelError) {
+        console.error('Error updating model status in Supabase:', updateModelError);
+      }
+    }
+
+    return NextResponse.json({
+      success: true,
+      training: {
+        id: trainingId,
+        status: 'canceled',
+        modelId: trainingData.model_id
+      }
+    });
+  } catch (error) {
+    console.error('Error cancelling training:', error);
+    return NextResponse.json(
+      { 
+        error: error instanceof Error ? error.message : 'Failed to cancel training',
+        success: false
+      },
+      { status: 500 }
+    );
+  }
 } 

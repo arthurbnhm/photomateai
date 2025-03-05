@@ -14,11 +14,29 @@ import {
 
 export function ModeToggle() {
   const { setTheme, resolvedTheme } = useTheme()
-  const isDark = resolvedTheme === 'dark'
+  const [mounted, setMounted] = React.useState(false)
+  
+  // After hydration, we can safely show the UI
+  React.useEffect(() => {
+    setMounted(true)
+  }, [])
+  
+  // Only calculate these classes on the client side after hydration
+  const isDark = mounted && resolvedTheme === 'dark'
   
   const iconBaseClass = "h-5 w-5 transition-all duration-500 ease-in-out"
   const sunClass = isDark ? 'rotate-[-90deg] scale-0 opacity-0' : 'rotate-0 scale-100 opacity-100'
   const moonClass = isDark ? 'rotate-0 scale-100 opacity-100' : 'rotate-90 scale-0 opacity-0'
+
+  // Prevent hydration mismatch by using a consistent initial state
+  if (!mounted) {
+    return (
+      <Button variant="outline" size="icon" className="relative">
+        <Sun className={`${iconBaseClass}`} />
+        <span className="sr-only">Loading theme</span>
+      </Button>
+    )
+  }
 
   return (
     <DropdownMenu>

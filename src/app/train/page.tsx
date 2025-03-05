@@ -9,6 +9,8 @@ import { useDropzone } from "react-dropzone";
 import Image from "next/image";
 import { v4 as uuidv4 } from 'uuid';
 import { toast } from "sonner";
+import { ModelListTable } from "@/components/ModelListTable";
+import { Loader2 } from "lucide-react";
 
 export default function TrainPage() {
   const [displayModelName, setDisplayModelName] = useState("");
@@ -16,7 +18,14 @@ export default function TrainPage() {
   const [uploadedImages, setUploadedImages] = useState<File[]>([]);
   const [isDraggingImages, setIsDraggingImages] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [trainingStatus, setTrainingStatus] = useState<{ id: string; status: string; url: string } | null>(null);
+  const [trainingStatus, setTrainingStatus] = useState<{ 
+    id: string; 
+    status: string; 
+    url: string; 
+    modelId?: string;
+    modelName?: string;
+    modelOwner?: string;
+  } | null>(null);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [nameError, setNameError] = useState<string | null>(null);
 
@@ -94,6 +103,11 @@ export default function TrainPage() {
     }
   }, [displayModelName]);
 
+  // Called when the ModelListTable detects that newTraining is now in the models list
+  const clearTrainingStatus = () => {
+    setTrainingStatus(null);
+  };
+
   // Handle form submission - now combines model creation and training
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -135,6 +149,7 @@ export default function TrainPage() {
 
       console.log(`Model created: ${modelData.model.name}`);
       console.log(`Model URL: ${modelData.model.url}`);
+      console.log(`Model ID: ${modelData.model.id}`);
       
       toast.success("Model created successfully");
       setUploadProgress(30);
@@ -200,7 +215,10 @@ export default function TrainPage() {
       setTrainingStatus({
         id: trainingData.training.id,
         status: trainingData.training.status,
-        url: trainingData.training.url
+        url: trainingData.training.url,
+        modelId: modelData.model.id,
+        modelName: modelData.model.name,
+        modelOwner: modelData.model.owner
       });
       
       // Complete progress
@@ -214,6 +232,10 @@ export default function TrainPage() {
           onClick: () => window.open(trainingData.training.url, '_blank')
         }
       });
+
+      // Reset the form fields but keep the training status for the ModelListTable
+      setDisplayModelName("");
+      setUploadedImages([]);
       
     } catch (error) {
       console.error("Error processing model:", error);
@@ -296,48 +318,58 @@ export default function TrainPage() {
     e.preventDefault();
     setIsDraggingImages(false);
     
-    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      const files = Array.from(e.dataTransfer.files).filter(
-        file => file.type.startsWith('image/')
-      );
-      
-      // Limit to 10 images total
-      const newImages = [...uploadedImages];
-      const remainingSlots = 10 - newImages.length;
-      
-      if (remainingSlots > 0) {
-        const filesToAdd = files.slice(0, remainingSlots);
-        setUploadedImages([...newImages, ...filesToAdd]);
-      }
+    // If the dragged items are not files, do nothing
+    if (!e.dataTransfer.files || e.dataTransfer.files.length === 0) {
+      return;
+    }
+    
+    // Create an array from the FileList
+    const fileArray = Array.from(e.dataTransfer.files);
+    
+    // Filter only image files
+    const imageFiles = fileArray.filter(file => 
+      file.type.startsWith('image/')
+    );
+    
+    if (imageFiles.length > 0) {
+      // Pass the image files to the dropzone's onDrop function
+      onDrop(imageFiles);
     }
   };
 
-  // Add global event listeners for drag events outside the component
-  // This ensures we reset the state when the user stops dragging anywhere
+  // Add global event listeners for drag and drop
   useEffect(() => {
+    const handleGlobalDragOver = (e: DragEvent) => {
+      e.preventDefault();
+      if (e.dataTransfer?.items && containsImageFiles(e.dataTransfer.items)) {
+        setIsDraggingImages(true);
+      }
+    };
+    
     const handleGlobalDragLeave = (e: DragEvent) => {
-      // Check if the drag is leaving the window
-      if (e.clientX <= 0 || e.clientY <= 0 || 
-          e.clientX >= window.innerWidth || e.clientY >= window.innerHeight) {
+      e.preventDefault();
+      // Only consider leaving if it's to the document.body or document.documentElement
+      if (e.target === document.body || e.target === document.documentElement) {
         setIsDraggingImages(false);
       }
     };
-
+    
     const handleGlobalDragEnd = () => {
       setIsDraggingImages(false);
     };
-
-    // Add event listeners when component mounts
-    window.addEventListener('dragleave', handleGlobalDragLeave);
-    window.addEventListener('dragend', handleGlobalDragEnd);
-
-    // Clean up event listeners when component unmounts
+    
+    document.addEventListener('dragover', handleGlobalDragOver);
+    document.addEventListener('dragleave', handleGlobalDragLeave);
+    document.addEventListener('dragend', handleGlobalDragEnd);
+    
     return () => {
-      window.removeEventListener('dragleave', handleGlobalDragLeave);
-      window.removeEventListener('dragend', handleGlobalDragEnd);
+      document.removeEventListener('dragover', handleGlobalDragOver);
+      document.removeEventListener('dragleave', handleGlobalDragLeave);
+      document.removeEventListener('dragend', handleGlobalDragEnd);
     };
   }, []);
 
+  // Use the div as a container to catch drag/drop events
   return (
     <div 
       className="flex flex-col min-h-screen p-8 pb-28 sm:pb-20 gap-8 sm:p-20 bg-background"
@@ -379,190 +411,151 @@ export default function TrainPage() {
       </header>
       
       <main className="flex-1 w-full max-w-4xl mx-auto flex flex-col gap-8 z-10 mt-4">
-        {trainingStatus ? (
-          <div className="bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-900 rounded-lg p-6 text-center">
-            <h2 className="text-xl font-semibold mb-2">Training Started!</h2>
-            <p className="mb-4">Your model is now training. This may take a while to complete.</p>
-            <div className="bg-card rounded-md p-4 mb-4 text-left">
-              <p><span className="font-medium">Training ID:</span> {trainingStatus.id}</p>
-              <p><span className="font-medium">Status:</span> {trainingStatus.status}</p>
-            </div>
-            <div className="flex justify-center">
-              <a 
-                href={trainingStatus.url} 
-                target="_blank" 
-                rel="noopener noreferrer"
-                className="bg-primary text-primary-foreground hover:bg-primary/90 px-4 py-2 rounded-md"
-              >
-                View Training on Replicate
-              </a>
-            </div>
-            <button
-              onClick={() => {
-                setTrainingStatus(null);
-                setDisplayModelName("");
-                setUploadedImages([]);
-              }}
-              className="mt-4 text-sm text-muted-foreground hover:text-foreground"
-            >
-              Train Another Model
-            </button>
-          </div>
-        ) : (
-          <form className="space-y-8">
-            <div className="space-y-4">
-              <div>
-                <Label htmlFor="model-name">Model Name</Label>
-                <Input 
-                  id="model-name" 
-                  placeholder="Enter a name for your model" 
-                  value={displayModelName}
-                  onChange={(e) => setDisplayModelName(e.target.value)}
-                  className={`mt-1 ${nameError ? 'border-red-500' : ''}`}
-                />
-                {nameError ? (
-                  <p className="text-xs text-red-500 mt-1">{nameError}</p>
-                ) : (
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Your model will be created as a private model with owner &quot;arthurbnhm&quot; using T4 GPU.
-                  </p>
-                )}
-                {actualModelName && !nameError && (
-                  <p className="text-xs text-green-600 mt-1">
-                    Model will be created as: <span className="font-mono">{actualModelName}</span>
-                  </p>
-                )}
-              </div>
-              
-              <div className="space-y-2">
-                <Label>Upload Images (10 max)</Label>
-                <div 
-                  {...getRootProps()} 
-                  className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors ${
-                    isDragActive ? 'border-primary bg-primary/5' : 'border-muted-foreground/20 hover:border-primary/50'
-                  }`}
-                >
-                  <input {...getInputProps()} />
-                  <div className="flex flex-col items-center justify-center gap-2">
-                    <svg 
-                      xmlns="http://www.w3.org/2000/svg" 
-                      width="24" 
-                      height="24" 
-                      viewBox="0 0 24 24" 
-                      fill="none" 
-                      stroke="currentColor" 
-                      strokeWidth="2" 
-                      strokeLinecap="round" 
-                      strokeLinejoin="round" 
-                      className="text-muted-foreground"
-                    >
-                      <path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"></path>
-                      <path d="M12 12v9"></path>
-                      <path d="m16 16-4-4-4 4"></path>
-                    </svg>
-                    <p className="text-sm font-medium">
-                      Drag and drop images here, or click to select files
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      JPG, PNG, WebP up to 10 images
-                    </p>
-                  </div>
-                </div>
-              </div>
-              
-              {uploadedImages.length > 0 && (
-                <div className="space-y-2">
-                  <Label>{uploadedImages.length} of 10 images uploaded</Label>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4 mt-2">
-                    {uploadedImages.map((file, index) => (
-                      <Card key={index} className="overflow-hidden relative group">
-                        <CardContent className="p-0">
-                          <div className="relative aspect-square">
-                            <Image
-                              src={URL.createObjectURL(file)}
-                              alt={`Uploaded image ${index + 1}`}
-                              fill
-                              className="object-cover"
-                            />
-                            <button
-                              type="button"
-                              onClick={() => removeImage(index)}
-                              className="absolute top-1 right-1 bg-background/80 dark:bg-foreground/20 text-foreground dark:text-background rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                              aria-label="Remove image"
-                            >
-                              <svg 
-                                xmlns="http://www.w3.org/2000/svg" 
-                                width="16" 
-                                height="16" 
-                                viewBox="0 0 24 24" 
-                                fill="none" 
-                                stroke="currentColor" 
-                                strokeWidth="2" 
-                                strokeLinecap="round" 
-                                strokeLinejoin="round"
-                              >
-                                <path d="M18 6 6 18"></path>
-                                <path d="m6 6 12 12"></path>
-                              </svg>
-                            </button>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </div>
-                </div>
+        <form className="space-y-8">
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="model-name">Model Name</Label>
+              <Input
+                id="model-name" 
+                placeholder="Enter a name for your model"
+                value={displayModelName}
+                onChange={(e) => setDisplayModelName(e.target.value)}
+                className={`mt-1 ${nameError ? 'border-red-500' : ''}`}
+              />
+              {nameError ? (
+                <p className="text-xs text-red-500 mt-1">{nameError}</p>
+              ) : (
+                <p className="text-xs text-muted-foreground mt-1">
+                  Your model will be created as a private model with owner &quot;arthurbnhm&quot; using T4 GPU.
+                </p>
               )}
-              
-              {isProcessing && uploadProgress > 0 && (
-                <div className="mt-4">
-                  <div className="flex justify-between mb-1">
-                    <span className="text-sm font-medium">Uploading images...</span>
-                    <span className="text-sm font-medium">{uploadProgress}%</span>
-                  </div>
-                  <div className="w-full bg-muted rounded-full h-2.5">
-                    <div 
-                      className="bg-primary h-2.5 rounded-full" 
-                      style={{ width: `${uploadProgress}%` }}
-                    ></div>
-                  </div>
-                </div>
+              {actualModelName && !nameError && (
+                <p className="text-xs text-green-600 mt-1">
+                  Model will be created as: <span className="font-mono">{actualModelName}</span>
+                </p>
               )}
             </div>
             
-            <Button 
-              type="submit" 
-              className="w-full"
-              disabled={!displayModelName || nameError !== null || uploadedImages.length === 0 || isProcessing}
-              onClick={handleSubmit}
-            >
-              {isProcessing ? (
-                <span className="flex items-center justify-center">
-                  <svg 
-                    className="animate-spin -ml-1 mr-3 h-5 w-5 text-primary-foreground" 
+            <div className="space-y-2">
+              <Label>Upload Images (10 max)</Label>
+              <div 
+                {...getRootProps()} 
+                className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors ${
+                  isDragActive ? 'border-primary bg-primary/5' : 'border-muted-foreground/20 hover:border-primary/50'
+                }`}
+              >
+                <input {...getInputProps()} />
+                <div className="flex flex-col items-center justify-center gap-2">
+                  <svg
                     xmlns="http://www.w3.org/2000/svg" 
-                    fill="none" 
-                    viewBox="0 0 24 24"
+                    width="24" 
+                    height="24" 
+                    viewBox="0 0 24 24" 
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2" 
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className="text-muted-foreground"
                   >
-                    <circle 
-                      className="opacity-25" 
-                      cx="12" 
-                      cy="12" 
-                      r="10" 
-                      stroke="currentColor" 
-                      strokeWidth="4"
-                    ></circle>
-                    <path 
-                      className="opacity-75" 
-                      fill="currentColor" 
-                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                    ></path>
+                    <path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"></path>
+                    <path d="M12 12v9"></path>
+                    <path d="m16 16-4-4-4 4"></path>
                   </svg>
-                  Processing...
-                </span>
-              ) : 'Create & Train Model'}
-            </Button>
-          </form>
-        )}
+                  <p className="text-sm font-medium">
+                    Drag and drop images here, or click to select files
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    JPG, PNG, WebP up to 10 images
+                  </p>
+                </div>
+              </div>
+            </div>
+            
+            {uploadedImages.length > 0 && (
+              <div className="space-y-2">
+                <Label>{uploadedImages.length} of 10 images uploaded</Label>
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4 mt-2">
+                  {uploadedImages.map((file, index) => (
+                    <Card key={index} className="overflow-hidden relative group">
+                      <CardContent className="p-0">
+                        <div className="relative aspect-square">
+                          <Image
+                            src={URL.createObjectURL(file)}
+                            alt={`Uploaded image ${index + 1}`}
+                            fill
+                            className="object-cover"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => removeImage(index)}
+                            className="absolute top-1 right-1 bg-background/80 dark:bg-foreground/20 text-foreground dark:text-background rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                            aria-label="Remove image"
+                          >
+                            <svg
+                              xmlns="http://www.w3.org/2000/svg" 
+                              width="16" 
+                              height="16" 
+                              viewBox="0 0 24 24" 
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2" 
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            >
+                              <path d="M18 6 6 18"></path>
+                              <path d="m6 6 12 12"></path>
+                            </svg>
+                          </button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              </div>
+            )}
+            
+            {isProcessing && uploadProgress > 0 && (
+              <div className="mt-4">
+                <div className="flex justify-between mb-1">
+                  <span className="text-sm font-medium">Processing...</span>
+                  <span className="text-sm font-medium">{uploadProgress}%</span>
+                </div>
+                <div className="w-full bg-muted rounded-full h-2.5">
+                  <div
+                    className="bg-primary h-2.5 rounded-full" 
+                    style={{ width: `${uploadProgress}%` }}
+                  ></div>
+                </div>
+              </div>
+            )}
+          </div>
+          
+          <Button
+            type="submit"
+            className="w-full"
+            disabled={!displayModelName || nameError !== null || uploadedImages.length === 0 || isProcessing}
+            onClick={handleSubmit}
+          >
+            {isProcessing ? (
+              <span className="flex items-center justify-center">
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Processing...
+              </span>
+            ) : 'Create & Train Model'}
+          </Button>
+        </form>
+
+        {/* Model List Table */}
+        <div className="mt-8">
+          <div className="mb-6">
+            <h2 className="text-2xl font-bold">Your Models</h2>
+          </div>
+          <ModelListTable 
+            newTraining={trainingStatus} 
+            onClearNewTraining={clearTrainingStatus}
+          />
+        </div>
       </main>
       
       <footer className="w-full max-w-4xl mx-auto text-center text-sm text-muted-foreground pt-4">

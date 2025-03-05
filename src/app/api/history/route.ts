@@ -1,11 +1,66 @@
 import { NextResponse } from 'next/server';
-import { addToHistory, getHistory, deleteFromHistory, type ImageGeneration } from './utils';
+import { createSupabaseAdmin } from '@/lib/supabase';
+
+// Define the type for image generation
+type ImageGeneration = {
+  id: string;
+  prompt: string;
+  timestamp: string;
+  images: string[];
+  aspectRatio: string;
+};
+
+// Type for Supabase prediction records
+type PredictionRecord = {
+  id: string
+  replicate_id: string
+  prompt: string
+  aspect_ratio: string
+  status: string
+  input: Record<string, unknown>
+  output: string[] | null
+  error: string | null
+  created_at: string
+  updated_at: string
+  completed_at: string | null
+}
 
 export async function GET() {
   try {
-    const imageHistory = getHistory();
-    console.log('Returning server history with', imageHistory.length, 'items');
-    return NextResponse.json(imageHistory);
+    // Initialize Supabase client
+    const supabase = createSupabaseAdmin();
+    
+    // Fetch successful predictions from Supabase
+    const { data: predictionData, error: supabaseError } = await supabase
+      .from('predictions')
+      .select('*')
+      .eq('status', 'succeeded')
+      .order('created_at', { ascending: false })
+      .limit(20);
+    
+    if (supabaseError) {
+      throw new Error(`Failed to fetch from Supabase: ${supabaseError.message}`);
+    }
+    
+    // If no data from Supabase, return empty array
+    if (!predictionData || predictionData.length === 0) {
+      console.log('No data in Supabase, returning empty array');
+      return NextResponse.json([]);
+    }
+    
+    // Transform Supabase records to ImageGeneration format
+    const transformedData: ImageGeneration[] = predictionData
+      .filter((pred: PredictionRecord) => pred.output && Array.isArray(pred.output))
+      .map((pred: PredictionRecord) => ({
+        id: pred.id,
+        prompt: pred.prompt,
+        timestamp: pred.created_at,
+        images: Array.isArray(pred.output) ? pred.output : [],
+        aspectRatio: pred.aspect_ratio
+      }));
+    
+    console.log('Returning Supabase history with', transformedData.length, 'items');
+    return NextResponse.json(transformedData);
   } catch (error) {
     console.error('Error fetching image history:', error);
     return NextResponse.json(
@@ -27,6 +82,54 @@ export async function POST(request: Request) {
       );
     }
     
+    // Initialize Supabase client
+    const supabase = createSupabaseAdmin();
+    
+    // Check if this is from a Replicate prediction
+    if (body.replicate_id) {
+      // Update the existing prediction record
+      const { error: updateError } = await supabase
+        .from('predictions')
+        .update({
+          output: body.images,
+          status: 'succeeded',
+          completed_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        })
+        .eq('replicate_id', body.replicate_id);
+      
+      if (updateError) {
+        console.error('Error updating prediction in Supabase:', updateError);
+        return NextResponse.json(
+          { error: 'Failed to update prediction in database' },
+          { status: 500 }
+        );
+      }
+    } else {
+      // Create a new prediction record
+      const { error: insertError } = await supabase
+        .from('predictions')
+        .insert({
+          replicate_id: `manual-${Date.now()}`,
+          prompt: body.prompt,
+          aspect_ratio: body.aspectRatio || "1:1",
+          status: 'succeeded',
+          input: { prompt: body.prompt },
+          output: body.images,
+          created_at: body.timestamp || new Date().toISOString(),
+          completed_at: new Date().toISOString()
+        });
+      
+      if (insertError) {
+        console.error('Error inserting prediction to Supabase:', insertError);
+        return NextResponse.json(
+          { error: 'Failed to save prediction to database' },
+          { status: 500 }
+        );
+      }
+    }
+    
+    // Create response object
     const newGeneration: ImageGeneration = {
       id: body.id || Date.now().toString(),
       prompt: body.prompt,
@@ -35,17 +138,7 @@ export async function POST(request: Request) {
       aspectRatio: body.aspectRatio || "1:1"
     };
     
-    // Use the shared function to add to history
-    const savedGeneration = addToHistory(newGeneration);
-    
-    if (!savedGeneration) {
-      return NextResponse.json(
-        { error: 'Failed to save generation to history' },
-        { status: 500 }
-      );
-    }
-    
-    return NextResponse.json(savedGeneration);
+    return NextResponse.json(newGeneration);
   } catch (error) {
     console.error('Error saving to image history:', error);
     return NextResponse.json(
@@ -68,18 +161,24 @@ export async function DELETE(request: Request) {
       );
     }
     
-    // Delete the generation from history
-    const success = deleteFromHistory(id);
+    // Initialize Supabase client
+    const supabase = createSupabaseAdmin();
     
-    if (!success) {
-      // Instead of returning a 404, we'll return a success response
-      // This is because the client might be trying to delete a generation
-      // that only exists in client history
-      console.log(`Generation with ID ${id} not found in server history, but reporting success`);
-    } else {
-      console.log(`Deleted generation with ID ${id}`);
+    // Delete from Supabase
+    const { error: deleteError } = await supabase
+      .from('predictions')
+      .delete()
+      .eq('id', id);
+    
+    if (deleteError) {
+      console.error('Error deleting from Supabase:', deleteError);
+      return NextResponse.json(
+        { error: 'Failed to delete from database' },
+        { status: 500 }
+      );
     }
     
+    console.log(`Deleted generation with ID ${id} from Supabase`);
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('Error deleting from image history:', error);

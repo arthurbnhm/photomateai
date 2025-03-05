@@ -1,6 +1,7 @@
 "use client"
 
 import { createContext, useContext, useState, ReactNode, useEffect } from 'react'
+import { createSupabaseClient } from '@/lib/supabase'
 
 // Define the type for image generation
 type ImageGeneration = {
@@ -14,6 +15,7 @@ type ImageGeneration = {
 // Add a type for pending generations with potential stall status
 type PendingGeneration = {
   id: string
+  replicate_id?: string // Store the actual Replicate ID when available
   prompt: string
   aspectRatio: string
   startTime?: string // When the generation started
@@ -52,66 +54,13 @@ export function GenerationProvider({ children }: { children: ReactNode }) {
   // Add state for pending generations
   const [pendingGenerations, setPendingGenerations] = useState<PendingGeneration[]>([])
 
-  // Load client history from localStorage on mount
+  // Mark potentially stalled generations periodically
   useEffect(() => {
-    try {
-      // Load completed generations
-      const savedHistory = localStorage.getItem('imageHistory')
-      if (savedHistory) {
-        setClientHistory(JSON.parse(savedHistory))
-      }
-      
-      // Load pending generations
-      const savedPendingGenerations = localStorage.getItem('pendingGenerations')
-      if (savedPendingGenerations) {
-        const parsedPending = JSON.parse(savedPendingGenerations) as PendingGeneration[]
-        
-        // Filter out stale pending generations
-        const now = Date.now()
-        let activePending = parsedPending.filter(gen => {
-          if (!gen.startTime) return false
-          
-          const genStartTime = new Date(gen.startTime).getTime()
-          return (now - genStartTime) < STALE_GENERATION_THRESHOLD
-        })
-        
-        // Load client history to deduplicate
-        if (savedHistory) {
-          const history = JSON.parse(savedHistory) as ImageGeneration[]
-          
-          // Filter out pending generations that are already in history
-          activePending = activePending.filter(pending => {
-            // Check if this pending generation appears in history by ID
-            return !history.some(completed => completed.id === pending.id)
-          })
-        }
-        
-        // Mark potentially stalled generations
-        activePending = activePending.map(gen => {
-          if (!gen.startTime) return gen;
-          
-          const now = Date.now();
-          const genStartTime = new Date(gen.startTime).getTime();
-          const potentiallyStalled = (now - genStartTime) > POTENTIALLY_STALLED_THRESHOLD;
-          
-          return {
-            ...gen,
-            potentiallyStalled
-          };
-        });
-        
-        setPendingGenerations(activePending)
-      }
-    } catch (error) {
-      console.error('Error loading data from localStorage:', error)
-    }
-  }, [])
-
-  // Check for pending generations that might be stalled
-  useEffect(() => {
-    // Check every 30 seconds to see if any pending generations should be marked as stalled
+    if (pendingGenerations.length === 0) return;
+    
     const interval = setInterval(() => {
-      const now = Date.now()
+      const now = Date.now();
+      
       setPendingGenerations(prev => 
         prev.map(gen => {
           if (!gen.startTime) return gen;
@@ -119,73 +68,16 @@ export function GenerationProvider({ children }: { children: ReactNode }) {
           const genStartTime = new Date(gen.startTime).getTime();
           const potentiallyStalled = (now - genStartTime) > POTENTIALLY_STALLED_THRESHOLD;
           
-          // Only update if the stalled status changes
-          if (potentiallyStalled !== gen.potentiallyStalled) {
-            return {
-              ...gen,
-              potentiallyStalled
-            };
-          }
-          return gen;
+          return {
+            ...gen,
+            potentiallyStalled
+          };
         })
-      )
-    }, 30000) // Check every 30 seconds
+      );
+    }, 30000); // Check every 30 seconds
     
-    return () => clearInterval(interval)
-  }, [])
-
-  // Run this effect when user visibility changes (tab focus)
-  useEffect(() => {
-    // Define the visibility change handler
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        // User has returned to the tab, check for completed generations
-        checkForCompletedGenerations()
-      }
-    }
-    
-    // Add event listener
-    document.addEventListener('visibilitychange', handleVisibilityChange)
-    
-    // Also check when the component mounts (in case the user navigated within the app)
-    checkForCompletedGenerations()
-    
-    // Clean up event listener
-    return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange)
-    }
-  }, [])
-
-  // Save client history to localStorage when it changes
-  useEffect(() => {
-    try {
-      localStorage.setItem('imageHistory', JSON.stringify(clientHistory))
-      
-      // Whenever history changes, ensure we don't have duplicates in pending
-      if (pendingGenerations.length > 0) {
-        const deduplicatedPending = pendingGenerations.filter(pending => {
-          // Keep only pending generations that don't appear in the history
-          return !clientHistory.some(completed => completed.id === pending.id)
-        })
-        
-        // If we removed any duplicates, update state
-        if (deduplicatedPending.length !== pendingGenerations.length) {
-          setPendingGenerations(deduplicatedPending)
-        }
-      }
-    } catch (error) {
-      console.error('Error saving history to localStorage:', error)
-    }
-  }, [clientHistory, pendingGenerations])
-  
-  // Save pending generations to localStorage when they change
-  useEffect(() => {
-    try {
-      localStorage.setItem('pendingGenerations', JSON.stringify(pendingGenerations))
-    } catch (error) {
-      console.error('Error saving pending generations to localStorage:', error)
-    }
-  }, [pendingGenerations])
+    return () => clearInterval(interval);
+  }, [pendingGenerations]);
 
   const refreshHistory = () => {
     setLastGeneratedAt(Date.now())
@@ -259,52 +151,85 @@ export function GenerationProvider({ children }: { children: ReactNode }) {
     if (pendingGenerations.length === 0) return
 
     try {
-      // Get latest history from API to see if any generations completed
-      const response = await fetch('/api/history')
+      // Initialize Supabase client
+      const supabase = createSupabaseClient();
       
-      if (response.ok) {
-        const latestHistory = await response.json()
+      // For each pending generation, check if it has completed in Supabase
+      const pendingToRemove: string[] = [];
+      let updatedClientHistory = [...clientHistory];
+      
+      for (const pending of pendingGenerations) {
+        // Skip if we don't have a replicate_id yet
+        if (!pending.replicate_id) {
+          console.log(`Skipping check for pending generation ${pending.id} - no replicate_id available yet`);
+          continue;
+        }
         
-        if (Array.isArray(latestHistory) && latestHistory.length > 0) {
-          // If API returns history, check for completed generations
-          let updatedClientHistory = [...clientHistory]
-          const pendingToRemove: string[] = []
-          
-          // Check each pending generation
-          for (const pending of pendingGenerations) {
-            // Look for this generation in API response
-            const completedGeneration = latestHistory.find(item => item.id === pending.id)
-            
-            if (completedGeneration) {
-              // This generation has completed while user was away
-              // Add to local history if not already there
-              if (!clientHistory.some(item => item.id === pending.id)) {
-                updatedClientHistory = [completedGeneration, ...updatedClientHistory].slice(0, 10)
-              }
-              
-              // Mark for removal from pending
-              pendingToRemove.push(pending.id)
-            }
+        console.log(`Checking status for pending generation with replicate_id: ${pending.replicate_id}`);
+        
+        // Try to find a completed prediction with this replicate_id
+        const { data: completedPrediction, error } = await supabase
+          .from('predictions')
+          .select('*')
+          .eq('replicate_id', pending.replicate_id)
+          .or('status.eq.succeeded,is_cancelled.eq.true')
+          .maybeSingle();
+        
+        if (error) {
+          console.error('Error checking for completed prediction:', error);
+          continue;
+        }
+        
+        console.log('Checking prediction status:', pending.id, completedPrediction);
+        
+        // Check if prediction is completed or cancelled
+        if (completedPrediction) {
+          // If it's cancelled, just remove from pending without adding to history
+          if (completedPrediction.is_cancelled === true) {
+            console.log('Found cancelled prediction:', pending.id);
+            pendingToRemove.push(pending.id);
+            continue;
           }
           
-          // Update states if needed
-          if (pendingToRemove.length > 0) {
-            // Remove completed generations from pending
-            setPendingGenerations(prev => 
-              prev.filter(gen => !pendingToRemove.includes(gen.id))
-            )
+          // If it's succeeded and has output, add to history
+          if (completedPrediction.status === 'succeeded' && completedPrediction.output) {
+            console.log('Found completed prediction with output:', pending.id, completedPrediction.output);
+            // This generation has completed
+            const completedGeneration: ImageGeneration = {
+              id: completedPrediction.id,
+              prompt: completedPrediction.prompt,
+              timestamp: completedPrediction.created_at,
+              images: Array.isArray(completedPrediction.output) ? completedPrediction.output : [],
+              aspectRatio: completedPrediction.aspect_ratio
+            };
             
-            // Update client history
-            if (updatedClientHistory.length !== clientHistory.length) {
-              setClientHistory(updatedClientHistory)
-              // Force a refresh of the UI
-              refreshHistory()
+            // Add to client history if not already there
+            if (!clientHistory.some(item => item.id === completedPrediction.id)) {
+              updatedClientHistory = [completedGeneration, ...updatedClientHistory].slice(0, 10);
             }
+            
+            // Mark for removal from pending
+            pendingToRemove.push(pending.id);
           }
         }
       }
+      
+      // Update states if needed
+      if (pendingToRemove.length > 0) {
+        // Remove completed generations from pending
+        setPendingGenerations(prev => 
+          prev.filter(gen => !pendingToRemove.includes(gen.id))
+        );
+        
+        // Update client history
+        if (updatedClientHistory.length !== clientHistory.length) {
+          setClientHistory(updatedClientHistory);
+          // Force a refresh of the UI
+          refreshHistory();
+        }
+      }
     } catch (error) {
-      console.error('Error checking for completed generations:', error)
+      console.error('Error checking for completed generations:', error);
     }
   }
 
@@ -314,47 +239,43 @@ export function GenerationProvider({ children }: { children: ReactNode }) {
       // First remove from client history
       setClientHistory(prev => prev.filter(gen => gen.id !== id));
       
-      // Then try to delete from the server
-      try {
-        const response = await fetch(`/api/history?id=${id}`, {
-          method: 'DELETE',
-        });
-        
-        // If the server returns 404, it means the generation doesn't exist on the server
-        // This is fine if we're using client history, so we'll still return true
-        if (response.status === 404) {
-          return true;
-        }
-        
-        return response.ok;
-      } catch (serverError) {
-        // If the server request fails but we've already removed from client history,
-        // we'll consider this a success
-        console.error('Error deleting from server, but removed from client:', serverError);
-        return true;
+      // Then try to delete from Supabase
+      const supabase = createSupabaseClient();
+      const { error } = await supabase
+        .from('predictions')
+        .delete()
+        .eq('id', id);
+      
+      if (error) {
+        console.error('Error deleting from Supabase:', error);
+        return false;
       }
+      
+      return true;
     } catch (error) {
       console.error('Error deleting generation:', error);
       return false;
     }
-  };
+  }
 
   return (
-    <GenerationContext.Provider value={{ 
-      isGenerating, 
-      setIsGenerating, 
-      refreshHistory,
-      lastGeneratedAt,
-      clientHistory,
-      addToClientHistory,
-      pendingGenerations,
-      addPendingGeneration,
-      removePendingGeneration,
-      clearStalePendingGenerations,
-      clearPendingGeneration,
-      checkForCompletedGenerations,
-      deleteGeneration
-    }}>
+    <GenerationContext.Provider
+      value={{
+        isGenerating,
+        setIsGenerating,
+        refreshHistory,
+        lastGeneratedAt,
+        clientHistory,
+        addToClientHistory,
+        pendingGenerations,
+        addPendingGeneration,
+        removePendingGeneration,
+        clearStalePendingGenerations,
+        clearPendingGeneration,
+        checkForCompletedGenerations,
+        deleteGeneration
+      }}
+    >
       {children}
     </GenerationContext.Provider>
   )

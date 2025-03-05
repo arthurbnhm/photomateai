@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Replicate from 'replicate';
+import { createSupabaseAdmin } from '@/lib/supabase';
 
 // Initialize Replicate with API token
 const replicate = new Replicate({
@@ -9,6 +10,7 @@ const replicate = new Replicate({
 export async function POST(request: NextRequest) {
   try {
     const { prompt, aspectRatio, outputFormat } = await request.json();
+    const supabase = createSupabaseAdmin();
 
     // Check if API token is available
     const apiToken = process.env.REPLICATE_API_TOKEN;
@@ -70,6 +72,42 @@ export async function POST(request: NextRequest) {
       console.log('Prediction created:', JSON.stringify(prediction, null, 2));
       console.log('Prediction ID:', prediction.id);
       
+      // Log the prediction to Supabase immediately to ensure it's available for cancellation
+      let dbRecordId = null;
+      try {
+        const { data: predictionRecord, error: insertError } = await supabase
+          .from('predictions')
+          .insert({
+            replicate_id: prediction.id,
+            prompt: prompt,
+            aspect_ratio: aspectRatio || "1:1",
+            status: prediction.status,
+            input: inputParams
+          })
+          .select()
+          .single();
+        
+        if (insertError) {
+          console.error('Error logging prediction to Supabase:', insertError);
+        } else {
+          console.log('Prediction logged to Supabase:', predictionRecord);
+          dbRecordId = predictionRecord.id;
+        }
+      } catch (dbError) {
+        console.error('Exception logging prediction to Supabase:', dbError);
+      }
+      
+      // Return an immediate response with the prediction ID - this is critical for cancellation
+      return NextResponse.json({
+        id: dbRecordId || `manual-${Date.now()}`,
+        replicate_id: prediction.id,
+        status: 'processing',
+        message: 'Prediction started successfully. The generation process may take up to 1-2 minutes.'
+      });
+      
+      // Note: This code is now unreachable. We're returning early and letting the client
+      // check for updates via checkForCompletedGenerations instead of making the client wait
+      
       // Poll for the prediction result
       let attempts = 0;
       const maxAttempts = 30; // 5 minutes (30 * 10 seconds)
@@ -91,23 +129,83 @@ export async function POST(request: NextRequest) {
         finalPrediction = await replicate.predictions.get(prediction.id);
         console.log(`Updated status: ${finalPrediction.status}`);
         
+        // Update the prediction status in Supabase
+        const { error: updateError } = await supabase
+          .from('predictions')
+          .update({
+            status: finalPrediction.status,
+            updated_at: new Date().toISOString()
+          })
+          .eq('replicate_id', prediction.id);
+        
+        if (updateError) {
+          console.error('Error updating prediction status in Supabase:', updateError);
+        }
+        
         if (finalPrediction.status === "processing") {
           console.log("Still processing...");
         } else if (finalPrediction.status === "succeeded") {
           console.log("Prediction succeeded!");
           console.log("Output:", JSON.stringify(finalPrediction.output, null, 2));
+          
+          // Update the prediction with output in Supabase
+          const { error: successUpdateError } = await supabase
+            .from('predictions')
+            .update({
+              status: finalPrediction.status,
+              output: finalPrediction.output,
+              completed_at: new Date().toISOString(),
+              updated_at: new Date().toISOString()
+            })
+            .eq('replicate_id', prediction.id);
+          
+          if (successUpdateError) {
+            console.error('Error updating prediction output in Supabase:', successUpdateError);
+          }
         } else if (finalPrediction.status === "failed") {
           console.error("Prediction failed:", finalPrediction.error);
+          
+          // Update the prediction with error in Supabase
+          const { error: failureUpdateError } = await supabase
+            .from('predictions')
+            .update({
+              status: finalPrediction.status,
+              error: finalPrediction.error || "Unknown error",
+              completed_at: new Date().toISOString(),
+              updated_at: new Date().toISOString()
+            })
+            .eq('replicate_id', prediction.id);
+          
+          if (failureUpdateError) {
+            console.error('Error updating prediction error in Supabase:', failureUpdateError);
+          }
         }
       }
 
       // Check if we've reached the maximum number of attempts
       if (attempts >= maxAttempts && finalPrediction.status !== "succeeded") {
         console.error("Reached maximum polling attempts without success");
+        
+        // Update the prediction with timeout error in Supabase
+        const { error: timeoutUpdateError } = await supabase
+          .from('predictions')
+          .update({
+            status: "timeout",
+            error: "Prediction timed out after 5 minutes",
+            completed_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          })
+          .eq('replicate_id', prediction.id);
+        
+        if (timeoutUpdateError) {
+          console.error('Error updating prediction timeout in Supabase:', timeoutUpdateError);
+        }
+        
         return NextResponse.json(
           { 
             error: "Prediction timed out after 5 minutes", 
             predictionId: prediction.id,
+            replicate_id: prediction.id,
             status: finalPrediction.status
           },
           { status: 504 }
@@ -117,130 +215,95 @@ export async function POST(request: NextRequest) {
       // If generation was successful, save to history
       if (finalPrediction.status === "succeeded" && Array.isArray(finalPrediction.output)) {
         try {
-          // Import the addToHistory function
-          const { addToHistory } = await import('../history/utils');
+          // We don't need to import addToHistory anymore since we're already using Supabase
+          // The prediction is already saved to Supabase in the code above
           
-          console.log('Images to save to history:', finalPrediction.output);
+          console.log('Images already saved to Supabase:', finalPrediction.output);
           
-          // Create a new generation object
-          const newGeneration = {
-            id: Date.now().toString(),
-            prompt,
-            timestamp: new Date().toISOString(),
-            images: finalPrediction.output,
-            aspectRatio: aspectRatio || "1:1"
-          };
-          
-          console.log('Generation object to save:', JSON.stringify(newGeneration, null, 2));
-          
-          // Add to history
-          const savedGeneration = addToHistory(newGeneration);
-          if (savedGeneration) {
-            console.log('Successfully saved to history:', JSON.stringify(savedGeneration, null, 2));
-          } else {
-            console.error('Failed to save to history: Invalid generation object');
-            
-            // Try to save via POST request as fallback
-            try {
-              const historyResponse = await fetch(new URL('/api/history', request.url).toString(), {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(newGeneration),
-              });
-              
-              if (historyResponse.ok) {
-                console.log('Successfully saved to history via POST request');
-              } else {
-                console.error('Failed to save to history via POST request:', await historyResponse.text());
-              }
-            } catch (postError) {
-              console.error('Error saving to history via POST request:', postError);
-            }
-          }
+          // Return the successful prediction
+          return NextResponse.json({
+            id: prediction.id,
+            replicate_id: prediction.id,
+            status: finalPrediction.status,
+            output: finalPrediction.output
+          });
         } catch (historyError) {
-          console.error('Failed to save to history:', historyError);
-          // Don't fail the request if history saving fails
+          console.error('Error handling successful prediction:', historyError);
+          
+          // Return the successful prediction anyway
+          return NextResponse.json({
+            id: prediction.id,
+            replicate_id: prediction.id,
+            status: finalPrediction.status,
+            output: finalPrediction.output
+          });
         }
+      } else if (finalPrediction.status === "failed") {
+        // Return the error
+        return NextResponse.json(
+          { 
+            error: finalPrediction.error || "Prediction failed", 
+            predictionId: prediction.id,
+            replicate_id: prediction.id,
+            status: finalPrediction.status
+          },
+          { status: 500 }
+        );
+      } else {
+        // Return an unknown error
+        return NextResponse.json(
+          { 
+            error: "Prediction did not succeed or fail properly", 
+            predictionId: prediction.id,
+            replicate_id: prediction.id,
+            status: finalPrediction.status
+          },
+          { status: 500 }
+        );
       }
-
-      // Return the final prediction result
-      return NextResponse.json({
-        output: finalPrediction.output,
-        prediction: finalPrediction,
-        status: finalPrediction.status,
-        predictionId: finalPrediction.id,
-        hasOutput: !!finalPrediction.output,
-        isUndefined: finalPrediction.output === undefined,
-        outputType: typeof finalPrediction.output,
-        outputIsArray: Array.isArray(finalPrediction.output),
-        outputLength: Array.isArray(finalPrediction.output) ? finalPrediction.output.length : 0,
-        completedAt: finalPrediction.completed_at,
-        metrics: finalPrediction.metrics,
-      });
     } catch (replicateError) {
-      console.error('Error generating image:', replicateError);
+      console.error('Error calling Replicate API:', replicateError);
       
-      // Extract the error message
-      const errorMessage = replicateError instanceof Error 
-        ? replicateError.message 
-        : String(replicateError);
+      // Log the error to Supabase
+      const { error: errorLogError } = await supabase
+        .from('predictions')
+        .insert({
+          replicate_id: 'error-' + Date.now(),
+          prompt: prompt,
+          aspect_ratio: aspectRatio || "1:1",
+          status: "error",
+          input: inputParams,
+          error: replicateError instanceof Error ? replicateError.message : 'Unknown error',
+          completed_at: new Date().toISOString()
+        });
       
-      // Check if the error is related to the API token
-      if (errorMessage.includes('API token') || errorMessage.includes('authentication') || errorMessage.includes('auth')) {
-        return NextResponse.json(
-          { 
-            error: "Invalid Replicate API token. Please check your token and try again.",
-            details: "You need a valid Replicate API token to use this feature. Get one at https://replicate.com/account/api-tokens"
-          },
-          { status: 401 }
-        );
+      if (errorLogError) {
+        console.error('Error logging prediction error to Supabase:', errorLogError);
       }
       
-      // Check if the error is related to the model version
-      if (errorMessage.includes('version') || errorMessage.includes('model')) {
-        return NextResponse.json(
-          { 
-            error: "Error with the model version. The model may be unavailable or the version ID is incorrect.",
-            details: errorMessage
-          },
-          { status: 400 }
-        );
-      }
+      // Determine if it's a rate limit error
+      const isRateLimitError = replicateError instanceof Error && 
+        (replicateError.message.includes('429') || 
+         replicateError.message.toLowerCase().includes('rate limit'));
+      
+      // Get additional error details
+      const errorMessage = replicateError instanceof Error ? replicateError.message : 'Unknown error';
+      const additionalInfo = isRateLimitError 
+        ? "You've reached the rate limit for image generation. Please try again later."
+        : "There was an error generating your image. Please try again.";
       
       return NextResponse.json(
         { 
-          error: `Error generating image: ${errorMessage}`,
-          details: "An unexpected error occurred while generating the image. Please try again later."
+          error: errorMessage,
+          details: additionalInfo
         },
-        { status: 500 }
+        { status: isRateLimitError ? 429 : 500 }
       );
     }
   } catch (error) {
-    console.error('Error generating image:', error);
-    
-    // Return more detailed error information
-    let errorMessage = 'Failed to generate image';
-    let additionalInfo = {};
-    
-    if (error instanceof Error) {
-      errorMessage = error.message;
-      additionalInfo = { stack: error.stack };
-      
-      // Check for specific error types
-      if (errorMessage.includes('404')) {
-        errorMessage = 'Model not found. Please check the model ID and version.';
-      } else if (errorMessage.includes('401') || errorMessage.includes('403')) {
-        errorMessage = 'Authentication error. Please check your API token.';
-      }
-    }
-    
+    console.error('Error in generate API route:', error);
     return NextResponse.json(
-      { 
-        error: errorMessage,
-        details: additionalInfo
-      },
+      { error: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
     );
   }

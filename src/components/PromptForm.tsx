@@ -111,90 +111,144 @@ export function PromptForm() {
       // Small delay to show initial loading state
       await new Promise(resolve => setTimeout(resolve, 300));
       
-      const response = await fetch('/api/generate', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          prompt: values.prompt,
-          aspectRatio: values.aspectRatio,
-          outputFormat: values.outputFormat
-        }),
-      });
-      
-      if (!response.ok) {
-        const errorData = await response.json();
-        console.error('API error:', errorData);
+      try {
+        const response = await fetch('/api/generate', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            prompt: values.prompt,
+            aspectRatio: values.aspectRatio,
+            outputFormat: values.outputFormat
+          }),
+        });
         
-        setError(errorData.error || 'Failed to generate image');
-        setErrorDetails(errorData.details || null);
+        if (!response.ok) {
+          const errorData = await response.json();
+          console.error('API error:', errorData);
+          
+          setError(errorData.error || 'Failed to generate image');
+          setErrorDetails(errorData.details || null);
+          
+          // Remove from pending generations
+          removePendingGeneration(generationId);
+          setSubmitting(false);
+          return;
+        }
+        
+        const data = await response.json();
+        console.log('FULL API RESPONSE DATA:', JSON.stringify(data, null, 2));
+        
+        // Look for the replicate_id in the right place and update the pending generation ASAP
+        let replicateId = null;
+        
+        // Handle different response structures
+        if (data.replicate_id) {
+          replicateId = data.replicate_id;
+        } else if (data.id) {
+          // Sometimes the API returns the replicate ID directly as 'id'
+          replicateId = data.id;
+        }
+        
+        if (replicateId) {
+          console.log(`Found replicate_id in response: ${replicateId}, updating pending generation ${generationId}`);
+          
+          // Find the pending generation and update it with the replicate_id
+          const currentPending = pendingGenerations.find(pg => pg.id === generationId);
+          if (currentPending) {
+            // Create updated pending generation with replicate_id
+            const updatedPending = {
+              ...currentPending,
+              replicate_id: replicateId
+            };
+            
+            // Remove the old one and add the updated one
+            removePendingGeneration(generationId);
+            addPendingGeneration(updatedPending);
+            
+            console.log('Updated pending generation:', updatedPending);
+          }
+          
+          // Immediate check for completion right after getting the replicate_id
+          setTimeout(() => {
+            checkForCompletedGenerations();
+          }, 500);
+          
+          // With the new API design, we now return early with a "processing" status
+          // and let the checkForCompletedGenerations function handle the completion
+          if (data.status === 'processing') {
+            console.log('Generation is processing. Will check for completion periodically.');
+            setSubmitting(false);
+            return;
+          }
+        } else {
+          console.warn(`No replicate_id found in API response for generation ${generationId}`);
+          console.log('Response data structure:', Object.keys(data));
+        }
+        
+        // Handle successful generation (this should only happen for immediate completions)
+        if (data.status === 'succeeded') {
+          // Add to client-side history
+          if (Array.isArray(data.output) && data.output.length > 0) {
+            console.log('Adding to client history:', {
+              id: generationId,
+              prompt: values.prompt,
+              timestamp: new Date().toISOString(),
+              images: data.output,
+              aspectRatio: values.aspectRatio
+            });
+            
+            addToClientHistory({
+              id: generationId,
+              prompt: values.prompt,
+              timestamp: new Date().toISOString(),
+              images: data.output,
+              aspectRatio: values.aspectRatio
+            });
+            
+            // Remove from pending generations
+            removePendingGeneration(generationId);
+            
+            // Refresh history to show new images
+            refreshHistory();
+            
+            // Reset form after successful generation
+            form.reset({
+              prompt: "",
+              aspectRatio: values.aspectRatio,
+              outputFormat: values.outputFormat
+            });
+          } else {
+            console.error('No images in output:', data);
+            
+            // Remove from pending generations
+            removePendingGeneration(generationId);
+          }
+        }
+      } catch (err) {
+        console.error('Error generating image:', err);
+        
+        // Create a detailed error message
+        let errorMessage = 'An error occurred while generating the image.';
+        let errorDetailsMessage = null;
+        
+        if (err instanceof Error) {
+          errorMessage = err.message;
+          errorDetailsMessage = err.stack || null;
+        }
+        
+        setError(errorMessage);
+        setErrorDetails(errorDetailsMessage);
         
         // Remove from pending generations
         removePendingGeneration(generationId);
-        setSubmitting(false);
-        return;
-      }
-      
-      const data = await response.json();
-      console.log('FULL API RESPONSE DATA:', JSON.stringify(data, null, 2));
-      
-      // Handle successful generation
-      if (data.status === 'succeeded') {
-        // Add to client-side history
-        if (Array.isArray(data.output) && data.output.length > 0) {
-          console.log('Adding to client history:', {
-            id: generationId,
-            prompt: values.prompt,
-            timestamp: new Date().toISOString(),
-            images: data.output,
-            aspectRatio: values.aspectRatio
-          });
-          
-          addToClientHistory({
-            id: generationId,
-            prompt: values.prompt,
-            timestamp: new Date().toISOString(),
-            images: data.output,
-            aspectRatio: values.aspectRatio
-          });
-          
-          // Remove from pending generations
-          removePendingGeneration(generationId);
-          
-          // Refresh history to show new images
-          refreshHistory();
-          
-          // Reset form after successful generation
-          form.reset({
-            prompt: "",
-            aspectRatio: values.aspectRatio,
-            outputFormat: values.outputFormat
-          });
-        } else {
-          console.error('No images in output:', data);
-          
-          // Remove from pending generations
-          removePendingGeneration(generationId);
-        }
       }
       
       setSubmitting(false);
       
     } catch (err) {
-      console.error('Error generating image:', err);
-      
-      // Create a detailed error message
-      let errorMessage = 'An error occurred while generating the image.';
-      let errorDetailsMessage = null;
-      
-      if (err instanceof Error) {
-        errorMessage = err.message;
-        errorDetailsMessage = err.stack || null;
-      }
-      
-      setError(errorMessage);
-      setErrorDetails(errorDetailsMessage);
+      console.error('Error in onSubmit:', err);
       setSubmitting(false);
     }
   };
