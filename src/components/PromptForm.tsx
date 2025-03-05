@@ -44,13 +44,12 @@ const formSchema = z.object({
 
 export function PromptForm() {
   const { 
-    addToClientHistory, 
-    refreshHistory, 
-    pendingGenerations,
-    addPendingGeneration,
-    removePendingGeneration,
+    pendingGenerations, 
+    addPendingGeneration, 
+    removePendingGeneration, 
     clearStalePendingGenerations,
-    checkForCompletedGenerations
+    checkForCompletedGenerations,
+    addToClientHistory
   } = useGeneration()
   
   const [submitting, setSubmitting] = useState(false)
@@ -59,6 +58,7 @@ export function PromptForm() {
   const [pageReloaded, setPageReloaded] = useState(true)
   const [models, setModels] = useState<Model[]>([])
   const [loadingModels, setLoadingModels] = useState(false)
+  const [fetchingModelVersion, setFetchingModelVersion] = useState(false)
   
   useEffect(() => {
     // Set pageReloaded to false after component mounts
@@ -114,6 +114,44 @@ export function PromptForm() {
     
     fetchModels();
   }, []);
+  
+  // Function to fetch the latest model version
+  const fetchLatestModelVersion = async (owner: string, name: string): Promise<string | null> => {
+    setFetchingModelVersion(true);
+    try {
+      console.log(`Fetching latest version for ${owner}/${name}...`);
+      
+      const response = await fetch(`/api/model-version?owner=${encodeURIComponent(owner)}&name=${encodeURIComponent(name)}`);
+      
+      console.log(`Model version API response status: ${response.status}`);
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`Failed to fetch model version: ${response.status} ${response.statusText}`, errorText);
+        throw new Error(`Failed to fetch model version: ${response.status} ${response.statusText}`);
+      }
+      
+      const data = await response.json();
+      console.log('Latest model version response:', data);
+      
+      if (data.success && data.version) {
+        console.log(`Successfully fetched version for ${owner}/${name}: ${data.version}`);
+        return data.version;
+      } else {
+        console.error('No model version found in response:', data);
+        if (data.error) {
+          throw new Error(data.error);
+        }
+        return null;
+      }
+    } catch (error) {
+      console.error('Error fetching model version:', error);
+      setError(`Error fetching model version: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      return null;
+    } finally {
+      setFetchingModelVersion(false);
+    }
+  };
   
   // Check for completed generations when component mounts or visibility changes
   useEffect(() => {
@@ -171,6 +209,55 @@ export function PromptForm() {
       await new Promise(resolve => setTimeout(resolve, 300));
       
       try {
+        // Find the selected model to get the name
+        let modelName = null;
+        let modelVersion = null;
+        
+        if (values.modelId) {
+          const selectedModel = models.find(model => model.id === values.modelId);
+          if (selectedModel) {
+            console.log('Selected model:', selectedModel);
+            modelName = selectedModel.replicate_name;
+            
+            // Fetch the latest version for this model at generation time
+            if (modelName) {
+              setFetchingModelVersion(true);
+              console.log(`Fetching latest version for arthurbnhm/${modelName}...`);
+              modelVersion = await fetchLatestModelVersion("arthurbnhm", modelName);
+              if (modelVersion) {
+                console.log(`Using latest version: ${modelVersion}`);
+              } else {
+                console.log('Failed to fetch latest version, will use model without specific version');
+                setError('Failed to fetch the latest model version. Please try again.');
+                setSubmitting(false);
+                removePendingGeneration(generationId);
+                return;
+              }
+            }
+          } else {
+            console.error('Selected model not found in models list:', values.modelId);
+            setError('Selected model not found. Please try again or select a different model.');
+            setSubmitting(false);
+            removePendingGeneration(generationId);
+            return;
+          }
+        } else {
+          setError('Please select a model before generating an image.');
+          setSubmitting(false);
+          removePendingGeneration(generationId);
+          return;
+        }
+        
+        // Log the request we're about to make
+        console.log('Sending generation request with:', {
+          prompt: values.prompt,
+          aspectRatio: values.aspectRatio,
+          outputFormat: values.outputFormat,
+          modelId: values.modelId,
+          modelVersion,
+          modelName
+        });
+        
         const response = await fetch('/api/generate', {
           method: 'POST',
           headers: {
@@ -181,6 +268,8 @@ export function PromptForm() {
             aspectRatio: values.aspectRatio,
             outputFormat: values.outputFormat,
             modelId: values.modelId,
+            modelVersion: modelVersion,
+            modelName: modelName
           }),
         });
         
@@ -228,64 +317,85 @@ export function PromptForm() {
             addPendingGeneration(updatedPending);
             
             console.log('Updated pending generation:', updatedPending);
-          }
-          
-          // Immediate check for completion right after getting the replicate_id
-          setTimeout(() => {
-            checkForCompletedGenerations();
-          }, 500);
-          
-          // With the new API design, we now return early with a "processing" status
-          // and let the checkForCompletedGenerations function handle the completion
-          if (data.status === 'processing') {
-            console.log('Generation is processing. Will check for completion periodically.');
-            setSubmitting(false);
-            return;
+            
+            // If the API has already completed the generation (synchronous response)
+            if (data.status === 'succeeded' && data.output) {
+              console.log('Generation completed synchronously, adding to client history');
+              console.log('API response data:', data);
+              
+              // Process the output to ensure we have valid string URLs
+              let processedOutput: string[] = [];
+              
+              if (Array.isArray(data.output)) {
+                processedOutput = data.output.map((item: unknown) => {
+                  if (typeof item === 'string') {
+                    return item;
+                  } else if (item && typeof item === 'object') {
+                    // If it's an object with a url property
+                    if ('url' in item && typeof (item as { url: string }).url === 'string') {
+                      return (item as { url: string }).url;
+                    }
+                  }
+                  // Fallback
+                  return typeof item === 'object' ? JSON.stringify(item) : String(item);
+                });
+              }
+              
+              // Add to client-side history
+              if (processedOutput.length > 0) {
+                console.log('Adding to client history with processed output:', {
+                  id: generationId,
+                  prompt: values.prompt,
+                  timestamp: new Date().toISOString(),
+                  images: processedOutput,
+                  aspectRatio: values.aspectRatio
+                });
+                
+                addToClientHistory({
+                  id: generationId,
+                  prompt: values.prompt,
+                  timestamp: new Date().toISOString(),
+                  images: processedOutput,
+                  aspectRatio: values.aspectRatio
+                });
+                
+                // Remove from pending generations
+                removePendingGeneration(generationId);
+                
+                // Reset form after successful generation
+                form.reset({
+                  prompt: "",
+                  aspectRatio: values.aspectRatio,
+                  outputFormat: values.outputFormat,
+                  modelId: values.modelId,
+                });
+                
+                setSubmitting(false);
+                return;
+              } else {
+                console.warn('Processed output is empty, not adding to client history');
+              }
+            } else {
+              console.log('Generation not completed synchronously, status:', data.status);
+              console.log('API response data:', data);
+            }
+            
+            // Immediate check for completion right after getting the replicate_id
+            setTimeout(() => {
+              checkForCompletedGenerations();
+            }, 500);
+            
+            // With the new API design, we now return early with a "processing" status
+            // and let the checkForCompletedGenerations function handle the completion
+            if (data.status === 'processing') {
+              console.log('Generation is processing. Will check for completion periodically.');
+              setSubmitting(false);
+              return;
+            }
           }
         } else {
           console.warn(`No replicate_id found in API response for generation ${generationId}`);
           console.log('Response data structure:', Object.keys(data));
-        }
-        
-        // Handle successful generation (this should only happen for immediate completions)
-        if (data.status === 'succeeded') {
-          // Add to client-side history
-          if (Array.isArray(data.output) && data.output.length > 0) {
-            console.log('Adding to client history:', {
-              id: generationId,
-              prompt: values.prompt,
-              timestamp: new Date().toISOString(),
-              images: data.output,
-              aspectRatio: values.aspectRatio
-            });
-            
-            addToClientHistory({
-              id: generationId,
-              prompt: values.prompt,
-              timestamp: new Date().toISOString(),
-              images: data.output,
-              aspectRatio: values.aspectRatio
-            });
-            
-            // Remove from pending generations
-            removePendingGeneration(generationId);
-            
-            // Refresh history to show new images
-            refreshHistory();
-            
-            // Reset form after successful generation
-            form.reset({
-              prompt: "",
-              aspectRatio: values.aspectRatio,
-              outputFormat: values.outputFormat,
-              modelId: values.modelId,
-            });
-          } else {
-            console.error('No images in output:', data);
-            
-            // Remove from pending generations
-            removePendingGeneration(generationId);
-          }
         }
       } catch (err) {
         console.error('Error generating image:', err);
@@ -454,7 +564,7 @@ export function PromptForm() {
                 {submitting ? (
                   <>
                     <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                    Generating...
+                    {fetchingModelVersion ? 'Fetching latest model version...' : 'Generating...'}
                   </>
                 ) : (
                   "Generate Image"

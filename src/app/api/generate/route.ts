@@ -2,22 +2,95 @@ import { NextRequest, NextResponse } from 'next/server';
 import Replicate from 'replicate';
 import { createSupabaseAdmin } from '@/lib/supabase';
 
+// Define the expected response type based on the documentation
+interface ModelVersionResponse {
+  previous: string | null;
+  next: string | null;
+  results: Array<{
+    id: string;
+    created_at: string;
+    cog_version: string;
+    openapi_schema: Record<string, unknown>;
+  }>;
+}
+
 // Initialize Replicate with API token
 const replicate = new Replicate({
   auth: process.env.REPLICATE_API_TOKEN,
 });
 
-// Default model version ID
-const DEFAULT_MODEL_VERSION = "40ac7e258f9af939116dfa3896368d8ffee7abcbf9889c64462b77f4478eab53";
+// Disable caching for Next.js App Router
+replicate.fetch = (url, options) => {
+  return fetch(url, { ...options, cache: "no-store" });
+};
+
+// Hardcoded model owner
+const MODEL_OWNER = "arthurbnhm";
+
+// Helper function to get the latest model version
+async function getLatestModelVersion(owner: string, name: string): Promise<string | null> {
+  try {
+    console.log(`Fetching versions for model ${owner}/${name}...`);
+    
+    // Get the list of versions from Replicate
+    const versionsResponse = await replicate.models.versions.list(owner, name) as unknown as ModelVersionResponse;
+    console.log('Raw versions response type:', typeof versionsResponse);
+    
+    // Log a sample of the response to avoid huge logs
+    if (versionsResponse) {
+      if ('results' in versionsResponse && Array.isArray(versionsResponse.results)) {
+        console.log('Response has results property');
+        console.log('First few results:', versionsResponse.results.slice(0, 2));
+      } else {
+        console.log('Response sample:', JSON.stringify(versionsResponse).substring(0, 200) + '...');
+      }
+    }
+    
+    // According to the documentation, the response should have a 'results' array
+    if (versionsResponse && 
+        'results' in versionsResponse && 
+        Array.isArray(versionsResponse.results) && 
+        versionsResponse.results.length > 0) {
+      console.log(`Found ${versionsResponse.results.length} versions for model ${owner}/${name}`);
+      console.log(`Latest version ID: ${versionsResponse.results[0].id}`);
+      return versionsResponse.results[0].id;
+    }
+    
+    console.error(`No model versions found for ${owner}/${name} or unexpected response format`);
+    console.error('Response structure:', JSON.stringify(versionsResponse, null, 2));
+    return null;
+  } catch (error) {
+    console.error(`Error fetching model versions for ${owner}/${name}:`, error);
+    return null;
+  }
+}
 
 export async function POST(request: NextRequest) {
+  let predictionId = '';
+  let dbRecordId = null;
+  
   try {
-    const { prompt, aspectRatio, outputFormat, modelId } = await request.json();
+    const { 
+      prompt, 
+      aspectRatio, 
+      outputFormat, 
+      modelId, 
+      modelVersion,
+      modelName: requestModelName
+    } = await request.json();
+    
     const supabase = createSupabaseAdmin();
 
     // Check if API token is available
     const apiToken = process.env.REPLICATE_API_TOKEN;
-    console.log('API request parameters:', { prompt, aspectRatio, outputFormat, modelId });
+    console.log('API request parameters:', { 
+      prompt, 
+      aspectRatio, 
+      outputFormat, 
+      modelId, 
+      modelVersion,
+      requestModelName
+    });
     console.log('API token available:', apiToken ? `Yes (starts with ${apiToken.substring(0, 4)}...)` : 'No');
     
     if (!apiToken) {
@@ -38,12 +111,24 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Get model details if modelId is provided
-    let modelVersion: string | undefined = DEFAULT_MODEL_VERSION;
-    let modelOwner = "arthurbnhm";
-    let modelName = "clem";
+    // Initialize model variables
+    let modelName = null;
+    let finalModelVersion = null;
     
-    if (modelId) {
+    // If model name is provided directly in the request, use it
+    if (requestModelName) {
+      console.log(`Using model name from request: ${MODEL_OWNER}/${requestModelName}`);
+      modelName = requestModelName;
+    }
+    
+    // If a specific model version was provided in the request, use it
+    if (modelVersion) {
+      console.log(`Using provided model version: ${modelVersion}`);
+      finalModelVersion = modelVersion;
+    }
+    
+    // Only fetch from Supabase if we don't have the model name from the request
+    if (modelId && !modelName) {
       try {
         // Fetch the model details from Supabase
         const { data: model, error } = await supabase
@@ -53,29 +138,69 @@ export async function POST(request: NextRequest) {
           .eq('status', 'ready')
           .single();
         
-        if (error || !model) {
+        if (error) {
           console.error('Error fetching model details:', error);
-        } else {
-          // Use the model's replicate_owner and replicate_name
-          modelOwner = model.replicate_owner;
+          
+          // Try with 'trained' status instead of 'ready'
+          const { data: trainedModel, error: trainedError } = await supabase
+            .from('models')
+            .select('*')
+            .eq('id', modelId)
+            .eq('status', 'trained')
+            .single();
+            
+          if (trainedError || !trainedModel) {
+            console.error('Error fetching model with trained status:', trainedError);
+            return NextResponse.json(
+              { error: 'Selected model not found or not available' },
+              { status: 404 }
+            );
+          } else {
+            // Use the model's replicate_name
+            modelName = trainedModel.replicate_name;
+            console.log(`Using custom model: ${MODEL_OWNER}/${modelName}`);
+          }
+        } else if (model) {
+          // Use the model's replicate_name
           modelName = model.replicate_name;
-          
-          // For custom models, we use the model name/owner instead of a specific version
-          modelVersion = undefined;
-          
-          console.log(`Using custom model: ${modelOwner}/${modelName}`);
+          console.log(`Using custom model: ${MODEL_OWNER}/${modelName}`);
+        } else {
+          console.error('No model found with ID:', modelId);
+          return NextResponse.json(
+            { error: 'Selected model not found' },
+            { status: 404 }
+          );
         }
       } catch (err) {
         console.error('Error getting model details:', err);
+        return NextResponse.json(
+          { error: 'Error retrieving model details' },
+          { status: 500 }
+        );
+      }
+    }
+    
+    // If we still don't have model information, return an error
+    if (!modelName) {
+      return NextResponse.json(
+        { error: 'No valid model selected' },
+        { status: 400 }
+      );
+    }
+    
+    // If we don't have a version yet, fetch the latest
+    if (!finalModelVersion) {
+      finalModelVersion = await getLatestModelVersion(MODEL_OWNER, modelName);
+      if (!finalModelVersion) {
+        return NextResponse.json(
+          { error: `No versions found for model ${MODEL_OWNER}/${modelName}` },
+          { status: 404 }
+        );
       }
     }
     
     // Log which model we're using
-    if (modelVersion) {
-      console.log(`Calling Replicate API with default model version: ${modelOwner}/${modelName}:${modelVersion}`);
-    } else {
-      console.log(`Calling Replicate API with custom model: ${modelOwner}/${modelName}`);
-    }
+    console.log(`Using model: ${MODEL_OWNER}/${modelName}:${finalModelVersion}`);
     
     const inputParams = {
       prompt,
@@ -97,42 +222,45 @@ export async function POST(request: NextRequest) {
     console.log('Input parameters:', JSON.stringify(inputParams, null, 2));
 
     try {
-      // Instead of using replicate.run, use the predictions API directly
-      console.log('Creating prediction using predictions.create API...');
+      // Get the webhook URL from environment variables
+      const webhookUrl = process.env.NEXT_PUBLIC_APP_URL 
+        ? `${process.env.NEXT_PUBLIC_APP_URL}/api/webhook` 
+        : null;
       
-      let prediction;
-      
-      if (modelVersion) {
-        // Use version-based prediction
-        prediction = await replicate.predictions.create({
-          version: modelVersion,
-          input: inputParams,
-          webhook: undefined,
-          webhook_events_filter: undefined
-        });
+      if (!webhookUrl) {
+        console.warn('No webhook URL available, falling back to synchronous prediction');
       } else {
-        // Use model-based prediction
-        prediction = await replicate.predictions.create({
-          model: `${modelOwner}/${modelName}`,
-          input: inputParams,
-          webhook: undefined,
-          webhook_events_filter: undefined
-        });
+        console.log('Using webhook URL:', webhookUrl);
       }
       
-      console.log('Prediction created:', JSON.stringify(prediction, null, 2));
-      console.log('Prediction ID:', prediction.id);
+      // Create a unique prediction ID for tracking
+      const modelIdentifier = `${MODEL_OWNER}/${modelName}:${finalModelVersion}`;
+      console.log(`Starting prediction with ${modelIdentifier}`);
       
-      // Log the prediction to Supabase immediately to ensure it's available for cancellation
-      let dbRecordId = null;
+      // Use predictions.create instead of replicate.run to support webhooks
+      const prediction = await replicate.predictions.create({
+        version: finalModelVersion,
+        input: inputParams,
+        webhook: webhookUrl || undefined,
+        webhook_events_filter: ["start", "output", "completed"]
+      });
+      
+      predictionId = prediction.id;
+      console.log('Prediction created:', JSON.stringify({
+        id: prediction.id,
+        status: prediction.status,
+        urls: prediction.urls
+      }, null, 2));
+      
+      // Log the prediction to Supabase immediately to ensure it's available for tracking
       try {
         const { data: predictionRecord, error: insertError } = await supabase
           .from('predictions')
           .insert({
-            replicate_id: prediction.id,
+            replicate_id: predictionId,
             prompt: prompt,
             aspect_ratio: aspectRatio || "1:1",
-            status: prediction.status,
+            status: prediction.status || "processing",
             input: inputParams
           })
           .select()
@@ -141,212 +269,57 @@ export async function POST(request: NextRequest) {
         if (insertError) {
           console.error('Error logging prediction to Supabase:', insertError);
         } else {
-          console.log('Prediction logged to Supabase:', predictionRecord);
+          console.log('Prediction logged to Supabase:', predictionRecord.id);
           dbRecordId = predictionRecord.id;
         }
       } catch (dbError) {
         console.error('Exception logging prediction to Supabase:', dbError);
       }
       
-      // Return an immediate response with the prediction ID - this is critical for cancellation
+      // Return the response with the prediction ID
       return NextResponse.json({
-        id: dbRecordId || `manual-${Date.now()}`,
-        replicate_id: prediction.id,
-        status: 'processing',
-        message: 'Prediction started successfully. The generation process may take up to 1-2 minutes.'
+        id: dbRecordId,
+        replicate_id: predictionId,
+        status: prediction.status || 'processing',
+        message: 'Prediction started successfully. You will be notified when it completes.',
+        urls: prediction.urls
       });
       
-      // Note: This code is now unreachable. We're returning early and letting the client
-      // check for updates via checkForCompletedGenerations instead of making the client wait
-      
-      // Poll for the prediction result
-      let attempts = 0;
-      const maxAttempts = 30; // 5 minutes (30 * 10 seconds)
-      let finalPrediction = prediction;
-
-      while (
-        attempts < maxAttempts &&
-        finalPrediction.status !== "succeeded" &&
-        finalPrediction.status !== "failed" &&
-        finalPrediction.status !== "canceled"
-      ) {
-        attempts++;
-        console.log(`Polling attempt ${attempts}/${maxAttempts}, current status: ${finalPrediction.status}`);
-        
-        // Wait for 10 seconds before polling again
-        await new Promise((resolve) => setTimeout(resolve, 10000));
-        
-        // Get the updated prediction
-        finalPrediction = await replicate.predictions.get(prediction.id);
-        console.log(`Updated status: ${finalPrediction.status}`);
-        
-        // Update the prediction status in Supabase
-        const { error: updateError } = await supabase
-          .from('predictions')
-          .update({
-            status: finalPrediction.status,
-            updated_at: new Date().toISOString()
-          })
-          .eq('replicate_id', prediction.id);
-        
-        if (updateError) {
-          console.error('Error updating prediction status in Supabase:', updateError);
-        }
-        
-        if (finalPrediction.status === "processing") {
-          console.log("Still processing...");
-        } else if (finalPrediction.status === "succeeded") {
-          console.log("Prediction succeeded!");
-          console.log("Output:", JSON.stringify(finalPrediction.output, null, 2));
-          
-          // Update the prediction with output in Supabase
-          const { error: successUpdateError } = await supabase
-            .from('predictions')
-            .update({
-              status: finalPrediction.status,
-              output: finalPrediction.output,
-              completed_at: new Date().toISOString(),
-              updated_at: new Date().toISOString()
-            })
-            .eq('replicate_id', prediction.id);
-          
-          if (successUpdateError) {
-            console.error('Error updating prediction output in Supabase:', successUpdateError);
-          }
-        } else if (finalPrediction.status === "failed") {
-          console.error("Prediction failed:", finalPrediction.error);
-          
-          // Update the prediction with error in Supabase
-          const { error: failureUpdateError } = await supabase
-            .from('predictions')
-            .update({
-              status: finalPrediction.status,
-              error: finalPrediction.error || "Unknown error",
-              completed_at: new Date().toISOString(),
-              updated_at: new Date().toISOString()
-            })
-            .eq('replicate_id', prediction.id);
-          
-          if (failureUpdateError) {
-            console.error('Error updating prediction error in Supabase:', failureUpdateError);
-          }
-        }
-      }
-
-      // Check if we've reached the maximum number of attempts
-      if (attempts >= maxAttempts && finalPrediction.status !== "succeeded") {
-        console.error("Reached maximum polling attempts without success");
-        
-        // Update the prediction with timeout error in Supabase
-        const { error: timeoutUpdateError } = await supabase
-          .from('predictions')
-          .update({
-            status: "timeout",
-            error: "Prediction timed out after 5 minutes",
-            completed_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-          })
-          .eq('replicate_id', prediction.id);
-        
-        if (timeoutUpdateError) {
-          console.error('Error updating prediction timeout in Supabase:', timeoutUpdateError);
-        }
-        
-        return NextResponse.json(
-          { 
-            error: "Prediction timed out after 5 minutes", 
-            predictionId: prediction.id,
-            replicate_id: prediction.id,
-            status: finalPrediction.status
-          },
-          { status: 504 }
-        );
-      }
-
-      // If generation was successful, save to history
-      if (finalPrediction.status === "succeeded" && Array.isArray(finalPrediction.output)) {
-        try {
-          // We don't need to import addToHistory anymore since we're already using Supabase
-          // The prediction is already saved to Supabase in the code above
-          
-          console.log('Images already saved to Supabase:', finalPrediction.output);
-          
-          // Return the successful prediction
-          return NextResponse.json({
-            id: prediction.id,
-            replicate_id: prediction.id,
-            status: finalPrediction.status,
-            output: finalPrediction.output
-          });
-        } catch (historyError) {
-          console.error('Error handling successful prediction:', historyError);
-          
-          // Return the successful prediction anyway
-          return NextResponse.json({
-            id: prediction.id,
-            replicate_id: prediction.id,
-            status: finalPrediction.status,
-            output: finalPrediction.output
-          });
-        }
-      } else if (finalPrediction.status === "failed") {
-        // Return the error
-        return NextResponse.json(
-          { 
-            error: finalPrediction.error || "Prediction failed", 
-            predictionId: prediction.id,
-            replicate_id: prediction.id,
-            status: finalPrediction.status
-          },
-          { status: 500 }
-        );
-      } else {
-        // Return an unknown error
-        return NextResponse.json(
-          { 
-            error: "Prediction did not succeed or fail properly", 
-            predictionId: prediction.id,
-            replicate_id: prediction.id,
-            status: finalPrediction.status
-          },
-          { status: 500 }
-        );
-      }
     } catch (replicateError) {
       console.error('Error calling Replicate API:', replicateError);
       
-      // Log the error to Supabase
-      const { error: errorLogError } = await supabase
-        .from('predictions')
-        .insert({
-          replicate_id: 'error-' + Date.now(),
-          prompt: prompt,
-          aspect_ratio: aspectRatio || "1:1",
-          status: "error",
-          input: inputParams,
-          error: replicateError instanceof Error ? replicateError.message : 'Unknown error',
-          completed_at: new Date().toISOString()
-        });
-      
-      if (errorLogError) {
-        console.error('Error logging prediction error to Supabase:', errorLogError);
-      }
-      
-      // Determine if it's a rate limit error
+      // Create an error response
       const isRateLimitError = replicateError instanceof Error && 
         (replicateError.message.includes('429') || 
          replicateError.message.toLowerCase().includes('rate limit'));
       
-      // Get additional error details
       const errorMessage = replicateError instanceof Error ? replicateError.message : 'Unknown error';
       const additionalInfo = isRateLimitError 
         ? "You've reached the rate limit for image generation. Please try again later."
         : "There was an error generating your image. Please try again.";
       
+      // If we have a database record, update it with the error
+      if (dbRecordId) {
+        try {
+          await supabase
+            .from('predictions')
+            .update({
+              status: 'failed',
+              error: errorMessage,
+              completed_at: new Date().toISOString(),
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', dbRecordId);
+        } catch (updateError) {
+          console.error('Error updating prediction with error status:', updateError);
+        }
+      }
+      
       return NextResponse.json(
         { 
           error: errorMessage,
-          details: additionalInfo
+          message: additionalInfo,
+          details: isRateLimitError ? 'RATE_LIMIT_EXCEEDED' : 'GENERATION_FAILED'
         },
         { status: isRateLimitError ? 429 : 500 }
       );

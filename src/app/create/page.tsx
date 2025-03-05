@@ -1,7 +1,24 @@
+"use client"
+
+import { useEffect } from "react"
 import { PromptForm } from "@/components/PromptForm";
 import { ImageHistory } from "@/components/ImageHistory";
+import { useGeneration } from "@/context/GenerationContext";
 
 export default function CreatePage() {
+  const { checkForCompletedGenerations } = useGeneration();
+
+  // Check for completed generations when the page loads
+  useEffect(() => {
+    // Small delay to ensure the context is fully initialized
+    const timer = setTimeout(() => {
+      console.log('Create page loaded, checking for completed generations');
+      checkForCompletedGenerations();
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [checkForCompletedGenerations]);
+
   return (
     <div className="flex flex-col min-h-screen p-8 pb-28 sm:pb-20 gap-8 sm:p-20 font-[family-name:var(--font-geist-sans)] relative bg-background">
       <header className="w-full max-w-4xl mx-auto text-center mt-8 sm:mt-6">

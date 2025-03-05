@@ -47,12 +47,68 @@ const STALE_GENERATION_THRESHOLD = 10 * 60 * 1000; // 10 minutes
 // Time to mark a generation as potentially stalled (3 minutes)
 const POTENTIALLY_STALLED_THRESHOLD = 3 * 60 * 1000;
 
+// Local storage keys
+const PENDING_GENERATIONS_KEY = 'photomate_pending_generations';
+const CLIENT_HISTORY_KEY = 'photomate_client_history';
+
 export function GenerationProvider({ children }: { children: ReactNode }) {
   const [isGenerating, setIsGenerating] = useState(false)
   const [lastGeneratedAt, setLastGeneratedAt] = useState<number | null>(null)
   const [clientHistory, setClientHistory] = useState<ImageGeneration[]>([])
   // Add state for pending generations
   const [pendingGenerations, setPendingGenerations] = useState<PendingGeneration[]>([])
+  const [isInitialized, setIsInitialized] = useState(false)
+
+  // Load saved state from localStorage on initial mount
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        // Load pending generations
+        const savedPendingGenerations = localStorage.getItem(PENDING_GENERATIONS_KEY);
+        if (savedPendingGenerations) {
+          const parsed = JSON.parse(savedPendingGenerations);
+          if (Array.isArray(parsed)) {
+            setPendingGenerations(parsed);
+            console.log('Restored pending generations from localStorage:', parsed.length);
+          }
+        }
+
+        // Load client history
+        const savedClientHistory = localStorage.getItem(CLIENT_HISTORY_KEY);
+        if (savedClientHistory) {
+          const parsed = JSON.parse(savedClientHistory);
+          if (Array.isArray(parsed)) {
+            setClientHistory(parsed);
+            console.log('Restored client history from localStorage:', parsed.length);
+          }
+        }
+
+        // Check for completed generations immediately after restoring state
+        setTimeout(() => {
+          checkForCompletedGenerations();
+        }, 500);
+
+        setIsInitialized(true);
+      } catch (error) {
+        console.error('Error loading state from localStorage:', error);
+        setIsInitialized(true);
+      }
+    }
+  }, []);
+
+  // Save pending generations to localStorage whenever they change
+  useEffect(() => {
+    if (isInitialized && typeof window !== 'undefined') {
+      localStorage.setItem(PENDING_GENERATIONS_KEY, JSON.stringify(pendingGenerations));
+    }
+  }, [pendingGenerations, isInitialized]);
+
+  // Save client history to localStorage whenever it changes
+  useEffect(() => {
+    if (isInitialized && typeof window !== 'undefined') {
+      localStorage.setItem(CLIENT_HISTORY_KEY, JSON.stringify(clientHistory));
+    }
+  }, [clientHistory, isInitialized]);
 
   // Mark potentially stalled generations periodically
   useEffect(() => {
@@ -79,23 +135,46 @@ export function GenerationProvider({ children }: { children: ReactNode }) {
     return () => clearInterval(interval);
   }, [pendingGenerations]);
 
+  // Set up a polling interval to check for completed generations
+  useEffect(() => {
+    // Skip if not initialized yet
+    if (!isInitialized) return;
+    
+    // Initial check
+    checkForCompletedGenerations();
+    
+    // Set up polling interval - check every 10 seconds
+    const interval = setInterval(() => {
+      checkForCompletedGenerations();
+    }, 10000);
+    
+    return () => clearInterval(interval);
+  }, [isInitialized]);
+
   const refreshHistory = () => {
-    setLastGeneratedAt(Date.now())
+    console.log('Refreshing history, triggering UI update');
+    setLastGeneratedAt(Date.now());
   }
 
   const addToClientHistory = (generation: ImageGeneration) => {
+    console.log('Adding to client history:', generation);
     setClientHistory(prev => {
       // Check if this generation already exists in history to avoid duplicates
       if (prev.some(item => item.id === generation.id)) {
-        return prev
+        console.log('Generation already exists in history, not adding duplicate');
+        return prev;
       }
       
-      const newHistory = [generation, ...prev].slice(0, 10)
-      return newHistory
-    })
+      const newHistory = [generation, ...prev].slice(0, 10);
+      console.log('New client history:', newHistory);
+      return newHistory;
+    });
     
     // When adding to history, ensure we remove from pending
-    removePendingGeneration(generation.id)
+    removePendingGeneration(generation.id);
+    
+    // Refresh history to trigger UI update
+    refreshHistory();
   }
 
   // Add functions to manage pending generations
@@ -151,82 +230,176 @@ export function GenerationProvider({ children }: { children: ReactNode }) {
     if (pendingGenerations.length === 0) return
 
     try {
+      console.log('Checking for completed generations, pending count:', pendingGenerations.length);
+      
       // Initialize Supabase client
       const supabase = createSupabaseClient();
       
       // For each pending generation, check if it has completed in Supabase
       const pendingToRemove: string[] = [];
       let updatedClientHistory = [...clientHistory];
+      let historyChanged = false;
       
+      // First, check for pending generations that don't have a replicate_id yet
+      const pendingWithoutReplicateId = pendingGenerations.filter(pg => !pg.replicate_id);
+      if (pendingWithoutReplicateId.length > 0) {
+        console.log('Checking for pending generations without replicate_id:', pendingWithoutReplicateId.length);
+        
+        // For each pending generation without replicate_id, try to find it in the database by prompt
+        for (const pending of pendingWithoutReplicateId) {
+          // Skip if no prompt (shouldn't happen, but just in case)
+          if (!pending.prompt) continue;
+          
+          // Look for a prediction with this prompt that was created around the same time
+          const startTime = pending.startTime ? new Date(pending.startTime) : new Date();
+          const fiveMinutesAgo = new Date(startTime.getTime() - 5 * 60 * 1000);
+          const fiveMinutesLater = new Date(startTime.getTime() + 5 * 60 * 1000);
+          
+          const { data: predictions, error } = await supabase
+            .from('predictions')
+            .select('*')
+            .eq('prompt', pending.prompt)
+            .gte('created_at', fiveMinutesAgo.toISOString())
+            .lte('created_at', fiveMinutesLater.toISOString())
+            .order('created_at', { ascending: false });
+          
+          if (error) {
+            console.error('Error looking up prediction by prompt:', error);
+            continue;
+          }
+          
+          if (predictions && predictions.length > 0) {
+            // Found a matching prediction, update the pending generation with the replicate_id
+            console.log('Found matching prediction for pending generation:', pending.id, predictions[0].replicate_id);
+            
+            // Update the pending generation with the replicate_id
+            setPendingGenerations(prev => 
+              prev.map(pg => 
+                pg.id === pending.id 
+                  ? { ...pg, replicate_id: predictions[0].replicate_id } 
+                  : pg
+              )
+            );
+            
+            // If the prediction has output, add it to client history
+            if (predictions[0].output && Array.isArray(predictions[0].output) && predictions[0].output.length > 0) {
+              const generation: ImageGeneration = {
+                id: predictions[0].id,
+                prompt: predictions[0].prompt,
+                timestamp: predictions[0].created_at,
+                images: predictions[0].output,
+                aspectRatio: predictions[0].aspect_ratio
+              };
+              
+              // If the prediction is succeeded, mark it for removal from pending
+              if (predictions[0].status === 'succeeded') {
+                pendingToRemove.push(pending.id);
+              }
+              
+              // Update client history
+              const existingIndex = updatedClientHistory.findIndex(item => item.id === predictions[0].id);
+              if (existingIndex === -1) {
+                updatedClientHistory = [generation, ...updatedClientHistory].slice(0, 10);
+                historyChanged = true;
+              } else if (updatedClientHistory[existingIndex].images.length < generation.images.length) {
+                updatedClientHistory[existingIndex] = generation;
+                historyChanged = true;
+              }
+            }
+          }
+        }
+      }
+      
+      // Now check for pending generations that have a replicate_id
       for (const pending of pendingGenerations) {
         // Skip if we don't have a replicate_id yet
         if (!pending.replicate_id) {
-          console.log(`Skipping check for pending generation ${pending.id} - no replicate_id available yet`);
           continue;
         }
         
         console.log(`Checking status for pending generation with replicate_id: ${pending.replicate_id}`);
         
-        // Try to find a completed prediction with this replicate_id
-        const { data: completedPrediction, error } = await supabase
+        // Try to find a prediction with this replicate_id (completed or in-progress with partial results)
+        const { data: prediction, error } = await supabase
           .from('predictions')
           .select('*')
           .eq('replicate_id', pending.replicate_id)
-          .or('status.eq.succeeded,is_cancelled.eq.true')
           .maybeSingle();
         
         if (error) {
-          console.error('Error checking for completed prediction:', error);
+          console.error('Error checking for prediction:', error);
           continue;
         }
         
-        console.log('Checking prediction status:', pending.id, completedPrediction);
+        console.log('Prediction status check result:', prediction?.status, 'Output length:', prediction?.output?.length || 0);
         
-        // Check if prediction is completed or cancelled
-        if (completedPrediction) {
-          // If it's cancelled, just remove from pending without adding to history
-          if (completedPrediction.is_cancelled === true) {
-            console.log('Found cancelled prediction:', pending.id);
+        // If no prediction found, skip
+        if (!prediction) {
+          console.log('No prediction found for replicate_id:', pending.replicate_id);
+          continue;
+        }
+        
+        // Check if prediction is cancelled
+        if (prediction.is_cancelled === true) {
+          console.log('Found cancelled prediction:', pending.id);
+          pendingToRemove.push(pending.id);
+          continue;
+        }
+        
+        // Check if prediction has output (partial or complete)
+        if (prediction.output && Array.isArray(prediction.output) && prediction.output.length > 0) {
+          console.log('Found prediction with output:', pending.id, 'Images:', prediction.output.length);
+          
+          // Create a generation object
+          const generation: ImageGeneration = {
+            id: prediction.id,
+            prompt: prediction.prompt,
+            timestamp: prediction.created_at,
+            images: prediction.output,
+            aspectRatio: prediction.aspect_ratio
+          };
+          
+          // If the prediction is succeeded, mark it for removal from pending
+          if (prediction.status === 'succeeded') {
+            console.log('Prediction completed successfully, removing from pending:', pending.id);
             pendingToRemove.push(pending.id);
-            continue;
           }
           
-          // If it's succeeded and has output, add to history
-          if (completedPrediction.status === 'succeeded' && completedPrediction.output) {
-            console.log('Found completed prediction with output:', pending.id, completedPrediction.output);
-            // This generation has completed
-            const completedGeneration: ImageGeneration = {
-              id: completedPrediction.id,
-              prompt: completedPrediction.prompt,
-              timestamp: completedPrediction.created_at,
-              images: Array.isArray(completedPrediction.output) ? completedPrediction.output : [],
-              aspectRatio: completedPrediction.aspect_ratio
-            };
-            
-            // Add to client history if not already there
-            if (!clientHistory.some(item => item.id === completedPrediction.id)) {
-              updatedClientHistory = [completedGeneration, ...updatedClientHistory].slice(0, 10);
-            }
-            
-            // Mark for removal from pending
-            pendingToRemove.push(pending.id);
+          // Update client history if this generation is not already there or if it has more images
+          const existingIndex = updatedClientHistory.findIndex(item => item.id === prediction.id);
+          if (existingIndex === -1) {
+            // Add new generation to the beginning of the history
+            console.log('Adding new generation to history:', prediction.id);
+            updatedClientHistory = [generation, ...updatedClientHistory].slice(0, 10);
+            historyChanged = true;
+          } else if (updatedClientHistory[existingIndex].images.length < generation.images.length) {
+            // Update existing generation with new images
+            console.log('Updating existing generation with new images:', 
+              'Old count:', updatedClientHistory[existingIndex].images.length,
+              'New count:', generation.images.length);
+            updatedClientHistory[existingIndex] = generation;
+            historyChanged = true;
           }
         }
       }
       
       // Update states if needed
       if (pendingToRemove.length > 0) {
+        console.log('Removing completed/cancelled generations from pending:', pendingToRemove);
         // Remove completed generations from pending
         setPendingGenerations(prev => 
           prev.filter(gen => !pendingToRemove.includes(gen.id))
         );
-        
-        // Update client history
-        if (updatedClientHistory.length !== clientHistory.length) {
-          setClientHistory(updatedClientHistory);
-          // Force a refresh of the UI
-          refreshHistory();
-        }
+      }
+      
+      // Update client history if it changed
+      if (historyChanged) {
+        console.log('Updating client history with new/updated generations');
+        setClientHistory(updatedClientHistory);
+        // Force a refresh of the UI
+        refreshHistory();
+      } else {
+        console.log('No changes to client history detected');
       }
     } catch (error) {
       console.error('Error checking for completed generations:', error);

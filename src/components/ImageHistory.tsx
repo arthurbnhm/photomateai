@@ -11,6 +11,7 @@ import { motion } from "framer-motion"
 import { Skeleton } from "@/components/ui/skeleton"
 import { createSupabaseClient } from "@/lib/supabase"
 
+// Define the type for image generation
 type ImageGeneration = {
   id: string
   prompt: string
@@ -19,8 +20,8 @@ type ImageGeneration = {
   aspectRatio: string
 }
 
-// Type for Supabase prediction records
-type PredictionRecord = {
+// Define a type for prediction data from Supabase
+type PredictionData = {
   id: string
   replicate_id: string
   prompt: string
@@ -36,6 +37,12 @@ type PredictionRecord = {
   is_cancelled: boolean
 }
 
+// Define a type for prediction output items
+type PredictionOutputItem = {
+  url?: string
+  [key: string]: unknown
+}
+
 export function ImageHistory() {
   const { lastGeneratedAt, clientHistory, pendingGenerations, clearStalePendingGenerations, clearPendingGeneration, checkForCompletedGenerations, deleteGeneration, refreshHistory } = useGeneration()
   const [generations, setGenerations] = useState<ImageGeneration[]>([])
@@ -45,6 +52,110 @@ export function ImageHistory() {
   const [hasRestoredPending, setHasRestoredPending] = useState(false)
   const [isDeleting, setIsDeleting] = useState<string | null>(null)
   const [elapsedTimes, setElapsedTimes] = useState<Record<string, number>>({})
+  const [lastRefreshTime, setLastRefreshTime] = useState<number>(Date.now())
+
+  // Function to fetch from Supabase
+  const fetchFromSupabase = async (showLoading: boolean) => {
+    try {
+      if (showLoading) {
+        setIsLoading(true);
+      }
+      
+      // Initialize Supabase client
+      const supabase = createSupabaseClient();
+      
+      // Fetch successful predictions from Supabase with more permissive query
+      const { data: predictionData, error: supabaseError } = await supabase
+        .from('predictions')
+        .select('*')
+        .eq('status', 'succeeded')
+        .eq('is_deleted', false)
+        .or('is_cancelled.is.null,is_cancelled.eq.false') // Accept both null and false values
+        .order('created_at', { ascending: false })
+        .limit(20);
+      
+      if (supabaseError) {
+        throw new Error(`Failed to fetch from Supabase: ${supabaseError.message}`);
+      }
+      
+      console.log('Fetched predictions from Supabase:', predictionData);
+      
+      if (Array.isArray(predictionData) && predictionData.length > 0) {
+        // Transform Supabase records to ImageGeneration format
+        const transformedData: ImageGeneration[] = predictionData
+          .filter((pred: PredictionData) => {
+            // More detailed logging to debug the issue
+            if (!pred.output) {
+              console.log('Prediction has no output:', pred.id);
+              return false;
+            }
+            if (!Array.isArray(pred.output)) {
+              console.log('Prediction output is not an array:', pred.id, typeof pred.output);
+              // Try to parse it if it's a string
+              try {
+                if (typeof pred.output === 'string') {
+                  pred.output = JSON.parse(pred.output);
+                  return Array.isArray(pred.output);
+                }
+              } catch (e) {
+                console.error('Failed to parse output string:', e);
+              }
+              return false;
+            }
+            if (pred.output.length === 0) {
+              console.log('Prediction output array is empty:', pred.id);
+              return false;
+            }
+            return true;
+          })
+          .map((pred: PredictionData) => {
+            // Process the output to ensure we have valid string URLs
+            let processedOutput: string[] = [];
+            
+            if (Array.isArray(pred.output)) {
+              processedOutput = pred.output.map((item: PredictionOutputItem | string) => {
+                if (typeof item === 'string') {
+                  return item;
+                } else if (item && typeof item === 'object') {
+                  // If it's an object with a url property
+                  if ('url' in item && typeof (item as { url: string }).url === 'string') {
+                    return (item as { url: string }).url;
+                  }
+                }
+                // Fallback
+                return typeof item === 'object' ? JSON.stringify(item) : String(item);
+              });
+            }
+            
+            return {
+              id: pred.id,
+              prompt: pred.prompt,
+              timestamp: pred.created_at,
+              images: processedOutput,
+              aspectRatio: pred.aspect_ratio
+            };
+          });
+        
+        console.log('Transformed image data:', transformedData);
+        setGenerations(transformedData);
+        setUseClientHistory(false);
+      } else {
+        console.log('Supabase history is empty, using client history:', clientHistory);
+        setGenerations(clientHistory);
+        setUseClientHistory(true);
+      }
+      
+      if (showLoading) {
+        setIsLoading(false);
+      }
+    } catch (err) {
+      console.error('Error fetching from Supabase:', err);
+      if (showLoading) {
+        setIsLoading(false);
+      }
+      throw err;
+    }
+  };
 
   // Update elapsed time every second
   useEffect(() => {
@@ -74,15 +185,28 @@ export function ImageHistory() {
     return () => clearInterval(interval);
   }, [pendingGenerations]);
 
-  // Check for stale generations on initial load
+  // Respond to changes in clientHistory
   useEffect(() => {
-    if (!hasRestoredPending && pendingGenerations.length > 0) {
-      // Clear any stale generations once on component mount
-      clearStalePendingGenerations();
-      setHasRestoredPending(true);
+    console.log('Client history changed, updating UI');
+    if (clientHistory.length > 0) {
+      // If we have pending generations that match items in client history,
+      // we should remove them from the pending list
+      const completedIds = new Set(clientHistory.map(item => item.id));
+      const pendingToRemove = pendingGenerations
+        .filter(pending => completedIds.has(pending.id))
+        .map(pending => pending.id);
+      
+      if (pendingToRemove.length > 0) {
+        console.log('Removing completed generations from pending:', pendingToRemove);
+        pendingToRemove.forEach(id => clearPendingGeneration(id));
+      }
+      
+      setGenerations(clientHistory);
+      setUseClientHistory(true);
+      setIsLoading(false);
     }
-  }, [clearStalePendingGenerations, pendingGenerations.length, hasRestoredPending]);
-  
+  }, [clientHistory, pendingGenerations, clearPendingGeneration]);
+
   // Check for completed generations when component mounts or visibility changes
   useEffect(() => {
     // Check when component mounts
@@ -92,7 +216,13 @@ export function ImageHistory() {
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
         // When user returns to tab or navigates back to page
+        console.log('Page became visible, checking for completed generations');
         checkForCompletedGenerations();
+        
+        // Also refresh from Supabase to ensure we have the latest data
+        fetchFromSupabase(false).catch(err => {
+          console.error('Error fetching from Supabase on visibility change:', err);
+        });
       }
     };
     
@@ -105,6 +235,42 @@ export function ImageHistory() {
     };
   }, [checkForCompletedGenerations]);
 
+  // Add a more frequent polling interval when there are pending generations
+  useEffect(() => {
+    // Skip if no pending generations
+    if (pendingGenerations.length === 0) return;
+    
+    console.log('Setting up polling for pending generations:', pendingGenerations.length);
+    
+    // When we have pending generations, we should not show the main loading state
+    // as we'll show the pending generation cards instead
+    setIsLoading(false);
+    
+    // Check immediately for any updates
+    checkForCompletedGenerations();
+    
+    // Set up a more frequent polling interval when we have pending generations
+    // Check every 2 seconds for new images
+    const interval = setInterval(() => {
+      console.log('Polling for updates...');
+      checkForCompletedGenerations();
+    }, 2000);
+    
+    return () => {
+      console.log('Clearing polling interval');
+      clearInterval(interval);
+    };
+  }, [pendingGenerations, checkForCompletedGenerations]);
+
+  // Check for stale generations on initial load
+  useEffect(() => {
+    if (!hasRestoredPending && pendingGenerations.length > 0) {
+      // Clear any stale generations once on component mount
+      clearStalePendingGenerations();
+      setHasRestoredPending(true);
+    }
+  }, [clearStalePendingGenerations, pendingGenerations.length, hasRestoredPending]);
+
   useEffect(() => {
     // Function to fetch image history from Supabase
     const fetchImageHistory = async () => {
@@ -112,85 +278,88 @@ export function ImageHistory() {
         setIsLoading(true)
         setError(null)
         
-        // Initialize Supabase client
-        const supabase = createSupabaseClient()
+        // If we have client history and lastGeneratedAt is recent (within the last 5 seconds),
+        // show client history immediately first
+        const now = Date.now();
+        const isRecentGeneration = lastGeneratedAt && (now - lastGeneratedAt < 5000);
         
-        // Fetch successful predictions from Supabase with more permissive query
-        const { data: predictionData, error: supabaseError } = await supabase
-          .from('predictions')
-          .select('*')
-          .eq('status', 'succeeded')
-          .eq('is_deleted', false)
-          .or('is_cancelled.is.null,is_cancelled.eq.false') // Accept both null and false values
-          .order('created_at', { ascending: false })
-          .limit(20)
-        
-        if (supabaseError) {
-          throw new Error(`Failed to fetch from Supabase: ${supabaseError.message}`)
-        }
-        
-        console.log('Fetched predictions from Supabase:', predictionData)
-        
-        if (Array.isArray(predictionData) && predictionData.length > 0) {
-          // Transform Supabase records to ImageGeneration format
-          const transformedData: ImageGeneration[] = predictionData
-            .filter((pred: PredictionRecord) => {
-              // More detailed logging to debug the issue
-              if (!pred.output) {
-                console.log('Prediction has no output:', pred.id);
-                return false;
-              }
-              if (!Array.isArray(pred.output)) {
-                console.log('Prediction output is not an array:', pred.id, typeof pred.output);
-                return false;
-              }
-              if (pred.output.length === 0) {
-                console.log('Prediction output array is empty:', pred.id);
-                return false;
-              }
-              return true;
-            })
-            .map((pred: PredictionRecord) => ({
-              id: pred.id,
-              prompt: pred.prompt,
-              timestamp: pred.created_at,
-              images: Array.isArray(pred.output) ? pred.output : [],
-              aspectRatio: pred.aspect_ratio
-            }))
+        if (isRecentGeneration && clientHistory.length > 0) {
+          console.log('Recent generation detected, showing client history immediately:', clientHistory);
+          setGenerations(clientHistory);
+          setUseClientHistory(true);
+          setIsLoading(false);
           
-          console.log('Transformed image data:', transformedData);
-          setGenerations(transformedData)
-          setUseClientHistory(false)
+          // Still fetch from Supabase in the background, but don't show loading state
+          fetchFromSupabase(false);
         } else {
-          console.log('Supabase history is empty, using client history:', clientHistory)
-          setGenerations(clientHistory)
-          setUseClientHistory(true)
+          // Otherwise, fetch from Supabase with loading state
+          await fetchFromSupabase(true);
         }
-        
-        setIsLoading(false)
       } catch (err) {
-        console.error('Error fetching image history from Supabase:', err)
-        setError(err instanceof Error ? err.message : 'Failed to load image history')
+        console.error('Error in fetchImageHistory:', err);
+        setError(err instanceof Error ? err.message : 'Failed to load image history');
         
         // Use client history as fallback
-        console.log('Using client history as fallback:', clientHistory)
-        setGenerations(clientHistory)
-        setUseClientHistory(true)
+        console.log('Using client history as fallback:', clientHistory);
+        setGenerations(clientHistory);
+        setUseClientHistory(true);
         
-        setIsLoading(false)
+        setIsLoading(false);
       }
-    }
+    };
     
-    fetchImageHistory()
-    // Refresh when lastGeneratedAt changes or clientHistory changes
-  }, [lastGeneratedAt, clientHistory])
+    // Initial fetch
+    fetchImageHistory();
+    
+    // Set up interval to refresh data
+    const refreshInterval = setInterval(fetchImageHistory, 30000); // Refresh every 30 seconds
+    
+    return () => clearInterval(refreshInterval);
+  }, [clientHistory, lastGeneratedAt]);
   
+  // Respond to lastGeneratedAt changes (manual refresh trigger)
+  useEffect(() => {
+    if (lastGeneratedAt && lastGeneratedAt > lastRefreshTime) {
+      console.log('Manual refresh triggered');
+      setLastRefreshTime(lastGeneratedAt);
+      
+      // Call fetchImageHistory here after it's been defined
+      const fetchData = async () => {
+        try {
+          setIsLoading(true);
+          setError(null);
+          await fetchFromSupabase(true);
+          
+          // Also check for completed generations
+          await checkForCompletedGenerations();
+        } catch (err) {
+          console.error('Error fetching data:', err);
+          setError(err instanceof Error ? err.message : 'Failed to refresh data');
+          setIsLoading(false);
+        }
+      };
+      
+      fetchData();
+    }
+  }, [lastGeneratedAt, lastRefreshTime, checkForCompletedGenerations]);
+
   // If we're using client history, update generations when clientHistory changes
   useEffect(() => {
     if (useClientHistory) {
-      setGenerations(clientHistory)
+      console.log('Updating generations from client history');
+      setGenerations(clientHistory);
     }
-  }, [clientHistory, useClientHistory])
+  }, [clientHistory, useClientHistory]);
+  
+  // Add a special effect to update UI when pending generations change
+  useEffect(() => {
+    // If we have pending generations, make sure they're reflected in the UI
+    if (pendingGenerations.length > 0) {
+      console.log('Pending generations changed, ensuring UI is updated');
+      // Force a re-render by updating the lastRefreshTime
+      setLastRefreshTime(Date.now());
+    }
+  }, [pendingGenerations]);
   
   const handleDelete = async (id: string) => {
     try {
@@ -342,108 +511,167 @@ export function ImageHistory() {
       <Toaster />
       <h2 className="text-2xl font-bold mb-6">Your Image History</h2>
       
-      {/* Loading indicator for initial history fetch */}
-      <LoadingIndicator 
-        isLoading={isLoading} 
-        text="Loading image history..." 
-        className="mb-4"
-      />
+      {/* Loading indicator for initial history fetch - only show when no pending generations */}
+      {isLoading && pendingGenerations.length === 0 && (
+        <LoadingIndicator 
+          isLoading={true}
+          text="Loading image history..." 
+          className="mb-4"
+        />
+      )}
       
       {/* Pending generations section */}
       {pendingGenerations.length > 0 && (
         <div className="mb-8">
           <div className="space-y-6">
-            {pendingGenerations.map((generation) => (
-              <motion.div
-                key={generation.id}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.3 }}
-              >
-                <Card className="overflow-hidden border-primary/20 shadow-md hover:shadow-lg transition-shadow duration-300">
-                  <CardHeader className="p-4 pb-0 space-y-0">
-                    {/* All controls in a single horizontal line */}
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="flex items-center gap-2">
-                        <Button 
-                          variant="outline" 
-                          size="sm" 
-                          onClick={() => copyPromptToClipboard(generation.prompt)}
-                          className="flex items-center gap-1.5"
-                        >
-                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-clipboard">
-                            <rect width="8" height="4" x="8" y="2" rx="1" ry="1"/>
-                            <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>
-                          </svg>
-                          Copy Prompt
-                        </Button>
-                        
-                        <div className="flex items-center gap-2 ml-2">
-                          {generation.potentiallyStalled ? (
-                            <>
-                              <span className="inline-block w-2.5 h-2.5 bg-amber-500 rounded-full animate-pulse"></span>
-                              <span className="text-sm font-medium text-amber-500">Stalled</span>
-                            </>
-                          ) : (
-                            <>
-                              <span className="inline-block w-2.5 h-2.5 bg-primary rounded-full animate-pulse"></span>
-                              <span className="text-sm font-medium text-primary">Generating</span>
-                              {elapsedTimes[generation.id] !== undefined && (
-                                <span className="text-xs text-muted-foreground ml-1">
-                                  ({elapsedTimes[generation.id]}s)
+            {pendingGenerations.map((generation) => {
+              // Check if this generation already has results in clientHistory
+              const completedGeneration = clientHistory.find(item => item.id === generation.id);
+              
+              // If we already have results for this generation, don't show the pending card
+              if (completedGeneration) {
+                return null;
+              }
+              
+              // Check if we have partial results for this generation
+              const hasPartialResults = generations.some(gen => 
+                gen.id === generation.id && gen.images && gen.images.length > 0
+              );
+              
+              // If we have partial results, find them
+              const partialGeneration = hasPartialResults 
+                ? generations.find(gen => gen.id === generation.id)
+                : null;
+              
+              return (
+                <motion.div
+                  key={generation.id}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.3 }}
+                >
+                  <Card className="overflow-hidden border-primary/20 shadow-md hover:shadow-lg transition-shadow duration-300">
+                    <CardHeader className="p-4 pb-0 space-y-0">
+                      {/* All controls in a single horizontal line */}
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-2">
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            onClick={() => copyPromptToClipboard(generation.prompt)}
+                            className="flex items-center gap-1.5"
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-clipboard">
+                              <rect width="8" height="4" x="8" y="2" rx="1" ry="1"/>
+                              <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>
+                            </svg>
+                            Copy Prompt
+                          </Button>
+                          
+                          <div className="flex items-center gap-2 ml-2">
+                            {generation.potentiallyStalled ? (
+                              <>
+                                <span className="inline-block w-2.5 h-2.5 bg-amber-500 rounded-full animate-pulse"></span>
+                                <span className="text-sm font-medium text-amber-500">Stalled</span>
+                              </>
+                            ) : (
+                              <>
+                                <span className="inline-block w-2.5 h-2.5 bg-primary rounded-full animate-pulse"></span>
+                                <span className="text-sm font-medium text-primary">
+                                  {hasPartialResults ? 'Partially Complete' : 'Generating'}
                                 </span>
-                              )}
-                            </>
+                                {elapsedTimes[generation.id] !== undefined && (
+                                  <span className="text-xs text-muted-foreground ml-1">
+                                    ({elapsedTimes[generation.id]}s)
+                                  </span>
+                                )}
+                              </>
+                            )}
+                          </div>
+                          
+                          {generation.potentiallyStalled && (
+                            <button 
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                clearPendingGeneration(generation.id);
+                              }}
+                              className="ml-2 text-xs font-medium px-2 py-1 bg-destructive/10 text-destructive hover:bg-destructive/20 hover:text-destructive rounded-md transition-colors duration-200 cursor-pointer"
+                            >
+                              Clear
+                            </button>
+                          )}
+                          
+                          {!generation.potentiallyStalled && (
+                            <button 
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                handleCancel(generation.id);
+                              }}
+                              disabled={isDeleting === generation.id}
+                              className="ml-2 text-xs font-medium px-2 py-1 bg-destructive/10 text-destructive hover:bg-destructive/20 hover:text-destructive rounded-md transition-colors duration-200 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              {isDeleting === generation.id ? 'Cancelling...' : 'Cancel'}
+                            </button>
                           )}
                         </div>
                         
-                        {generation.potentiallyStalled && (
-                          <button 
-                            onClick={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              clearPendingGeneration(generation.id);
-                            }}
-                            className="ml-2 text-xs font-medium px-2 py-1 bg-destructive/10 text-destructive hover:bg-destructive/20 hover:text-destructive rounded-md transition-colors duration-200 cursor-pointer"
-                          >
-                            Clear
-                          </button>
-                        )}
-                        
-                        {!generation.potentiallyStalled && (
-                          <button 
-                            onClick={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              handleCancel(generation.id);
-                            }}
-                            disabled={isDeleting === generation.id}
-                            className="ml-2 text-xs font-medium px-2 py-1 bg-destructive/10 text-destructive hover:bg-destructive/20 hover:text-destructive rounded-md transition-colors duration-200 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                          >
-                            {isDeleting === generation.id ? 'Cancelling...' : 'Cancel'}
-                          </button>
+                        <span className="text-xs font-medium px-3 py-1.5 bg-primary/10 text-primary rounded-full border border-primary/20">
+                          {generation.aspectRatio}
+                        </span>
+                      </div>
+                    </CardHeader>
+                    
+                    <CardContent className="p-4 pt-4">
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                        {hasPartialResults && partialGeneration && partialGeneration.images ? (
+                          // Show partial results with skeletons for missing images
+                          <>
+                            {partialGeneration.images.map((image, index) => (
+                              <div 
+                                key={index} 
+                                className="aspect-square relative overflow-hidden rounded-lg shadow-sm hover:shadow-md transition-all duration-300 group"
+                              >
+                                <div className="absolute inset-0 bg-gradient-to-br from-primary/10 to-primary/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-10"></div>
+                                <img 
+                                  src={image} 
+                                  alt={`Generated image ${index + 1} for "${generation.prompt}"`}
+                                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                  loading="lazy"
+                                  onError={(e) => {
+                                    console.error(`Failed to load image: ${image}`, typeof image);
+                                    // Fallback to a placeholder
+                                    e.currentTarget.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect width='18' height='18' x='3' y='3' rx='2' ry='2'/%3E%3Ccircle cx='9' cy='9' r='2'/%3E%3Cpath d='m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21'/%3E%3C/svg%3E";
+                                    e.currentTarget.style.padding = "25%";
+                                    e.currentTarget.style.background = "#f0f0f0";
+                                  }}
+                                />
+                              </div>
+                            ))}
+                            {/* Add skeletons for remaining images */}
+                            {Array.from({ length: 4 - partialGeneration.images.length }).map((_, index) => (
+                              <Skeleton 
+                                key={`skeleton-${index}`} 
+                                className="aspect-square rounded-lg"
+                              />
+                            ))}
+                          </>
+                        ) : (
+                          // Show all skeletons if no partial results
+                          Array.from({ length: 4 }).map((_, index) => (
+                            <Skeleton 
+                              key={index} 
+                              className="aspect-square rounded-lg"
+                            />
+                          ))
                         )}
                       </div>
-                      
-                      <span className="text-xs font-medium px-3 py-1.5 bg-primary/10 text-primary rounded-full border border-primary/20">
-                        {generation.aspectRatio}
-                      </span>
-                    </div>
-                  </CardHeader>
-                  
-                  <CardContent className="p-4 pt-4">
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                      {Array.from({ length: 4 }).map((_, index) => (
-                        <Skeleton 
-                          key={index} 
-                          className="aspect-square rounded-lg"
-                        />
-                      ))}
-                    </div>
-                  </CardContent>
-                </Card>
-              </motion.div>
-            ))}
+                    </CardContent>
+                  </Card>
+                </motion.div>
+              )
+            })}
           </div>
         </div>
       )}
@@ -538,7 +766,7 @@ export function ImageHistory() {
                             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                             loading="lazy"
                             onError={(e) => {
-                              console.error(`Failed to load image: ${image}`);
+                              console.error(`Failed to load image: ${image}`, typeof image);
                               // Fallback to a placeholder
                               e.currentTarget.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect width='18' height='18' x='3' y='3' rx='2' ry='2'/%3E%3Ccircle cx='9' cy='9' r='2'/%3E%3Cpath d='m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21'/%3E%3C/svg%3E";
                               e.currentTarget.style.padding = "25%";
