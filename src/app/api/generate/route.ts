@@ -7,13 +7,17 @@ const replicate = new Replicate({
   auth: process.env.REPLICATE_API_TOKEN,
 });
 
+// Default model version ID
+const DEFAULT_MODEL_VERSION = "40ac7e258f9af939116dfa3896368d8ffee7abcbf9889c64462b77f4478eab53";
+
 export async function POST(request: NextRequest) {
   try {
-    const { prompt, aspectRatio, outputFormat } = await request.json();
+    const { prompt, aspectRatio, outputFormat, modelId } = await request.json();
     const supabase = createSupabaseAdmin();
 
     // Check if API token is available
     const apiToken = process.env.REPLICATE_API_TOKEN;
+    console.log('API request parameters:', { prompt, aspectRatio, outputFormat, modelId });
     console.log('API token available:', apiToken ? `Yes (starts with ${apiToken.substring(0, 4)}...)` : 'No');
     
     if (!apiToken) {
@@ -34,10 +38,44 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log('API request parameters:', { prompt, aspectRatio, outputFormat });
-
-    // Run the model with the specific version ID
-    console.log('Calling Replicate API with model:', "arthurbnhm/clem:40ac7e258f9af939116dfa3896368d8ffee7abcbf9889c64462b77f4478eab53");
+    // Get model details if modelId is provided
+    let modelVersion: string | undefined = DEFAULT_MODEL_VERSION;
+    let modelOwner = "arthurbnhm";
+    let modelName = "clem";
+    
+    if (modelId) {
+      try {
+        // Fetch the model details from Supabase
+        const { data: model, error } = await supabase
+          .from('models')
+          .select('*')
+          .eq('id', modelId)
+          .eq('status', 'ready')
+          .single();
+        
+        if (error || !model) {
+          console.error('Error fetching model details:', error);
+        } else {
+          // Use the model's replicate_owner and replicate_name
+          modelOwner = model.replicate_owner;
+          modelName = model.replicate_name;
+          
+          // For custom models, we use the model name/owner instead of a specific version
+          modelVersion = undefined;
+          
+          console.log(`Using custom model: ${modelOwner}/${modelName}`);
+        }
+      } catch (err) {
+        console.error('Error getting model details:', err);
+      }
+    }
+    
+    // Log which model we're using
+    if (modelVersion) {
+      console.log(`Calling Replicate API with default model version: ${modelOwner}/${modelName}:${modelVersion}`);
+    } else {
+      console.log(`Calling Replicate API with custom model: ${modelOwner}/${modelName}`);
+    }
     
     const inputParams = {
       prompt,
@@ -62,12 +100,25 @@ export async function POST(request: NextRequest) {
       // Instead of using replicate.run, use the predictions API directly
       console.log('Creating prediction using predictions.create API...');
       
-      const prediction = await replicate.predictions.create({
-        version: "40ac7e258f9af939116dfa3896368d8ffee7abcbf9889c64462b77f4478eab53",
-        input: inputParams,
-        webhook: undefined,
-        webhook_events_filter: undefined
-      });
+      let prediction;
+      
+      if (modelVersion) {
+        // Use version-based prediction
+        prediction = await replicate.predictions.create({
+          version: modelVersion,
+          input: inputParams,
+          webhook: undefined,
+          webhook_events_filter: undefined
+        });
+      } else {
+        // Use model-based prediction
+        prediction = await replicate.predictions.create({
+          model: `${modelOwner}/${modelName}`,
+          input: inputParams,
+          webhook: undefined,
+          webhook_events_filter: undefined
+        });
+      }
       
       console.log('Prediction created:', JSON.stringify(prediction, null, 2));
       console.log('Prediction ID:', prediction.id);

@@ -35,6 +35,8 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
     const modelId = searchParams.get('modelId');
     const status = searchParams.get('status');
+    const isCancelled = searchParams.get('is_cancelled');
+    const isDeleted = searchParams.get('is_deleted');
     const limit = parseInt(searchParams.get('limit') || '10', 10);
     const page = parseInt(searchParams.get('page') || '1', 10);
     const offset = (page - 1) * limit;
@@ -106,7 +108,7 @@ export async function GET(request: NextRequest) {
     let query = supabase
       .from('models')
       .select('*, trainings!trainings_model_id_fkey(*)')
-      .eq('is_deleted', false);
+      .eq('is_deleted', isDeleted === 'true' ? true : (isDeleted === 'false' ? false : false)); // Default to false if not specified
 
     // Apply status filter if provided
     if (status) {
@@ -164,13 +166,29 @@ export async function GET(request: NextRequest) {
       return model;
     }));
 
-    // Filter out models with cancelled trainings and filter cancelled trainings from the results
-    const filteredModels = processedModels
-      .filter(model => !model.is_cancelled) // Filter out cancelled models
-      .map((model): Model => ({
-        ...model,
-        trainings: model.trainings.filter((training: Training) => !training.is_cancelled)
-      }));
+    // Filter models based on is_cancelled parameter if provided
+    let filteredModels = processedModels;
+    
+    if (isCancelled !== null) {
+      const isCancelledBool = isCancelled === 'true';
+      filteredModels = processedModels.filter(model => {
+        // If is_cancelled is explicitly defined on the model, use that
+        if (typeof model.is_cancelled !== 'undefined') {
+          return model.is_cancelled === isCancelledBool;
+        }
+        // Default behavior (if is_cancelled is not specified, assume it's false)
+        return !isCancelledBool;
+      });
+    } else {
+      // Default behavior: filter out cancelled models
+      filteredModels = processedModels.filter(model => !model.is_cancelled);
+    }
+    
+    // Filter out cancelled trainings from the results
+    const finalModels = filteredModels.map((model): Model => ({
+      ...model,
+      trainings: model.trainings.filter((training: Training) => !training.is_cancelled)
+    }));
 
     // Get total count for pagination
     const { count: totalCount, error: countError } = await supabase
@@ -184,7 +202,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      models: filteredModels,
+      models: finalModels,
       pagination: {
         total: totalCount || 0,
         page,

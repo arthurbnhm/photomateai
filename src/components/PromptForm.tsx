@@ -25,12 +25,21 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 
+// Define the model interface
+interface Model {
+  id: string;
+  replicate_name: string;
+  replicate_owner: string;
+  status: string;
+}
+
 const formSchema = z.object({
   prompt: z.string().min(2, {
     message: "Prompt must be at least 2 characters.",
   }),
   aspectRatio: z.string().default("1:1"),
   outputFormat: z.string().default("png"),
+  modelId: z.string().optional(),
 })
 
 export function PromptForm() {
@@ -48,6 +57,8 @@ export function PromptForm() {
   const [error, setError] = useState<string | null>(null)
   const [errorDetails, setErrorDetails] = useState<string | null>(null)
   const [pageReloaded, setPageReloaded] = useState(true)
+  const [models, setModels] = useState<Model[]>([])
+  const [loadingModels, setLoadingModels] = useState(false)
   
   useEffect(() => {
     // Set pageReloaded to false after component mounts
@@ -56,6 +67,53 @@ export function PromptForm() {
       setPageReloaded(false);
     }
   }, [pageReloaded]);
+  
+  // Fetch available models
+  useEffect(() => {
+    const fetchModels = async () => {
+      setLoadingModels(true);
+      try {
+        // Fetch models that are trained or ready (not cancelled, not deleted)
+        // Note: In the database, models have status 'trained' not 'ready'
+        const response = await fetch('/api/model-list?is_cancelled=false&is_deleted=false');
+        if (!response.ok) {
+          throw new Error('Failed to fetch models');
+        }
+        
+        const data = await response.json();
+        console.log('API response:', data);
+        
+        if (data.success && data.models) {
+          console.log('Models found:', data.models.length);
+          
+          // Filter models to only include those with status 'trained'
+          const availableModels = data.models.filter((model: Model) => 
+            model.status === 'trained' || model.status === 'ready'
+          );
+          
+          console.log('Available models after filtering:', availableModels.length);
+          
+          if (availableModels.length === 0) {
+            console.log('No available models found after filtering');
+          }
+          
+          // Sort models by name for better user experience
+          const sortedModels = [...availableModels].sort((a, b) => 
+            a.replicate_name.localeCompare(b.replicate_name)
+          );
+          setModels(sortedModels);
+        } else {
+          console.log('No models found or API response not successful');
+        }
+      } catch (err) {
+        console.error('Error fetching models:', err);
+      } finally {
+        setLoadingModels(false);
+      }
+    };
+    
+    fetchModels();
+  }, []);
   
   // Check for completed generations when component mounts or visibility changes
   useEffect(() => {
@@ -86,6 +144,7 @@ export function PromptForm() {
       prompt: "",
       aspectRatio: "1:1",
       outputFormat: "png",
+      modelId: undefined,
     },
   })
 
@@ -120,7 +179,8 @@ export function PromptForm() {
           body: JSON.stringify({
             prompt: values.prompt,
             aspectRatio: values.aspectRatio,
-            outputFormat: values.outputFormat
+            outputFormat: values.outputFormat,
+            modelId: values.modelId,
           }),
         });
         
@@ -217,7 +277,8 @@ export function PromptForm() {
             form.reset({
               prompt: "",
               aspectRatio: values.aspectRatio,
-              outputFormat: values.outputFormat
+              outputFormat: values.outputFormat,
+              modelId: values.modelId,
             });
           } else {
             console.error('No images in output:', data);
@@ -311,71 +372,94 @@ export function PromptForm() {
                 )}
               />
               
-              <div className="flex flex-col md:flex-row md:items-end gap-4">
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 gap-4 md:flex-1">
-                  <FormField
-                    control={form.control}
-                    name="aspectRatio"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-foreground">Aspect Ratio</FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value}>
-                          <FormControl>
-                            <SelectTrigger className="bg-background border-input">
-                              <SelectValue placeholder="Select aspect ratio" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            <SelectItem value="1:1">Square (1:1)</SelectItem>
-                            <SelectItem value="16:9">Landscape (16:9)</SelectItem>
-                            <SelectItem value="9:16">Portrait (9:16)</SelectItem>
-                            <SelectItem value="4:3">Standard (4:3)</SelectItem>
-                            <SelectItem value="3:2">Classic (3:2)</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  
-                  <FormField
-                    control={form.control}
-                    name="outputFormat"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-foreground">Format</FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value}>
-                          <FormControl>
-                            <SelectTrigger className="bg-background border-input">
-                              <SelectValue placeholder="Select format" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            <SelectItem value="png">PNG</SelectItem>
-                            <SelectItem value="jpg">JPG</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-                
-                <Button 
-                  type="submit" 
-                  className="w-full md:w-auto"
-                  disabled={submitting}
-                >
-                  {submitting ? (
-                    <>
-                      <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                      Generating...
-                    </>
-                  ) : (
-                    "Generate Image"
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                <FormField
+                  control={form.control}
+                  name="aspectRatio"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-foreground">Aspect Ratio</FormLabel>
+                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <FormControl>
+                          <SelectTrigger className="bg-background border-input">
+                            <SelectValue placeholder="Select aspect ratio" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="1:1">Square (1:1)</SelectItem>
+                          <SelectItem value="16:9">Landscape (16:9)</SelectItem>
+                          <SelectItem value="9:16">Portrait (9:16)</SelectItem>
+                          <SelectItem value="4:3">Standard (4:3)</SelectItem>
+                          <SelectItem value="3:2">Classic (3:2)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
                   )}
-                </Button>
+                />
+                
+                <FormField
+                  control={form.control}
+                  name="outputFormat"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-foreground">Format</FormLabel>
+                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <FormControl>
+                          <SelectTrigger className="bg-background border-input">
+                            <SelectValue placeholder="Select format" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="png">PNG</SelectItem>
+                          <SelectItem value="jpg">JPG</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                
+                <FormField
+                  control={form.control}
+                  name="modelId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-foreground">Model</FormLabel>
+                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <FormControl>
+                          <SelectTrigger className="bg-background border-input">
+                            <SelectValue placeholder={loadingModels ? "Loading models..." : "Select model (optional)"} />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {models.map((model) => (
+                            <SelectItem key={model.id} value={model.id}>
+                              {model.replicate_name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
               </div>
+              
+              <Button 
+                type="submit" 
+                className="w-full md:w-auto"
+                disabled={submitting}
+              >
+                {submitting ? (
+                  <>
+                    <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                    Generating...
+                  </>
+                ) : (
+                  "Generate Image"
+                )}
+              </Button>
             </form>
           </Form>
         </div>
