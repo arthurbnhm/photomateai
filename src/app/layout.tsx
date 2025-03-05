@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { NavBar } from "@/components/NavBar";
-import { GenerationProvider } from "@/context/GenerationContext";
 import { Toaster } from "@/components/ui/sonner";
 import { ThemeProvider } from "@/components/theme-provider";
 import { ModeToggle } from "@/components/mode-toggle";
@@ -28,19 +27,17 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange={false}
         >
-          <GenerationProvider>
-            <div className="fixed top-6 right-6 z-[100] pointer-events-auto">
-              <ModeToggle />
-            </div>
-            
-            <div className="flex min-h-screen flex-col relative">
-              <NavBar />
-              <main className="flex-1">
-                {children}
-              </main>
-            </div>
-            <Toaster />
-          </GenerationProvider>
+          <div className="fixed top-6 right-6 z-[100] pointer-events-auto">
+            <ModeToggle />
+          </div>
+          
+          <div className="flex min-h-screen flex-col relative">
+            <NavBar />
+            <main className="flex-1">
+              {children}
+            </main>
+          </div>
+          <Toaster />
         </ThemeProvider>
       </body>
     </html>

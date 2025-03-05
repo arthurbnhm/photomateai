@@ -5,7 +5,6 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import * as z from "zod"
 import { RefreshCw, AlertCircle } from "lucide-react"
-import { useGeneration } from "@/context/GenerationContext"
 
 import { Button } from "@/components/ui/button"
 import {
@@ -33,6 +32,45 @@ interface Model {
   status: string;
 }
 
+// Define the type for pending generations with potential stall status
+type PendingGeneration = {
+  id: string
+  replicate_id?: string // Store the actual Replicate ID when available
+  prompt: string
+  aspectRatio: string
+  startTime?: string // When the generation started
+  potentiallyStalled?: boolean // Flag for generations that might be stalled
+}
+
+// Define the type for image generation
+type ImageGeneration = {
+  id: string
+  prompt: string
+  timestamp: string
+  images: string[]
+  aspectRatio: string
+}
+
+// Local storage keys
+const PENDING_GENERATIONS_KEY = 'photomate_pending_generations';
+const CLIENT_HISTORY_KEY = 'photomate_client_history';
+
+// Process output to ensure we have valid string URLs
+const processOutput = (output: unknown[]): string[] => {
+  return output.map(item => {
+    if (typeof item === 'string') {
+      return item;
+    } else if (item && typeof item === 'object') {
+      // If it's an object with a url property
+      if ('url' in item && typeof (item as { url: string }).url === 'string') {
+        return (item as { url: string }).url;
+      }
+    }
+    // Fallback
+    return typeof item === 'object' ? JSON.stringify(item) : String(item);
+  });
+}
+
 const formSchema = z.object({
   prompt: z.string().min(2, {
     message: "Prompt must be at least 2 characters.",
@@ -42,16 +80,13 @@ const formSchema = z.object({
   modelId: z.string().optional(),
 })
 
-export function PromptForm() {
-  const { 
-    pendingGenerations, 
-    addPendingGeneration, 
-    removePendingGeneration, 
-    clearStalePendingGenerations,
-    checkForCompletedGenerations,
-    addToClientHistory
-  } = useGeneration()
-  
+export function PromptForm({
+  pendingGenerations,
+  setPendingGenerations
+}: {
+  pendingGenerations: PendingGeneration[];
+  setPendingGenerations: React.Dispatch<React.SetStateAction<PendingGeneration[]>>;
+}) {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [errorDetails, setErrorDetails] = useState<string | null>(null)
@@ -59,6 +94,7 @@ export function PromptForm() {
   const [models, setModels] = useState<Model[]>([])
   const [loadingModels, setLoadingModels] = useState(false)
   const [fetchingModelVersion, setFetchingModelVersion] = useState(false)
+  const [isInitialized, setIsInitialized] = useState(false)
   
   useEffect(() => {
     // Set pageReloaded to false after component mounts
@@ -67,6 +103,35 @@ export function PromptForm() {
       setPageReloaded(false);
     }
   }, [pageReloaded]);
+  
+  // Load saved state from localStorage on initial mount
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        // Load pending generations
+        const savedPendingGenerations = localStorage.getItem(PENDING_GENERATIONS_KEY);
+        if (savedPendingGenerations) {
+          const parsed = JSON.parse(savedPendingGenerations);
+          if (Array.isArray(parsed)) {
+            setPendingGenerations(parsed);
+            console.log('Restored pending generations from localStorage:', parsed.length);
+          }
+        }
+
+        setIsInitialized(true);
+      } catch (error) {
+        console.error('Error loading state from localStorage:', error);
+        setIsInitialized(true);
+      }
+    }
+  }, []);
+
+  // Save pending generations to localStorage whenever they change
+  useEffect(() => {
+    if (isInitialized && typeof window !== 'undefined') {
+      localStorage.setItem(PENDING_GENERATIONS_KEY, JSON.stringify(pendingGenerations));
+    }
+  }, [pendingGenerations, isInitialized]);
   
   // Fetch available models
   useEffect(() => {
@@ -152,26 +217,23 @@ export function PromptForm() {
       setFetchingModelVersion(false);
     }
   };
-  
-  // Check for completed generations when component mounts or visibility changes
-  useEffect(() => {
-    // Check for completed generations when PromptForm mounts
-    checkForCompletedGenerations();
+
+  // Add a pending generation
+  const addPendingGeneration = (generation: PendingGeneration) => {
+    // Add start time if not provided
+    const genWithStartTime = {
+      ...generation,
+      startTime: generation.startTime || new Date().toISOString(),
+      potentiallyStalled: false
+    }
     
-    // Setup event listener for visibility changes
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        // Check again when the page becomes visible
-        checkForCompletedGenerations();
-      }
-    };
-    
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    
-    return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
-  }, [checkForCompletedGenerations]);
+    setPendingGenerations(prev => [...prev, genWithStartTime])
+  }
+
+  // Remove a pending generation
+  const removePendingGeneration = (id: string) => {
+    setPendingGenerations(prev => prev.filter(gen => gen.id !== id))
+  }
   
   // Display a warning message if there are pending generations on page load
   const hasPendingGenerationsOnReload = pageReloaded && pendingGenerations.length > 0;
@@ -286,117 +348,40 @@ export function PromptForm() {
           return;
         }
         
-        const data = await response.json();
-        console.log('FULL API RESPONSE DATA:', JSON.stringify(data, null, 2));
+        const result = await response.json();
+        console.log('FULL API RESPONSE DATA:', JSON.stringify(result, null, 2));
         
-        // Look for the replicate_id in the right place and update the pending generation ASAP
-        let replicateId = null;
-        
-        // Handle different response structures
-        if (data.replicate_id) {
-          replicateId = data.replicate_id;
-        } else if (data.id) {
-          // Sometimes the API returns the replicate ID directly as 'id'
-          replicateId = data.id;
+        // Update the pending generation with the replicate_id
+        if (result && result.replicate_id) {
+          setPendingGenerations(prev => 
+            prev.map(gen => 
+              gen.id === generationId 
+                ? { ...gen, replicate_id: result.replicate_id } 
+                : gen
+            )
+          );
         }
         
-        if (replicateId) {
-          console.log(`Found replicate_id in response: ${replicateId}, updating pending generation ${generationId}`);
+        // Reset form and UI state
+        form.reset();
+        setSubmitting(false);
+        
+        // If the generation has already completed and returned results
+        if (result && result.status === 'succeeded' && result.output) {
+          // Add to client history
+          addToClientHistory({
+            id: generationId,
+            prompt: values.prompt,
+            timestamp: new Date().toISOString(),
+            images: processOutput(result.output),
+            aspectRatio: values.aspectRatio
+          });
           
-          // Find the pending generation and update it with the replicate_id
-          const currentPending = pendingGenerations.find(pg => pg.id === generationId);
-          if (currentPending) {
-            // Create updated pending generation with replicate_id
-            const updatedPending = {
-              ...currentPending,
-              replicate_id: replicateId
-            };
-            
-            // Remove the old one and add the updated one
-            removePendingGeneration(generationId);
-            addPendingGeneration(updatedPending);
-            
-            console.log('Updated pending generation:', updatedPending);
-            
-            // If the API has already completed the generation (synchronous response)
-            if (data.status === 'succeeded' && data.output) {
-              console.log('Generation completed synchronously, adding to client history');
-              console.log('API response data:', data);
-              
-              // Process the output to ensure we have valid string URLs
-              let processedOutput: string[] = [];
-              
-              if (Array.isArray(data.output)) {
-                processedOutput = data.output.map((item: unknown) => {
-                  if (typeof item === 'string') {
-                    return item;
-                  } else if (item && typeof item === 'object') {
-                    // If it's an object with a url property
-                    if ('url' in item && typeof (item as { url: string }).url === 'string') {
-                      return (item as { url: string }).url;
-                    }
-                  }
-                  // Fallback
-                  return typeof item === 'object' ? JSON.stringify(item) : String(item);
-                });
-              }
-              
-              // Add to client-side history
-              if (processedOutput.length > 0) {
-                console.log('Adding to client history with processed output:', {
-                  id: generationId,
-                  prompt: values.prompt,
-                  timestamp: new Date().toISOString(),
-                  images: processedOutput,
-                  aspectRatio: values.aspectRatio
-                });
-                
-                addToClientHistory({
-                  id: generationId,
-                  prompt: values.prompt,
-                  timestamp: new Date().toISOString(),
-                  images: processedOutput,
-                  aspectRatio: values.aspectRatio
-                });
-                
-                // Remove from pending generations
-                removePendingGeneration(generationId);
-                
-                // Reset form after successful generation
-                form.reset({
-                  prompt: "",
-                  aspectRatio: values.aspectRatio,
-                  outputFormat: values.outputFormat,
-                  modelId: values.modelId,
-                });
-                
-                setSubmitting(false);
-                return;
-              } else {
-                console.warn('Processed output is empty, not adding to client history');
-              }
-            } else {
-              console.log('Generation not completed synchronously, status:', data.status);
-              console.log('API response data:', data);
-            }
-            
-            // Immediate check for completion right after getting the replicate_id
-            setTimeout(() => {
-              checkForCompletedGenerations();
-            }, 500);
-            
-            // With the new API design, we now return early with a "processing" status
-            // and let the checkForCompletedGenerations function handle the completion
-            if (data.status === 'processing') {
-              console.log('Generation is processing. Will check for completion periodically.');
-              setSubmitting(false);
-              return;
-            }
-          }
-        } else {
-          console.warn(`No replicate_id found in API response for generation ${generationId}`);
-          console.log('Response data structure:', Object.keys(data));
+          // Remove from pending since it's already done
+          removePendingGeneration(generationId);
         }
+
+        return;
       } catch (err) {
         console.error('Error generating image:', err);
         
@@ -424,10 +409,34 @@ export function PromptForm() {
     }
   };
   
-  // Function to clear stale pending generations
-  const handleClearStaleGenerations = () => {
-    clearStalePendingGenerations();
+  // Clear stale pending generations
+  const clearStalePendingGenerations = () => {
+    setPendingGenerations([]);
   };
+
+  // Add to client history
+  const addToClientHistory = (generation: ImageGeneration) => {
+    // Get current history
+    const currentHistory = localStorage.getItem(CLIENT_HISTORY_KEY);
+    let history: ImageGeneration[] = [];
+    
+    try {
+      if (currentHistory) {
+        history = JSON.parse(currentHistory);
+      }
+    } catch (e) {
+      console.error('Error parsing client history:', e);
+    }
+    
+    // Add new generation at the start
+    history = [generation, ...history];
+    
+    // Keep only the last 20 generations
+    history = history.slice(0, 20);
+    
+    // Save back to localStorage
+    localStorage.setItem(CLIENT_HISTORY_KEY, JSON.stringify(history));
+  }
 
   return (
     <div className="w-full mb-8">
@@ -450,7 +459,7 @@ export function PromptForm() {
                     type="button"
                     variant="outline"
                     size="sm"
-                    onClick={handleClearStaleGenerations}
+                    onClick={clearStalePendingGenerations}
                     className="text-xs py-1 h-auto"
                   >
                     Clear Pending Generations
