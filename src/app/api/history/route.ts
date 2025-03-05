@@ -149,42 +149,64 @@ export async function POST(request: Request) {
 }
 
 export async function DELETE(request: Request) {
+  // Set CORS headers to ensure the browser can access the response
+  const headers = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'DELETE, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type',
+    'Content-Type': 'application/json'
+  };
+
+  // Handle preflight requests
+  if (request.method === 'OPTIONS') {
+    return new Response(null, { 
+      status: 204,
+      headers 
+    });
+  }
+
   try {
     // Get the ID from the URL query parameters
     const url = new URL(request.url);
-    const id = url.searchParams.get('id');
+    const replicateId = url.searchParams.get('id');
     
-    if (!id) {
-      return NextResponse.json(
-        { error: 'Missing generation ID' },
-        { status: 400 }
+    if (!replicateId) {
+      return new Response(
+        JSON.stringify({ error: 'Missing replicate ID' }),
+        { status: 400, headers }
       );
     }
     
     // Initialize Supabase client
     const supabase = createSupabaseAdmin();
     
+    console.log(`Deleting prediction with replicate_id: ${replicateId}`);
+    
     // Soft delete by updating is_deleted to true
     const { error: updateError } = await supabase
       .from('predictions')
       .update({ is_deleted: true })
-      .eq('id', id);
+      .eq('replicate_id', replicateId);
     
     if (updateError) {
       console.error('Error updating prediction in Supabase:', updateError);
-      return NextResponse.json(
-        { error: 'Failed to mark prediction as deleted' },
-        { status: 500 }
+      return new Response(
+        JSON.stringify({ error: 'Failed to mark prediction as deleted', details: updateError }),
+        { status: 500, headers }
       );
     }
     
-    console.log(`Marked generation with ID ${id} as deleted in Supabase`);
-    return NextResponse.json({ success: true });
+    console.log(`Marked generation with replicate_id: ${replicateId} as deleted in Supabase`);
+    return new Response(
+      JSON.stringify({ success: true }),
+      { status: 200, headers }
+    );
   } catch (error) {
     console.error('Error deleting from image history:', error);
-    return NextResponse.json(
-      { error: 'Failed to delete from image history' },
-      { status: 500 }
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return new Response(
+      JSON.stringify({ error: 'Failed to delete from image history', details: errorMessage }),
+      { status: 500, headers }
     );
   }
 } 
