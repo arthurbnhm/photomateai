@@ -30,7 +30,7 @@
 # App
 
 - Let the user choose colors
-- Rework the navigation bar to something more native
+- ✅ Rework the navigation bar to something more native
 - Remove things related to current debugging
 - ✅ Improve UI for model management
 - Implement better error handling and user feedback

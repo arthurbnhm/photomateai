@@ -9,7 +9,6 @@ import {
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { formatDistanceToNow } from "date-fns";
 import { toast } from "sonner";
 import {
   AlertDialog,
@@ -262,7 +261,7 @@ export function ModelListTable({ newTraining, onClearNewTraining }: ModelListTab
                       let newModelStatus = model.status;
                       if (status === 'succeeded') {
                         newModelStatus = 'trained';
-                      } else if (['training', 'processing', 'starting', 'queued', 'created'].includes(status)) {
+                      } else if (['training', 'processing', 'starting', 'queued'].includes(status)) {
                         newModelStatus = 'training';
                       }
                       
@@ -414,7 +413,6 @@ export function ModelListTable({ newTraining, onClearNewTraining }: ModelListTab
     if (model.trainings && model.trainings.some(t => 
       t.status === "training" || 
       t.status === "starting" || 
-      t.status === "created" || 
       t.status === "queued" ||
       t.status === "processing"
     )) {
@@ -451,7 +449,6 @@ export function ModelListTable({ newTraining, onClearNewTraining }: ModelListTab
     const activeTraining = model.trainings.find(t => 
       t.status === "training" || 
       t.status === "starting" || 
-      t.status === "created" || 
       t.status === "queued"
     );
     
@@ -542,8 +539,6 @@ export function ModelListTable({ newTraining, onClearNewTraining }: ModelListTab
 
   const getStatusBadge = (status: string) => {
     switch (status.toLowerCase()) {
-      case "created":
-        return <Badge variant="secondary">Created</Badge>;
       case "training":
       case "processing":
       case "starting":
@@ -714,7 +709,6 @@ export function ModelListTable({ newTraining, onClearNewTraining }: ModelListTab
           <TableRow>
             <TableHead>Model Name</TableHead>
             <TableHead>Status</TableHead>
-            <TableHead>Created</TableHead>
             <TableHead className="text-right">Actions</TableHead>
           </TableRow>
         </TableHeader>
@@ -728,9 +722,6 @@ export function ModelListTable({ newTraining, onClearNewTraining }: ModelListTab
               <TableCell>
                 {getStatusBadge("training")}
               </TableCell>
-              <TableCell>
-                Just now
-              </TableCell>
               <TableCell className="text-right space-x-2">
                 {renderNewTrainingCancelButton()}
               </TableCell>
@@ -739,7 +730,7 @@ export function ModelListTable({ newTraining, onClearNewTraining }: ModelListTab
           
           {models.length === 0 && !showNewTraining ? (
             <TableRow>
-              <TableCell colSpan={4} className="text-center">
+              <TableCell colSpan={3} className="text-center">
                 No models found. Create your first model above!
               </TableCell>
             </TableRow>
@@ -753,9 +744,6 @@ export function ModelListTable({ newTraining, onClearNewTraining }: ModelListTab
                     {model.display_name}
                   </TableCell>
                   <TableCell>{getStatusBadge(effectiveStatus)}</TableCell>
-                  <TableCell>
-                    {formatDistanceToNow(new Date(model.created_at), { addSuffix: true })}
-                  </TableCell>
                   <TableCell className="text-right space-x-2">
                     {shouldShowCancelButton(model) ? (
                       renderCancelButton(model)
