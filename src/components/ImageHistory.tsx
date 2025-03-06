@@ -8,8 +8,8 @@ import { Toaster } from "@/components/ui/sonner"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { motion } from "framer-motion"
 import { Skeleton } from "@/components/ui/skeleton"
-import { createSupabaseClient } from "@/lib/supabase"
 import { Badge } from "@/components/ui/badge"
+import { createSupabaseClient } from "@/lib/supabase"
 
 // Define the type for image generation
 type ImageGeneration = {
@@ -738,89 +738,6 @@ export function ImageHistory({
       });
   };
 
-  // Get status badge similar to ModelListTable
-  const getStatusBadge = (status: string, hasPartialResults: boolean = false, elapsedTime?: number) => {
-    if (status === "generating") {
-      if (hasPartialResults) {
-        return (
-          <Badge variant="secondary" className="flex items-center gap-1">
-            <span className="h-2 w-2 rounded-full bg-blue-400 animate-pulse"></span>
-            Partially Complete
-            {elapsedTime !== undefined && (
-              <span className="text-xs ml-1">({elapsedTime}s)</span>
-            )}
-          </Badge>
-        );
-      }
-      return (
-        <Badge variant="secondary" className="flex items-center gap-1">
-          <span className="h-2 w-2 rounded-full bg-blue-400 animate-pulse"></span>
-          Generating
-          {elapsedTime !== undefined && (
-            <span className="text-xs ml-1">({elapsedTime}s)</span>
-          )}
-        </Badge>
-      );
-    } else if (status === "stalled") {
-      return (
-        <Badge variant="outline" className="bg-yellow-100 text-yellow-800 hover:bg-yellow-200 border-yellow-300 flex items-center gap-1">
-          <span className="h-2 w-2 rounded-full bg-amber-500 animate-pulse"></span>
-          Stalled
-        </Badge>
-      );
-    } else if (status === "completed") {
-      return (
-        <Badge variant="secondary" className="flex items-center gap-1">
-          <span className="h-2 w-2 rounded-full bg-green-500"></span>
-          Completed
-        </Badge>
-      );
-    } else if (status === "failed") {
-      return <Badge variant="destructive">Failed</Badge>;
-    } else if (status === "canceled") {
-      return <Badge variant="outline" className="bg-yellow-100 text-yellow-800 hover:bg-yellow-200 border-yellow-300">Canceled</Badge>;
-    } else {
-      return <Badge variant="outline">{status}</Badge>;
-    }
-  };
-
-  // Get a pastel colored badge for aspect ratio
-  const getAspectRatioBadge = (aspectRatio: string) => {
-    // Different pastel colors based on aspect ratio
-    switch (aspectRatio) {
-      case "1:1":
-        return (
-          <Badge variant="outline" className="bg-purple-50 text-purple-700 hover:bg-purple-100 border-purple-200">
-            {aspectRatio}
-          </Badge>
-        );
-      case "4:5":
-        return (
-          <Badge variant="outline" className="bg-pink-50 text-pink-700 hover:bg-pink-100 border-pink-200">
-            {aspectRatio}
-          </Badge>
-        );
-      case "16:9":
-        return (
-          <Badge variant="outline" className="bg-green-50 text-green-700 hover:bg-green-100 border-green-200">
-            {aspectRatio}
-          </Badge>
-        );
-      case "9:16":
-        return (
-          <Badge variant="outline" className="bg-orange-50 text-orange-700 hover:bg-orange-100 border-orange-200">
-            {aspectRatio}
-          </Badge>
-        );
-      default:
-        return (
-          <Badge variant="outline" className="bg-blue-50 text-blue-700 hover:bg-blue-100 border-blue-200">
-            {aspectRatio}
-          </Badge>
-        );
-    }
-  };
-
   return (
     <div className="w-full">
       <Toaster />
@@ -869,16 +786,32 @@ export function ImageHistory({
                     <CardHeader className="p-4 pb-0 space-y-0">
                       <div className="flex items-center justify-between gap-3">
                         <div className="flex items-center gap-2">
-                          {getAspectRatioBadge(generation.aspectRatio)}
-                          
-                          <div className="flex items-center gap-2 ml-2">
+                          <div className="flex items-center gap-2">
                             {generation.potentiallyStalled ? (
                               <>
-                                {getStatusBadge("stalled")}
+                                <span className="inline-block w-2.5 h-2.5 bg-amber-500 rounded-full animate-pulse"></span>
+                                <span className="text-sm font-medium text-amber-500">Stalled</span>
                               </>
                             ) : (
                               <>
-                                {getStatusBadge("generating", hasPartialResults, elapsedTimes[generation.id])}
+                                {hasPartialResults ? (
+                                  <>
+                                    <span className="inline-block w-2.5 h-2.5 bg-primary rounded-full animate-pulse"></span>
+                                    <span className="text-sm font-medium text-primary">
+                                      Partially Complete
+                                    </span>
+                                  </>
+                                ) : (
+                                  <Badge variant="secondary" className="flex items-center gap-1">
+                                    <span className="h-2 w-2 rounded-full bg-blue-400 animate-pulse"></span>
+                                    Generating
+                                  </Badge>
+                                )}
+                                {elapsedTimes[generation.id] !== undefined && (
+                                  <span className="text-xs text-muted-foreground ml-1">
+                                    ({elapsedTimes[generation.id]}s)
+                                  </span>
+                                )}
                               </>
                             )}
                           </div>
@@ -1023,7 +956,7 @@ export function ImageHistory({
                 <CardHeader className="p-4 pb-0 space-y-0">
                   <div className="flex items-center justify-between gap-3">
                     <div className="flex items-center gap-2">
-                      {getAspectRatioBadge(generation.aspectRatio)}
+                      {/* Aspect ratio badge removed */}
                     </div>
                     
                     <div className="flex items-center gap-2">
