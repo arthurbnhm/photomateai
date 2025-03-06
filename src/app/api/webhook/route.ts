@@ -81,7 +81,6 @@ export async function POST(request: Request) {
         .update({
           status: webhookData.status,
           error: webhookData.error,
-          logs: webhookData.logs,
           updated_at: new Date().toISOString()
         })
         .eq('training_id', replicate_id);
@@ -93,6 +92,19 @@ export async function POST(request: Request) {
 
       // If training is completed, update the model status
       if (webhookData.status === 'succeeded') {
+        // Update the training with completed_at timestamp
+        const { error: trainingCompletedError } = await supabase
+          .from('trainings')
+          .update({
+            completed_at: new Date().toISOString()
+          })
+          .eq('training_id', replicate_id);
+
+        if (trainingCompletedError) {
+          console.error('Error updating training completed_at:', trainingCompletedError);
+          // Continue anyway
+        }
+
         const { error: modelUpdateError } = await supabase
           .from('models')
           .update({

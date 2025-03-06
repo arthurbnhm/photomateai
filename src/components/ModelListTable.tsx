@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   Table,
   TableBody,
@@ -23,7 +23,7 @@ import {
 import { Trash2, XCircle } from "lucide-react";
 import { createClient } from "@supabase/supabase-js";
 
-// Initialize Supabase client for realtime subscriptions
+// Initialize Supabase client
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
@@ -89,7 +89,7 @@ export function ModelListTable({ newTraining, onClearNewTraining }: ModelListTab
   const [realtimeSubscribed, setRealtimeSubscribed] = useState(false);
   
   // Check if newTraining is already in models list
-  const isNewTrainingInModels = () => {
+  const isNewTrainingInModels = useCallback(() => {
     if (!newTraining || !models.length) return false;
     
     return models.some(model => {
@@ -108,9 +108,9 @@ export function ModelListTable({ newTraining, onClearNewTraining }: ModelListTab
         training.training_id === newTraining.id
       );
     });
-  };
+  }, [newTraining, models]);
 
-  const fetchModels = async (pageNum = 1) => {
+  const fetchModels = useCallback(async (pageNum = 1) => {
     setLoading(true);
     try {
       const response = await fetch(`/api/model-list?page=${pageNum}&limit=5`);
@@ -120,31 +120,23 @@ export function ModelListTable({ newTraining, onClearNewTraining }: ModelListTab
       
       const data: ModelListResponse = await response.json();
       
-      if (!data.success) {
-        throw new Error(data.error || "Failed to fetch models");
-      }
-      
-      setModels(data.models);
-      setTotalPages(data.pagination.pages);
-      setPage(data.pagination.page);
-      
-      // If newTraining is now in models list, clear it
-      if (newTraining && data.models.some(model => {
-        // Check if any model matches the newTraining
-        if (newTraining.modelId && model.id === newTraining.modelId) return true;
-        if (newTraining.modelName && model.model_id === newTraining.modelName && 
-            newTraining.modelOwner && model.model_owner === newTraining.modelOwner) return true;
-        return model.trainings.some(t => t.id === newTraining.id || t.training_id === newTraining.id);
-      })) {
-        onClearNewTraining?.();
+      if (data.success) {
+        setModels(data.models);
+        setTotalPages(data.pagination.pages);
+        
+        // If we have a newTraining and it's now in the models list, clear it
+        if (newTraining && isNewTrainingInModels() && onClearNewTraining) {
+          onClearNewTraining();
+        }
+      } else {
+        setError(data.error || "Failed to fetch models");
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "An error occurred");
-      console.error("Error fetching models:", err);
     } finally {
       setLoading(false);
     }
-  };
+  }, [newTraining, onClearNewTraining, isNewTrainingInModels]);
 
   // Initial fetch
   useEffect(() => {
@@ -198,8 +190,9 @@ export function ModelListTable({ newTraining, onClearNewTraining }: ModelListTab
     return () => {
       trainingSubscription.unsubscribe();
       modelSubscription.unsubscribe();
+      setRealtimeSubscribed(false);
     };
-  }, [page]);
+  }, [fetchModels]);
 
   // When newTraining changes, refresh the models list
   useEffect(() => {

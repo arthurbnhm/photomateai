@@ -233,7 +233,7 @@ async function trainModel(modelOwner: string, modelName: string, zipUrl: string)
 
     // Define training parameters
     const trainingParams = {
-      steps: 1000,
+      steps: 3,
       lora_rank: 16,
       optimizer: "adamw8bit",
       batch_size: 1,
@@ -253,8 +253,15 @@ async function trainModel(modelOwner: string, modelName: string, zipUrl: string)
     console.log('Training parameters defined:', trainingParams);
 
     // Get webhook URL from environment or use fallback
-    const webhookUrl = process.env.REPLICATE_WEBHOOK_URL || "https://your-app-url.com/api/webhook";
-    console.log(`Using webhook URL: ${webhookUrl}`);
+    const webhookUrl = process.env.NEXT_PUBLIC_APP_URL 
+      ? `${process.env.NEXT_PUBLIC_APP_URL}/api/webhook` 
+      : undefined;
+    
+    if (!webhookUrl) {
+      console.warn('No webhook URL available. Status updates will not be received.');
+    } else {
+      console.log(`Using webhook URL: ${webhookUrl}`);
+    }
 
     // Create the training in Replicate
     console.log('Creating training in Replicate with destination:', `${modelOwner}/${modelName}`);

@@ -4,7 +4,6 @@ import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
 import { ThemeProvider } from "@/components/theme-provider";
 import { ModeToggle } from "@/components/mode-toggle";
-import { ClientNavBar } from "@/components/ClientNavBar";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -32,7 +31,6 @@ export default function RootLayout({
           </div>
           
           <div className="flex min-h-screen flex-col relative">
-            <ClientNavBar />
             <main className="flex-1">
               {children}
             </main>
