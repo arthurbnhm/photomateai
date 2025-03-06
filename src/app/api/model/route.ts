@@ -23,7 +23,6 @@ export async function POST(request: NextRequest) {
 
     // Check if API token is available
     const apiToken = process.env.REPLICATE_API_TOKEN;
-    console.log('API token available:', apiToken ? `Yes (starts with ${apiToken.substring(0, 4)}...)` : 'No');
     
     if (!apiToken) {
       console.error('REPLICATE_API_TOKEN is not set');
@@ -101,13 +100,6 @@ async function createModel(modelName: string, owner: string, visibility: Visibil
     );
   }
 
-  console.log('Creating model with parameters:', { 
-    modelName, 
-    owner, 
-    visibility: visibility || 'private',
-    hardware: hardware || 'gpu-t4'
-  });
-
   try {
     // Create the model in Replicate
     const model = await replicate.models.create(
@@ -118,8 +110,6 @@ async function createModel(modelName: string, owner: string, visibility: Visibil
         hardware: hardware || 'gpu-t4'
       }
     );
-
-    console.log('Model created successfully:', model);
 
     // Initialize Supabase client
     const supabase = createSupabaseAdmin();
@@ -175,20 +165,11 @@ async function trainModel(modelOwner: string, modelName: string, zipUrl: string)
     );
   }
 
-  console.log('=== TRAINING PROCESS STARTED ===');
-  console.log('Training model with parameters:', { 
-    modelOwner, 
-    modelName,
-    zipUrl
-  });
-
   try {
     // Initialize Supabase client
     const supabase = createSupabaseAdmin();
-    console.log('Supabase client initialized for training');
 
     // Find the model in Supabase
-    console.log('Looking for model in database with:', { modelOwner, modelName });
     const { data: modelData, error: modelError } = await supabase
       .from('models')
       .select('*')
@@ -204,26 +185,11 @@ async function trainModel(modelOwner: string, modelName: string, zipUrl: string)
       );
     }
 
-    console.log('Found model in database:', modelData);
-    
-    // Log the structure of the model data to help debug database schema issues
-    console.log('Model data structure:', {
-      id: modelData.id,
-      model_id: modelData.model_id,
-      model_owner: modelData.model_owner,
-      keys: Object.keys(modelData)
-    });
-
     // Verify the zip URL is accessible
     try {
-      console.log(`Verifying zip URL accessibility: ${zipUrl}`);
       const zipResponse = await fetch(zipUrl, { method: 'HEAD' });
       if (zipResponse.ok) {
-        console.log(`Zip URL verification successful: HTTP ${zipResponse.status}`);
-        console.log('Content-Type:', zipResponse.headers.get('Content-Type'));
-        console.log('Content-Length:', zipResponse.headers.get('Content-Length'));
       } else {
-        console.error(`⚠️ Zip URL verification failed: HTTP ${zipResponse.status}`);
         console.error('This may cause training to fail as Replicate cannot access the zip file');
       }
     } catch (verifyError) {
@@ -250,8 +216,6 @@ async function trainModel(modelOwner: string, modelName: string, zipUrl: string)
       gradient_checkpointing: false
     };
 
-    console.log('Training parameters defined:', trainingParams);
-
     // Get webhook URL from environment or use fallback
     const webhookUrl = process.env.NEXT_PUBLIC_APP_URL 
       ? `${process.env.NEXT_PUBLIC_APP_URL}/api/webhook` 
@@ -259,16 +223,10 @@ async function trainModel(modelOwner: string, modelName: string, zipUrl: string)
     
     if (!webhookUrl) {
       console.warn('No webhook URL available. Status updates will not be received.');
-    } else {
-      console.log(`Using webhook URL: ${webhookUrl}`);
     }
 
     // Create the training in Replicate
-    console.log('Creating training in Replicate with destination:', `${modelOwner}/${modelName}`);
     try {
-      console.log('Sending request to Replicate API...');
-      const replicateStart = Date.now();
-      
       const training = await replicate.trainings.create(
         "ostris",
         "flux-dev-lora-trainer",
@@ -282,16 +240,8 @@ async function trainModel(modelOwner: string, modelName: string, zipUrl: string)
           webhook_events_filter: ["start", "output", "logs", "completed"]
         }
       );
-      
-      const replicateDuration = Date.now() - replicateStart;
-      console.log(`Replicate API request completed in ${replicateDuration}ms`);
-      console.log('Training created successfully in Replicate:', training);
-      console.log('Training ID:', training.id);
-      console.log('Training status:', training.status);
-      console.log('Training version:', training.version);
 
       // Store the training in Supabase
-      console.log('Storing training in database with model_id:', modelData.id);
       try {
         const trainingInsertData = {
           model_id: modelData.id,
@@ -301,8 +251,6 @@ async function trainModel(modelOwner: string, modelName: string, zipUrl: string)
           input_params: trainingParams
         };
         
-        console.log('Training insert data:', trainingInsertData);
-        
         const { data: trainingData, error: trainingError } = await supabase
           .from('trainings')
           .insert(trainingInsertData)
@@ -310,31 +258,24 @@ async function trainModel(modelOwner: string, modelName: string, zipUrl: string)
           .single();
 
         if (trainingError) {
-          console.error('Error storing training in Supabase:', trainingError);
           // Continue anyway since the training was created in Replicate
         } else {
-          console.log('Training stored in database:', trainingData);
+          // Training stored successfully
         }
-      } catch (dbError) {
-        console.error('Exception when inserting training record:', dbError);
+      } catch (_) {
         // Continue anyway since the training was created in Replicate
       }
 
       // Update the model status to 'training'
-      console.log('Updating model status to training');
-      const { error: updateError } = await supabase
+      const { error: _updateError } = await supabase
         .from('models')
         .update({ status: 'training' })
         .eq('id', modelData.id);
 
-      if (updateError) {
-        console.error('Error updating model status:', updateError);
+      if (_updateError) {
         // Continue anyway
-      } else {
-        console.log('Model status updated successfully to "training"');
       }
 
-      console.log('=== TRAINING PROCESS COMPLETED SUCCESSFULLY ===');
       return NextResponse.json({
         success: true,
         training: {
@@ -384,7 +325,7 @@ async function initializeBucket() {
     const supabase = createSupabaseAdmin();
     
     // Check if the bucket exists
-    const { data: buckets } = await supabase.storage.listBuckets();
+    const { data: buckets, error: bucketsError } = await supabase.storage.listBuckets();
     const bucketExists = buckets?.some(bucket => bucket.name === 'training-files');
     
     if (!bucketExists) {
@@ -396,13 +337,10 @@ async function initializeBucket() {
         });
         
         if (createBucketError) {
-          console.log('Error creating bucket (might already exist):', createBucketError);
           // Continue anyway, as the bucket might already exist but not be visible to this user
         } else {
-          console.log('Created training-files bucket');
         }
       } catch (error) {
-        console.log('Exception when creating bucket (continuing anyway):', error);
         // Continue anyway, as the bucket might already exist
       }
     }
@@ -414,13 +352,7 @@ async function initializeBucket() {
         fileSizeLimit: 50 * 1024 * 1024, // 50MB limit
       });
       
-      if (updateError) {
-        console.log('Error updating bucket:', updateError);
-      } else {
-        console.log('Updated training-files bucket to be public');
-      }
     } catch (error) {
-      console.log('Exception when updating bucket:', error);
     }
     
     return NextResponse.json({
@@ -442,19 +374,10 @@ async function initializeBucket() {
 // Handle file upload using formdata
 async function handleFileUpload(request: NextRequest) {
   try {
-    console.log('=== UPLOAD PROCESS STARTED ===');
     const formData = await request.formData();
     const modelOwner = formData.get('modelOwner') as string;
     const modelName = formData.get('modelName') as string;
     const files = formData.getAll('files') as File[];
-
-    console.log(`Received upload request for model: ${modelOwner}/${modelName}`);
-    console.log(`Number of files to process: ${files.length}`);
-    
-    // Log some details about the files
-    const fileSizes = files.map(f => Math.round(f.size / 1024)).join(', ');
-    console.log(`File sizes (KB): ${fileSizes}`);
-    console.log(`Total size: ${Math.round(files.reduce((sum, f) => sum + f.size, 0) / 1024)} KB`);
 
     if (!modelOwner || !modelName || files.length === 0) {
       console.error('Missing required parameters for upload');
@@ -466,15 +389,11 @@ async function handleFileUpload(request: NextRequest) {
 
     // Initialize Supabase client with admin privileges
     const supabase = createSupabaseAdmin();
-    console.log('Supabase client initialized');
-    
+
     // Check available buckets
     const { data: buckets, error: bucketsError } = await supabase.storage.listBuckets();
     if (bucketsError) {
       console.error('Error listing buckets:', bucketsError);
-    } else {
-      console.log('Available buckets:', buckets?.map(b => b.name));
-      console.log('Target bucket exists:', buckets?.some(b => b.name === 'training-files'));
     }
     
     // Find the model in Supabase
@@ -486,32 +405,25 @@ async function handleFileUpload(request: NextRequest) {
       .single();
 
     if (modelError) {
-      console.error('Error finding model in Supabase:', modelError);
       // Continue anyway since we can still upload the files
     } else {
-      console.log('Found model in database:', modelData?.id);
     }
     
-    console.log('Creating zip file in memory...');
     // Create a zip file directly
     const zip = new JSZip();
     
     // Add each file to the zip
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
-      console.log(`Processing file ${i + 1}/${files.length}: ${file.name} (${Math.round(file.size / 1024)} KB)`);
       // Read the file as ArrayBuffer
       const arrayBuffer = await file.arrayBuffer();
-      console.log(`File ${i + 1} read successfully, size: ${Math.round(arrayBuffer.byteLength / 1024)} KB`);
       // Add to zip with a simple numbered name
       zip.file(`${i + 1}${getFileExtension(file.name)}`, arrayBuffer);
     }
     
-    console.log('All files added to zip, generating final zip file...');
     // Generate the zip file
     try {
       const zipContent = await zip.generateAsync({ type: 'blob' });
-      console.log(`Zip file generated successfully. Size: ${Math.round(zipContent.size / 1024)} KB`);
       
       // Check if zip size is approaching limit
       const sizeLimit = 50 * 1024 * 1024; // 50MB
@@ -520,16 +432,11 @@ async function handleFileUpload(request: NextRequest) {
       }
       
       // Convert Blob to ArrayBuffer for Supabase upload
-      console.log('Converting zip to ArrayBuffer for upload...');
       const zipArrayBuffer = await zipContent.arrayBuffer();
-      console.log(`Conversion complete. ArrayBuffer size: ${Math.round(zipArrayBuffer.byteLength / 1024)} KB`);
       
       // Upload the zip file directly to Supabase
       const zipPath = `${modelOwner}/${modelName}/images.zip`;
-      console.log(`Uploading to Supabase storage path: ${zipPath}`);
-      console.log('Starting upload to Supabase...');
       
-      const uploadStart = Date.now();
       const { error: uploadError } = await supabase.storage
         .from('training-files')
         .upload(zipPath, zipArrayBuffer, {
@@ -537,44 +444,27 @@ async function handleFileUpload(request: NextRequest) {
           cacheControl: '3600',
           upsert: true
         });
-      const uploadDuration = Date.now() - uploadStart;
-      
+
       if (uploadError) {
-        console.error('Error uploading zip file:', uploadError);
-        console.error('Upload error details:', JSON.stringify(uploadError));
         return NextResponse.json(
           { error: `Failed to upload zip file: ${uploadError.message}`, success: false },
           { status: 500 }
         );
       }
       
-      console.log(`Upload completed successfully in ${uploadDuration}ms`);
-      
       // Get the public URL for the zip file
       const { data: publicUrl } = supabase.storage
         .from('training-files')
         .getPublicUrl(zipPath);
       
-      console.log(`Zip file public URL: ${publicUrl.publicUrl}`);
-      
       // Verify the upload by attempting to fetch the file head
       try {
-        console.log('Verifying upload accessibility...');
-        const verifyResponse = await fetch(publicUrl.publicUrl, { method: 'HEAD' });
-        if (verifyResponse.ok) {
-          console.log(`Verification successful: HTTP ${verifyResponse.status}`);
-          console.log('Content-Type:', verifyResponse.headers.get('Content-Type'));
-          console.log('Content-Length:', verifyResponse.headers.get('Content-Length'));
-        } else {
-          console.warn(`⚠️ Verification failed: HTTP ${verifyResponse.status}`);
-        }
       } catch (verifyError) {
         console.warn('⚠️ Could not verify upload:', verifyError);
       }
       
       // Update the model with the zip URL if we found the model
       if (modelData) {
-        console.log(`Updating model ${modelData.id} status to 'files_uploaded'`);
         const { error: updateError } = await supabase
           .from('models')
           .update({ 
@@ -583,14 +473,10 @@ async function handleFileUpload(request: NextRequest) {
           .eq('id', modelData.id);
 
         if (updateError) {
-          console.error('Error updating model in Supabase:', updateError);
           // Continue anyway since the files were uploaded
-        } else {
-          console.log('Model status updated successfully');
         }
       }
 
-      console.log('=== UPLOAD PROCESS COMPLETED SUCCESSFULLY ===');
       return NextResponse.json({
         success: true,
         zipUrl: publicUrl.publicUrl,
@@ -631,8 +517,6 @@ async function cancelTraining(trainingId: string) {
     );
   }
 
-  console.log('Cancelling training with ID:', trainingId);
-
   try {
     // First, try to find the training in Supabase to get the correct Replicate training ID
     const supabase = createSupabaseAdmin();
@@ -646,7 +530,6 @@ async function cancelTraining(trainingId: string) {
     
     // If not found, try to find by internal id
     if (trainingError) {
-      console.log('Training not found by training_id, trying internal id');
       const { data: internalTrainingData, error: internalTrainingError } = await supabase
         .from('trainings')
         .select('*, models!inner(*)')
@@ -654,7 +537,6 @@ async function cancelTraining(trainingId: string) {
         .single();
       
       if (internalTrainingError) {
-        console.error('Error finding training in Supabase:', internalTrainingError);
         return NextResponse.json(
           { error: 'Training not found in database', success: false },
           { status: 404 }
@@ -665,13 +547,8 @@ async function cancelTraining(trainingId: string) {
       trainingId = internalTrainingData.training_id;
       
       // Now we have the correct Replicate training ID
-      console.log('Using Replicate training ID for cancellation:', trainingId);
-      
       // Cancel the training in Replicate
-      console.log('Calling replicate.trainings.cancel with ID:', trainingId);
-      const response = await replicate.trainings.cancel(trainingId);
-      
-      console.log('Training cancelled successfully, response:', JSON.stringify(response, null, 2));
+      await replicate.trainings.cancel(trainingId);
       
       // Update the training status in Supabase
       const { error: updateTrainingError } = await supabase
@@ -684,9 +561,7 @@ async function cancelTraining(trainingId: string) {
         .eq('training_id', trainingId);
       
       if (updateTrainingError) {
-        console.error('Error updating training status in Supabase:', updateTrainingError);
       } else {
-        console.log('Successfully updated training status in Supabase');
       }
       
       // Check if this is the only active training for the model
@@ -705,7 +580,6 @@ async function cancelTraining(trainingId: string) {
           .eq('id', internalTrainingData.model_id);
         
         if (updateModelError) {
-          console.error('Error updating model status in Supabase:', updateModelError);
         }
       }
       
@@ -720,13 +594,8 @@ async function cancelTraining(trainingId: string) {
     }
     
     // If we found the training by training_id, proceed with cancellation
-    console.log('Found training by training_id, proceeding with cancellation');
-    
     // Cancel the training in Replicate
-    console.log('Calling replicate.trainings.cancel with ID:', trainingId);
-    const response = await replicate.trainings.cancel(trainingId);
-
-    console.log('Training cancelled successfully, response:', JSON.stringify(response, null, 2));
+    await replicate.trainings.cancel(trainingId);
 
     // Update the training status in Supabase
     const { error: updateTrainingError } = await supabase
@@ -739,9 +608,6 @@ async function cancelTraining(trainingId: string) {
       .eq('training_id', trainingId);
 
     if (updateTrainingError) {
-      console.error('Error updating training status in Supabase:', updateTrainingError);
-    } else {
-      console.log('Successfully updated training status in Supabase');
     }
 
     // Check if this is the only active training for the model
@@ -760,7 +626,6 @@ async function cancelTraining(trainingId: string) {
         .eq('id', trainingData.model_id);
 
       if (updateModelError) {
-        console.error('Error updating model status in Supabase:', updateModelError);
       }
     }
 

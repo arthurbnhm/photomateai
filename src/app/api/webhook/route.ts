@@ -49,7 +49,6 @@ async function downloadAndStoreImage(url: string): Promise<string | null> {
 export async function POST(request: Request) {
   try {
     const webhookData = await request.json();
-    console.log('Received webhook data:', webhookData);
 
     const supabase = createSupabaseClient();
     const replicate_id = webhookData.id;
@@ -73,8 +72,6 @@ export async function POST(request: Request) {
 
     // If found in trainings table, handle as a training webhook
     if (training) {
-      console.log('Found training with ID:', replicate_id);
-      
       // Update the training status
       const { error: updateError } = await supabase
         .from('trainings')
@@ -101,7 +98,6 @@ export async function POST(request: Request) {
           .eq('training_id', replicate_id);
 
         if (trainingCompletedError) {
-          console.error('Error updating training completed_at:', trainingCompletedError);
           // Continue anyway
         }
 
@@ -114,7 +110,6 @@ export async function POST(request: Request) {
           .eq('id', training.model_id);
 
         if (modelUpdateError) {
-          console.error('Error updating model status:', modelUpdateError);
           // Continue anyway
         }
       } else if (webhookData.status === 'failed') {
@@ -128,7 +123,6 @@ export async function POST(request: Request) {
           .eq('id', training.model_id);
 
         if (modelUpdateError) {
-          console.error('Error updating model status:', modelUpdateError);
           // Continue anyway
         }
       }
@@ -154,7 +148,6 @@ export async function POST(request: Request) {
     }
 
     // Handle prediction webhook
-    console.log('Found prediction with ID:', replicate_id);
     
     // Handle different webhook statuses for predictions
     if (webhookData.status === 'succeeded') {
@@ -185,7 +178,7 @@ export async function POST(request: Request) {
             .eq('id', prediction.id);
 
           if (updateError) {
-            console.error('Error updating prediction status:', updateError);
+            // Continue anyway
           }
 
           return NextResponse.json({ error: 'Failed to store images' }, { status: 500 });

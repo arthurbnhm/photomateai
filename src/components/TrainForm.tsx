@@ -75,7 +75,6 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
             action: 'initBucket'
           }),
         });
-        console.log('Bucket initialization requested');
       } catch (error) {
         console.error('Error initializing bucket:', error);
       }
@@ -141,17 +140,11 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
     // Use the ref to check if already subscribed, but still keep realtimeSubscribed in deps
     if (!trainingStatus || subscriptionActiveRef.current) return;
     
-    console.log('Setting up realtime subscription for training:', trainingStatus.id);
-    
     // Define a type-safe handler for the Supabase realtime event
     function handleTrainingUpdate(payload: RealtimeTrainingPayload) {
-      console.log('Training update received:', payload);
-      
       if (payload.new && trainingStatus) {
         // Only update if the status has changed
         if (payload.new.status !== trainingStatus.status) {
-          console.log(`Status changed from ${trainingStatus.status} to ${payload.new.status}`);
-          
           // Update the training status
           onTrainingStatusChange({
             ...(trainingStatus as TrainingStatus),
@@ -239,10 +232,6 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
         throw new Error(modelData.error || 'Failed to create model');
       }
 
-      console.log(`Model created: ${modelData.model.name}`);
-      console.log(`Model URL: ${modelData.model.url}`);
-      console.log(`Model ID: ${modelData.model.id}`);
-      
       toast.success("Model created successfully");
       setUploadProgress(30);
       
@@ -299,9 +288,6 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
       if (!trainingData.success) {
         throw new Error(trainingData.error || 'Failed to start model training');
       }
-      
-      console.log('Model training started');
-      console.log(`Training ID: ${trainingData.training.id}`);
       
       // Set the training status
       const newTrainingStatus = {

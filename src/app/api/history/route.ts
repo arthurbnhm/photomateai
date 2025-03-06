@@ -44,7 +44,6 @@ export async function GET() {
     
     // If no data from Supabase, return empty array
     if (!predictionData || predictionData.length === 0) {
-      console.log('No data in Supabase, returning empty array');
       return NextResponse.json([]);
     }
     
@@ -59,7 +58,6 @@ export async function GET() {
         aspectRatio: pred.aspect_ratio
       }));
     
-    console.log('Returning Supabase history with', transformedData.length, 'items');
     return NextResponse.json(transformedData);
   } catch (error) {
     console.error('Error fetching image history:', error);
@@ -181,23 +179,18 @@ export async function DELETE(request: Request) {
     // Initialize Supabase client
     const supabase = createSupabaseAdmin();
     
-    console.log(`Deleting prediction with replicate_id: ${replicateId}`);
-    
     // Process storage URLs if provided
     let storageUrls: string[] = [];
     if (urlsParam) {
       try {
         storageUrls = JSON.parse(urlsParam);
-        console.log(`Received ${storageUrls.length} storage URLs to delete`);
-      } catch (error) {
-        console.error('Error parsing storage URLs:', error);
+      } catch (_error) {
         // Continue even if we can't parse the URLs
       }
     }
     
     // If no URLs were provided or parsing failed, try to fetch them from the database
     if (storageUrls.length === 0) {
-      console.log('No storage URLs provided, fetching from database');
       const { data: predictionData, error: fetchError } = await supabase
         .from('predictions')
         .select('storage_urls')
@@ -205,11 +198,9 @@ export async function DELETE(request: Request) {
         .single();
       
       if (fetchError) {
-        console.error('Error fetching prediction data:', fetchError);
         // Continue with soft delete even if we can't fetch the storage URLs
       } else if (predictionData && predictionData.storage_urls && Array.isArray(predictionData.storage_urls)) {
         storageUrls = predictionData.storage_urls;
-        console.log(`Fetched ${storageUrls.length} storage URLs from database`);
       }
     }
     
@@ -227,27 +218,18 @@ export async function DELETE(request: Request) {
             const bucket = pathParts[publicIndex + 1];
             const path = pathParts.slice(publicIndex + 2).join('/');
             
-            console.log(`Deleting file from storage: bucket=${bucket}, path=${path}`);
             const { error: storageError } = await supabase.storage
               .from(bucket)
               .remove([path]);
             
             if (storageError) {
-              console.error(`Error deleting file from storage: ${url}`, storageError);
               // Continue with other files even if one fails
-            } else {
-              console.log(`Successfully deleted file from storage: ${url}`);
             }
-          } else {
-            console.warn(`Could not parse storage path from URL: ${url}`);
           }
-        } catch (error) {
-          console.error(`Error processing storage URL: ${url}`, error);
+        } catch (_error) {
           // Continue with other files even if one fails
         }
       }
-    } else {
-      console.log('No storage URLs to delete');
     }
     
     // Soft delete by updating is_deleted to true
@@ -264,7 +246,6 @@ export async function DELETE(request: Request) {
       );
     }
     
-    console.log(`Marked generation with replicate_id: ${replicateId} as deleted in Supabase`);
     return new Response(
       JSON.stringify({ success: true }),
       { status: 200, headers }

@@ -190,13 +190,10 @@ export function ImageHistory({
   useEffect(() => {
     if (!isMounted) return;
     
-    console.log("Setting up Supabase Realtime and loading initial data...");
     loadGenerations(true);
     
     // Set up Supabase Realtime subscription
     const supabase = createSupabaseClient();
-    
-    console.log("Setting up Supabase Realtime subscription for predictions...");
     
     // Subscribe to changes in the predictions table for successful generations
     const successChannel = supabase
@@ -209,8 +206,6 @@ export function ImageHistory({
           filter: 'status=eq.succeeded'
         }, 
         (payload) => {
-          console.log("Received real-time update for succeeded prediction:", payload);
-          
           // Process the updated prediction
           if (payload.new && 
               payload.new.status === 'succeeded' && 
@@ -223,8 +218,6 @@ export function ImageHistory({
             );
             
             if (matchingPending) {
-              console.log("Found matching pending generation:", matchingPending.id);
-              
               // Process the new image data
               const processedImages = processOutput(payload.new.storage_urls);
               
@@ -265,7 +258,6 @@ export function ImageHistory({
                 prev.filter(g => g.id !== matchingPending.id)
               );
             } else {
-              console.log("No matching pending generation found, refreshing data...");
               loadGenerations(true);
             }
           }
@@ -284,8 +276,6 @@ export function ImageHistory({
           filter: 'or(status=eq.failed,is_cancelled=eq.true)'
         }, 
         (payload) => {
-          console.log("Received real-time update for failed/cancelled prediction:", payload);
-          
           if (payload.new) {
             // Find matching pending generation
             const matchingPending = pendingGenerations.find(p => 
@@ -320,8 +310,6 @@ export function ImageHistory({
     if (!isMounted || pendingGenerations.length === 0) return;
     
     const checkPendingGenerations = async () => {
-      console.log("Fallback polling: Checking pending generations...");
-      
       try {
         const supabase = createSupabaseClient();
         
@@ -360,8 +348,6 @@ export function ImageHistory({
           
           // Handle completed generations
           if (prediction.status === 'succeeded' && prediction.storage_urls && prediction.storage_urls.length > 0) {
-            console.log("Fallback polling: Found completed generation:", pendingGen.id);
-            
             // Create processed images
             const processedImages = processOutput(prediction.storage_urls);
             
@@ -535,7 +521,6 @@ export function ImageHistory({
     if (pendingGen) {
       // If it's a pending generation with no replicate_id, just return
       if (!pendingGen.replicate_id) {
-        console.log('Pending generation with no replicate_id, skipping database update');
         clearPendingGeneration(id);
         return true;
       }
@@ -551,7 +536,6 @@ export function ImageHistory({
     // For completed generations, find the generation in our state
     const completedGen = generations.find(gen => gen.id === id);
     if (completedGen && completedGen.replicate_id) {
-      console.log('Using replicate_id from completed generation:', completedGen.replicate_id);
       // Extract the URLs from the images array
       const imageUrls = completedGen.images.map(img => img.url);
       return await sendDeleteRequest(completedGen.replicate_id, imageUrls);
@@ -565,8 +549,6 @@ export function ImageHistory({
   
   // Helper function to send delete request to the API
   const sendDeleteRequest = async (replicateId: string, storageUrls?: string[]): Promise<boolean> => {
-    console.log('Sending delete request for replicate_id:', replicateId);
-    
     try {
       return new Promise((resolve) => {
         const xhr = new XMLHttpRequest();
@@ -574,7 +556,6 @@ export function ImageHistory({
         
         xhr.onload = function() {
           if (xhr.status >= 200 && xhr.status < 300) {
-            console.log('Generation deleted successfully with replicate_id:', replicateId);
             resolve(true);
           } else {
             console.error('Server error while deleting:', xhr.status, xhr.statusText);
@@ -672,8 +653,6 @@ export function ImageHistory({
 
   // Mark image as expired and trigger refresh
   const handleImageError = (generationId: string, imageIndex: number) => {
-    console.log(`Image error for generation ${generationId}, index ${imageIndex}`);
-    
     setGenerations(prev => 
       prev.map(gen => 
         gen.id === generationId
@@ -708,8 +687,6 @@ export function ImageHistory({
     } catch (error) {
       console.error('Error cleaning up localStorage:', error);
     }
-    
-    console.log(`Manually cleared pending generation with ID ${id}`);
   };
 
   const handleDelete = async (id: string) => {

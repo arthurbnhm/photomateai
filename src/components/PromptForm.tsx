@@ -115,7 +115,6 @@ export function PromptForm({
           const parsed = JSON.parse(savedPendingGenerations);
           if (Array.isArray(parsed)) {
             setPendingGenerations(parsed);
-            console.log('Restored pending generations from localStorage:', parsed.length);
           }
         }
 
@@ -146,21 +145,12 @@ export function PromptForm({
       }
       
       const data = await response.json();
-      console.log('API response:', data);
       
       if (data.success && data.models) {
-        console.log('Models found:', data.models.length);
-        
         // Filter models to only include those with status 'trained'
         const availableModels = data.models.filter((model: Model) => 
           model.status === 'trained' || model.status === 'ready'
         );
-        
-        console.log('Available models after filtering:', availableModels.length);
-        
-        if (availableModels.length === 0) {
-          console.log('No available models found after filtering');
-        }
         
         // Sort models by display_name for better user experience
         const sortedModels = [...availableModels].sort((a, b) => {
@@ -175,8 +165,6 @@ export function PromptForm({
         if (sortedModels.length > 0 && !form.getValues().modelId) {
           form.setValue('modelId', sortedModels[0].id);
         }
-      } else {
-        console.log('No models found or API response not successful');
       }
     } catch (err) {
       console.error('Error fetching models:', err);
@@ -194,11 +182,7 @@ export function PromptForm({
   const fetchLatestModelVersion = async (owner: string, name: string): Promise<string | null> => {
     setFetchingModelVersion(true);
     try {
-      console.log(`Fetching latest version for ${owner}/${name}...`);
-      
       const response = await fetch(`/api/model-version?owner=${encodeURIComponent(owner)}&name=${encodeURIComponent(name)}`);
-      
-      console.log(`Model version API response status: ${response.status}`);
       
       if (!response.ok) {
         const errorText = await response.text();
@@ -207,10 +191,8 @@ export function PromptForm({
       }
       
       const data = await response.json();
-      console.log('Latest model version response:', data);
       
       if (data.success && data.version) {
-        console.log(`Successfully fetched version for ${owner}/${name}: ${data.version}`);
         return data.version;
       } else {
         console.error('No model version found in response:', data);
@@ -290,8 +272,6 @@ export function PromptForm({
       setError(null);
       setErrorDetails(null);
       
-      console.log('Submitting with values:', values);
-      
       // Generate a unique ID for this generation
       const generationId = Date.now().toString();
       
@@ -314,16 +294,13 @@ export function PromptForm({
         if (values.modelId) {
           const selectedModel = models.find(model => model.id === values.modelId);
           if (selectedModel) {
-            console.log('Selected model:', selectedModel);
             modelName = selectedModel.model_id;
             
             // Fetch the latest version for this model at generation time
             if (modelName) {
               setFetchingModelVersion(true);
-              console.log(`Fetching latest version for ${selectedModel.model_owner}/${modelName}...`);
               modelVersion = await fetchLatestModelVersion(selectedModel.model_owner, modelName);
               if (modelVersion) {
-                console.log(`Using latest version: ${modelVersion}`);
               } else {
                 console.warn('Could not fetch latest version, will use default');
               }
@@ -365,7 +342,6 @@ export function PromptForm({
         }
         
         const result = await response.json();
-        console.log('FULL API RESPONSE DATA:', JSON.stringify(result, null, 2));
         
         // Update the pending generation with the replicate_id
         if (result && result.replicate_id) {
@@ -479,12 +455,12 @@ export function PromptForm({
                 )}
               />
               
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
                 <FormField
                   control={form.control}
                   name="aspectRatio"
                   render={({ field }) => (
-                    <FormItem>
+                    <FormItem className="md:col-span-3">
                       <FormLabel>Aspect Ratio</FormLabel>
                       <Select 
                         onValueChange={field.onChange} 
@@ -512,7 +488,7 @@ export function PromptForm({
                   control={form.control}
                   name="outputFormat"
                   render={({ field }) => (
-                    <FormItem>
+                    <FormItem className="md:col-span-2">
                       <FormLabel>Format</FormLabel>
                       <Select 
                         onValueChange={field.onChange} 
@@ -537,7 +513,7 @@ export function PromptForm({
                   control={form.control}
                   name="modelId"
                   render={({ field }) => (
-                    <FormItem>
+                    <FormItem className="md:col-span-5">
                       <FormLabel>Model</FormLabel>
                       <Select 
                         onValueChange={field.onChange} 
@@ -561,22 +537,24 @@ export function PromptForm({
                     </FormItem>
                   )}
                 />
+                
+                <div className="md:col-span-2 flex justify-end">
+                  <Button 
+                    type="submit" 
+                    className="w-full"
+                    disabled={submitting}
+                  >
+                    {submitting ? (
+                      <>
+                        <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                        {fetchingModelVersion ? 'Fetching latest model version...' : 'Generating...'}
+                      </>
+                    ) : (
+                      "Generate Image"
+                    )}
+                  </Button>
+                </div>
               </div>
-              
-              <Button 
-                type="submit" 
-                className="w-full md:w-auto"
-                disabled={submitting}
-              >
-                {submitting ? (
-                  <>
-                    <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                    {fetchingModelVersion ? 'Fetching latest model version...' : 'Generating...'}
-                  </>
-                ) : (
-                  "Generate Image"
-                )}
-              </Button>
             </form>
           </Form>
         </div>

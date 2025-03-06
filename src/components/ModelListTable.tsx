@@ -112,43 +112,24 @@ export function ModelListTable({ newTraining, onClearNewTraining }: ModelListTab
 
   // Memoize the fetch function to prevent it from changing on every render
   const fetchModels = useCallback(async (pageNum = 1) => {
-    console.log(`Fetching models for page ${pageNum}...`);
     setLoading(true);
     try {
       const startTime = Date.now();
       const response = await fetch(`/api/model-list?page=${pageNum}&limit=5`);
       
       if (!response.ok) {
-        console.error(`API error: ${response.status} ${response.statusText}`);
         throw new Error(`Failed to fetch models: ${response.status} ${response.statusText}`);
       }
       
       const data: ModelListResponse = await response.json();
-      const fetchTime = Date.now() - startTime;
       
       if (data.success) {
-        console.log(`Models fetched successfully in ${fetchTime}ms. Found ${data.models.length} models.`);
-        
-        // Log model statuses for debugging
-        data.models.forEach(model => {
-          console.log(`Model ${model.display_name} (${model.id}): status=${model.status}, trainings=${model.trainings.length}`);
-          
-          // Log training statuses
-          if (model.trainings.length > 0) {
-            model.trainings.forEach(training => {
-              console.log(`  - Training ${training.id}: status=${training.status}, created=${new Date(training.created_at).toLocaleString()}`);
-            });
-          }
-        });
-        
         setModels(data.models);
         setTotalPages(data.pagination.pages);
       } else {
-        console.error('API returned error:', data.error);
         setError(data.error || "Failed to fetch models");
       }
     } catch (err) {
-      console.error('Error fetching models:', err);
       setError(err instanceof Error ? err.message : "An error occurred");
     } finally {
       setLoading(false);
@@ -157,13 +138,11 @@ export function ModelListTable({ newTraining, onClearNewTraining }: ModelListTab
 
   // Immediate fetch function without debouncing for critical updates
   const fetchModelsImmediate = useCallback((pageNum = 1) => {
-    console.log('Immediate fetch triggered');
     fetchModels(pageNum);
   }, [fetchModels]);
 
   // Debounced version with minimal delay for non-critical updates
   const debouncedFetchModels = useCallback((pageNum = 1) => {
-    console.log('Debounced fetch models called');
     if (fetchTimeoutRef.current) {
       clearTimeout(fetchTimeoutRef.current);
     }
@@ -206,8 +185,6 @@ export function ModelListTable({ newTraining, onClearNewTraining }: ModelListTab
     // Only setup the subscription once
     if (realtimeSubscribed) return;
     
-    console.log('Setting up realtime subscriptions');
-    
     try {
       // Subscribe to changes in the trainings table - monitor ALL status changes
       const trainingSubscription = supabase
@@ -222,15 +199,11 @@ export function ModelListTable({ newTraining, onClearNewTraining }: ModelListTab
           }, 
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           (payload: any) => {
-            console.log('Training update received:', payload);
-            
             // Process ALL status changes to ensure we catch everything
             if (payload?.new?.status) {
               const status = payload.new.status;
               const trainingId = payload.new.training_id;
               const modelId = payload.new.model_id;
-              
-              console.log(`Training status changed to ${status} for training ${trainingId}`);
               
               // Simple approach: directly update the models state for immediate UI refresh
               if (modelId) {
@@ -240,8 +213,6 @@ export function ModelListTable({ newTraining, onClearNewTraining }: ModelListTab
                   return prevModels.map(model => {
                     // Check if this is the model that needs updating
                     if (model.id === modelId) {
-                      console.log(`Updating model ${model.id} with training status: ${status}`);
-                      
                       // Update the training in the model's trainings array
                       const updatedTrainings = model.trainings.map(training => {
                         if (training.training_id === trainingId) {
@@ -289,8 +260,7 @@ export function ModelListTable({ newTraining, onClearNewTraining }: ModelListTab
             }
           }
         )
-        .subscribe((status) => {
-          console.log('Training subscription status:', status);
+        .subscribe((_status) => {
         });
       
       // Also subscribe to changes in the models table
@@ -306,14 +276,10 @@ export function ModelListTable({ newTraining, onClearNewTraining }: ModelListTab
           }, 
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           (payload: any) => {
-            console.log('Model update received:', payload);
-            
             // Process model status changes
             if (payload?.new?.status) {
               const status = payload.new.status;
               const modelId = payload.new.id;
-              
-              console.log(`Model status changed to ${status} for model ${modelId}`);
               
               // Directly update the model in state for immediate UI refresh
               if (modelId) {
@@ -331,13 +297,11 @@ export function ModelListTable({ newTraining, onClearNewTraining }: ModelListTab
             }
           }
         )
-        .subscribe((status) => {
-          console.log('Model subscription status:', status);
+        .subscribe((_status) => {
         });
       
       // Set up a periodic refresh to ensure data consistency, but with longer interval
       const refreshInterval = setInterval(() => {
-        console.log('Performing periodic refresh');
         debouncedFetchModels(page);
       }, 60000); // Refresh every 60 seconds (reduced frequency)
       
@@ -345,7 +309,6 @@ export function ModelListTable({ newTraining, onClearNewTraining }: ModelListTab
       
       // Cleanup function
       return () => {
-        console.log('Cleaning up realtime subscriptions');
         trainingSubscription.unsubscribe();
         modelSubscription.unsubscribe();
         clearInterval(refreshInterval);
@@ -357,8 +320,7 @@ export function ModelListTable({ newTraining, onClearNewTraining }: ModelListTab
           fetchTimeoutRef.current = null;
         }
       };
-    } catch (error) {
-      console.error('Error setting up realtime subscriptions:', error);
+    } catch (_error) {
       // Fallback to periodic polling
       const intervalId = setInterval(() => {
         fetchModels(page);
@@ -376,9 +338,7 @@ export function ModelListTable({ newTraining, onClearNewTraining }: ModelListTab
   useEffect(() => {
     if (!newTraining) return;
     
-    console.log('New training detected, scheduling refresh');
     const timer = setTimeout(() => {
-      console.log('Refreshing models due to new training');
       fetchModels(page);
     }, 2000);
     
@@ -441,7 +401,6 @@ export function ModelListTable({ newTraining, onClearNewTraining }: ModelListTab
   const getTrainingIdForCancellation = (model: Model): string | null => {
     // Look for trainings in the trainings array
     if (!model.trainings || model.trainings.length === 0) {
-      console.error('No valid training_id found for model:', model);
       return null;
     }
     
@@ -453,7 +412,6 @@ export function ModelListTable({ newTraining, onClearNewTraining }: ModelListTab
     );
     
     if (activeTraining?.training_id) {
-      console.log('Using active training with training_id:', activeTraining.training_id);
       return activeTraining.training_id;
     }
     
@@ -461,7 +419,6 @@ export function ModelListTable({ newTraining, onClearNewTraining }: ModelListTab
     if (model.trainings.length === 1) {
       const training = model.trainings[0];
       if (training?.training_id) {
-        console.log('Using only training with training_id:', training.training_id);
         return training.training_id;
       }
     }
@@ -480,12 +437,10 @@ export function ModelListTable({ newTraining, onClearNewTraining }: ModelListTab
     }
     
     if (mostRecent?.training_id) {
-      console.log('Using most recent training with training_id:', mostRecent.training_id);
       return mostRecent.training_id;
     }
     
     // No valid training ID found
-    console.error('No valid training_id found for model:', model);
     return null;
   };
 
@@ -499,7 +454,6 @@ export function ModelListTable({ newTraining, onClearNewTraining }: ModelListTab
         onClick={() => {
           // Check if model is empty or invalid
           if (!model || !model.id || Object.keys(model).length === 0) {
-            console.error('Invalid model object received:', model);
             toast.error("Invalid model data");
             return;
           }
@@ -511,7 +465,6 @@ export function ModelListTable({ newTraining, onClearNewTraining }: ModelListTab
               modelId: model.id
             });
           } else {
-            console.error('Could not find any training ID to cancel for model:', model);
             toast.error("Could not find a training ID to cancel");
           }
         }}
@@ -572,8 +525,6 @@ export function ModelListTable({ newTraining, onClearNewTraining }: ModelListTab
     
     setIsCancelling(true);
     try {
-      console.log('Attempting to cancel training with ID:', trainingToCancel.id);
-      
       const response = await fetch('/api/model', {
         method: 'POST',
         headers: {
@@ -585,20 +536,13 @@ export function ModelListTable({ newTraining, onClearNewTraining }: ModelListTab
         }),
       });
       
-      // Get the raw text first to help debug
-      const responseText = await response.text();
-      console.log('Raw API response:', responseText);
-      
       // Try to parse as JSON
       let data;
       try {
-        data = JSON.parse(responseText);
-      } catch (parseError) {
-        console.error('Error parsing JSON response:', parseError);
-        throw new Error(`Invalid response from server: ${responseText}`);
+        data = await response.json();
+      } catch (_parseError) {
+        throw new Error(`Invalid response from server: ${await response.text()}`);
       }
-      
-      console.log('Cancel training response:', data);
       
       if (!data.success) {
         throw new Error(data.error || 'Failed to cancel training');
@@ -614,7 +558,6 @@ export function ModelListTable({ newTraining, onClearNewTraining }: ModelListTab
         fetchModels(page);
       }, 1000);
     } catch (err) {
-      console.error("Error cancelling training:", err);
       toast.error(`Error: ${err instanceof Error ? err.message : 'Failed to cancel training'}`);
     } finally {
       setIsCancelling(false);
@@ -651,7 +594,6 @@ export function ModelListTable({ newTraining, onClearNewTraining }: ModelListTab
       setModels(models.filter(model => model.id !== modelToDelete.id));
       toast.success("Model marked as deleted successfully");
     } catch (err) {
-      console.error("Error deleting model:", err);
       toast.error(`Error: ${err instanceof Error ? err.message : 'Failed to delete model'}`);
     } finally {
       setIsDeleting(false);
@@ -669,19 +611,16 @@ export function ModelListTable({ newTraining, onClearNewTraining }: ModelListTab
         onClick={() => {
           // Check if newTraining exists and has an ID
           if (!newTraining) {
-            console.error('newTraining is null or undefined');
             toast.error("Invalid training data");
             return;
           }
           
           if (newTraining.id) {
-            console.log('Using newTraining.id for cancellation:', newTraining.id);
             setTrainingToCancel({
               id: newTraining.id,
               modelId: newTraining.modelId || ''
             });
           } else {
-            console.error('New training has no ID:', newTraining);
             toast.error("Could not find a valid training ID");
           }
         }}

@@ -32,7 +32,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log('Cancelling prediction:', predictionId);
+    // Cancelling prediction
+    // console.log('Cancelling prediction:', predictionId);
 
     try {
       // First, check if this is a prediction ID or a replicate ID
@@ -66,8 +67,8 @@ export async function POST(request: NextRequest) {
       }
 
       // Cancel the prediction using Replicate API
-      const response = await replicate.predictions.cancel(replicateId);
-      console.log('Prediction cancelled successfully:', response);
+      await replicate.predictions.cancel(replicateId);
+      // console.log('Prediction cancelled successfully:', response);
 
       // Update the prediction in Supabase
       const { error: updateError } = await supabase
@@ -92,9 +93,9 @@ export async function POST(request: NextRequest) {
         if (lookupError) {
           console.error('Error looking up prediction:', lookupError);
         } else if (!existingPrediction) {
-          console.log(`No prediction found with replicate_id: ${replicateId}. It might not be in the database yet.`);
+          // console.log(`No prediction found with replicate_id: ${replicateId}. It might not be in the database yet.`);
         } else {
-          console.log(`Found prediction with replicate_id: ${replicateId}, but failed to update it.`);
+          // console.log(`Found prediction with replicate_id: ${replicateId}, but failed to update it.`);
         }
         
         // Return success anyway since we successfully cancelled the prediction in Replicate
@@ -116,7 +117,7 @@ export async function POST(request: NextRequest) {
       // Even if the Replicate API call fails, try to mark it as cancelled in Supabase anyway
       // This handles cases where the prediction might be done or not found in Replicate
       try {
-        console.log('Attempting to mark prediction as cancelled in database despite Replicate API error');
+        // console.log('Attempting to mark prediction as cancelled in database despite Replicate API error');
         
         // Determine which field to use for the query
         const field = predictionId.includes('-') ? 'id' : 'replicate_id';
@@ -131,7 +132,7 @@ export async function POST(request: NextRequest) {
           .eq(field, predictionId);
           
         if (!fallbackUpdateError) {
-          console.log('Successfully marked prediction as cancelled in database');
+          // console.log('Successfully marked prediction as cancelled in database');
           return NextResponse.json({ 
             success: true, 
             message: 'Prediction marked as cancelled in database (Replicate API error ignored)'

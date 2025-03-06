@@ -45,7 +45,6 @@ export default function CreatePage() {
   // Listen for training status updates from ModelListTable
   useEffect(() => {
     const handleTrainingStatusUpdate = (event: CustomEvent) => {
-      console.log('Received training status update:', event.detail);
       setTrainingStatus(event.detail);
     };
     

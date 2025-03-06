@@ -5,10 +5,10 @@
 - Once training done, it generate a first set of portrait
 - ✅ Model listing - Added table to display models with status and actions
 - ✅ Add progress indicator for ongoing trainings
-- Fix the training progress (seems hardcoded) and merge with the list
+- ✅ Fix the training progress (seems hardcoded) and merge with the list
 - ✅ Implement supabase real-time subscription
 - Add a description? I'm looking to fix the genre issue (male/female)
-- Add a use model that goes to create page and selects the model
+- ❌ Add a use model that goes to create page and selects the model
 
 # Create
 

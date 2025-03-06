@@ -30,37 +30,19 @@ const MODEL_OWNER = "arthurbnhm";
 // Helper function to get the latest model version
 async function getLatestModelVersion(owner: string, name: string): Promise<string | null> {
   try {
-    console.log(`Fetching versions for model ${owner}/${name}...`);
-    
     // Get the list of versions from Replicate
     const versionsResponse = await replicate.models.versions.list(owner, name) as unknown as ModelVersionResponse;
-    console.log('Raw versions response type:', typeof versionsResponse);
-    
-    // Log a sample of the response to avoid huge logs
-    if (versionsResponse) {
-      if ('results' in versionsResponse && Array.isArray(versionsResponse.results)) {
-        console.log('Response has results property');
-        console.log('First few results:', versionsResponse.results.slice(0, 2));
-      } else {
-        console.log('Response sample:', JSON.stringify(versionsResponse).substring(0, 200) + '...');
-      }
-    }
     
     // According to the documentation, the response should have a 'results' array
     if (versionsResponse && 
         'results' in versionsResponse && 
         Array.isArray(versionsResponse.results) && 
         versionsResponse.results.length > 0) {
-      console.log(`Found ${versionsResponse.results.length} versions for model ${owner}/${name}`);
-      console.log(`Latest version ID: ${versionsResponse.results[0].id}`);
       return versionsResponse.results[0].id;
     }
     
-    console.error(`No model versions found for ${owner}/${name} or unexpected response format`);
-    console.error('Response structure:', JSON.stringify(versionsResponse, null, 2));
     return null;
-  } catch (error) {
-    console.error(`Error fetching model versions for ${owner}/${name}:`, error);
+  } catch (_error) {
     return null;
   }
 }
@@ -102,13 +84,11 @@ export async function POST(request: NextRequest) {
     
     // If model name is provided directly in the request, use it
     if (requestModelName) {
-      console.log(`Using model name from request: ${MODEL_OWNER}/${requestModelName}`);
       modelName = requestModelName;
     }
     
     // If a specific model version was provided in the request, use it
     if (modelVersion) {
-      console.log(`Using provided model version: ${modelVersion}`);
       finalModelVersion = modelVersion;
     }
     
@@ -144,13 +124,11 @@ export async function POST(request: NextRequest) {
             // Use the model's model_id
             modelName = trainedModel.model_id;
             modelId = trainedModel.id;
-            console.log(`Using custom model: ${MODEL_OWNER}/${modelName}`);
           }
         } else if (model) {
           // Use the model's model_id
           modelName = model.model_id;
           modelId = model.id;
-          console.log(`Using custom model: ${MODEL_OWNER}/${modelName}`);
         } else {
           console.error('No model found with ID:', requestModelId);
           return NextResponse.json(
@@ -186,9 +164,6 @@ export async function POST(request: NextRequest) {
       }
     }
     
-    // Log which model we're using
-    console.log(`Using model: ${MODEL_OWNER}/${modelName}:${finalModelVersion}`);
-    
     const inputParams = {
       prompt,
       model: "dev",
@@ -206,8 +181,6 @@ export async function POST(request: NextRequest) {
       disable_safety_checker: true
     };
     
-    console.log('Input parameters:', JSON.stringify(inputParams, null, 2));
-
     try {
       // Get the webhook URL from environment variables
       const webhookUrl = process.env.NEXT_PUBLIC_APP_URL 
@@ -216,28 +189,20 @@ export async function POST(request: NextRequest) {
       
       if (!webhookUrl) {
         console.warn('No webhook URL available, falling back to synchronous prediction');
-      } else {
-        console.log('Using webhook URL:', webhookUrl);
       }
       
       // Create a unique prediction ID for tracking
       const modelIdentifier = `${MODEL_OWNER}/${modelName}:${finalModelVersion}`;
-      console.log(`Starting prediction with ${modelIdentifier}`);
       
       // Use predictions.create instead of replicate.run to support webhooks
       const prediction = await replicate.predictions.create({
         version: finalModelVersion,
         input: inputParams,
-        webhook: webhookUrl || undefined,
-        webhook_events_filter: ["start", "output", "completed"]
+        webhook: webhookUrl,
+        webhook_events_filter: ["completed"]
       });
       
       predictionId = prediction.id;
-      console.log('Prediction created:', JSON.stringify({
-        id: prediction.id,
-        status: prediction.status,
-        urls: prediction.urls
-      }, null, 2));
       
       // Log the prediction to Supabase immediately to ensure it's available for tracking
       try {
@@ -257,7 +222,6 @@ export async function POST(request: NextRequest) {
         if (insertError) {
           console.error('Error logging prediction to Supabase:', insertError);
         } else {
-          console.log('Prediction logged to Supabase:', predictionRecord.id);
           dbRecordId = predictionRecord.id;
         }
       } catch (dbError) {
