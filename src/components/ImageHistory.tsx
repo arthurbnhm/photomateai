@@ -552,7 +552,9 @@ export function ImageHistory({
     const completedGen = generations.find(gen => gen.id === id);
     if (completedGen && completedGen.replicate_id) {
       console.log('Using replicate_id from completed generation:', completedGen.replicate_id);
-      return await sendDeleteRequest(completedGen.replicate_id);
+      // Extract the URLs from the images array
+      const imageUrls = completedGen.images.map(img => img.url);
+      return await sendDeleteRequest(completedGen.replicate_id, imageUrls);
     }
     
     // If we couldn't find the generation or it doesn't have a replicate_id,
@@ -562,13 +564,13 @@ export function ImageHistory({
   };
   
   // Helper function to send delete request to the API
-  const sendDeleteRequest = async (replicateId: string): Promise<boolean> => {
+  const sendDeleteRequest = async (replicateId: string, storageUrls?: string[]): Promise<boolean> => {
     console.log('Sending delete request for replicate_id:', replicateId);
     
     try {
       return new Promise((resolve) => {
         const xhr = new XMLHttpRequest();
-        xhr.open('DELETE', `/api/history?id=${replicateId}`, true);
+        xhr.open('DELETE', `/api/history?id=${replicateId}${storageUrls ? `&urls=${encodeURIComponent(JSON.stringify(storageUrls))}` : ''}`, true);
         
         xhr.onload = function() {
           if (xhr.status >= 200 && xhr.status < 300) {

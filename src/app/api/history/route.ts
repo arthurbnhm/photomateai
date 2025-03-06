@@ -169,6 +169,7 @@ export async function DELETE(request: Request) {
     // Get the ID from the URL query parameters
     const url = new URL(request.url);
     const replicateId = url.searchParams.get('id');
+    const urlsParam = url.searchParams.get('urls');
     
     if (!replicateId) {
       return new Response(
@@ -181,6 +182,73 @@ export async function DELETE(request: Request) {
     const supabase = createSupabaseAdmin();
     
     console.log(`Deleting prediction with replicate_id: ${replicateId}`);
+    
+    // Process storage URLs if provided
+    let storageUrls: string[] = [];
+    if (urlsParam) {
+      try {
+        storageUrls = JSON.parse(urlsParam);
+        console.log(`Received ${storageUrls.length} storage URLs to delete`);
+      } catch (error) {
+        console.error('Error parsing storage URLs:', error);
+        // Continue even if we can't parse the URLs
+      }
+    }
+    
+    // If no URLs were provided or parsing failed, try to fetch them from the database
+    if (storageUrls.length === 0) {
+      console.log('No storage URLs provided, fetching from database');
+      const { data: predictionData, error: fetchError } = await supabase
+        .from('predictions')
+        .select('storage_urls')
+        .eq('replicate_id', replicateId)
+        .single();
+      
+      if (fetchError) {
+        console.error('Error fetching prediction data:', fetchError);
+        // Continue with soft delete even if we can't fetch the storage URLs
+      } else if (predictionData && predictionData.storage_urls && Array.isArray(predictionData.storage_urls)) {
+        storageUrls = predictionData.storage_urls;
+        console.log(`Fetched ${storageUrls.length} storage URLs from database`);
+      }
+    }
+    
+    // Delete each image from storage
+    if (storageUrls.length > 0) {
+      for (const url of storageUrls) {
+        try {
+          // Extract the path from the URL
+          // URLs are typically in the format: https://[project].supabase.co/storage/v1/object/public/[bucket]/[path]
+          const urlObj = new URL(url);
+          const pathParts = urlObj.pathname.split('/');
+          // Find the index of 'public' and get everything after it
+          const publicIndex = pathParts.indexOf('public');
+          if (publicIndex !== -1 && publicIndex < pathParts.length - 1) {
+            const bucket = pathParts[publicIndex + 1];
+            const path = pathParts.slice(publicIndex + 2).join('/');
+            
+            console.log(`Deleting file from storage: bucket=${bucket}, path=${path}`);
+            const { error: storageError } = await supabase.storage
+              .from(bucket)
+              .remove([path]);
+            
+            if (storageError) {
+              console.error(`Error deleting file from storage: ${url}`, storageError);
+              // Continue with other files even if one fails
+            } else {
+              console.log(`Successfully deleted file from storage: ${url}`);
+            }
+          } else {
+            console.warn(`Could not parse storage path from URL: ${url}`);
+          }
+        } catch (error) {
+          console.error(`Error processing storage URL: ${url}`, error);
+          // Continue with other files even if one fails
+        }
+      }
+    } else {
+      console.log('No storage URLs to delete');
+    }
     
     // Soft delete by updating is_deleted to true
     const { error: updateError } = await supabase
