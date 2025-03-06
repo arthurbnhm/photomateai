@@ -5,7 +5,7 @@ import { createSupabaseAdmin } from '@/lib/supabase';
 interface Training {
   id: string;
   model_id: string;
-  replicate_training_id: string;
+  training_id: string;
   status: string;
   zip_url: string;
   input_params: Record<string, unknown>;
@@ -16,17 +16,16 @@ interface Training {
 
 interface Model {
   id: string;
-  name: string;
-  owner: string;
-  replicate_owner: string;
-  replicate_name: string;
+  model_id: string;
+  model_owner: string;
+  display_name: string;
   visibility: string;
   hardware: string;
   status: string;
   created_at: string;
   is_deleted: boolean;
   trainings: Training[];
-  replicate_training_id?: string;
+  training_id?: string;
 }
 
 export async function GET(request: NextRequest) {
@@ -83,18 +82,18 @@ export async function GET(request: NextRequest) {
         // Get any training for this model (even if cancelled)
         const { data: anyTraining } = await supabase
           .from('trainings')
-          .select('replicate_training_id')
+          .select('training_id')
           .eq('model_id', modelId)
           .order('created_at', { ascending: false })
           .limit(1)
           .single();
         
         if (anyTraining) {
-          model.replicate_training_id = anyTraining.replicate_training_id;
+          model.training_id = anyTraining.training_id;
         }
       } else if (trainings && trainings.length > 0) {
         // Add the latest training ID to the model for convenience
-        model.replicate_training_id = trainings[0].replicate_training_id;
+        model.training_id = trainings[0].training_id;
       }
 
       return NextResponse.json({
@@ -138,13 +137,13 @@ export async function GET(request: NextRequest) {
         // Get any training for this model (even if cancelled)
         const { data: anyTraining } = await supabase
           .from('trainings')
-          .select('replicate_training_id, is_cancelled')
+          .select('training_id, is_cancelled')
           .eq('model_id', model.id)
           .order('created_at', { ascending: false })
           .limit(1);
           
         if (anyTraining && anyTraining.length > 0) {
-          model.replicate_training_id = anyTraining[0].replicate_training_id;
+          model.training_id = anyTraining[0].training_id;
           model.is_cancelled = anyTraining[0].is_cancelled;
         }
       } else if (model.trainings && model.trainings.length > 0) {
@@ -155,10 +154,10 @@ export async function GET(request: NextRequest) {
         );
         
         if (activeTraining) {
-          model.replicate_training_id = activeTraining.replicate_training_id;
+          model.training_id = activeTraining.training_id;
           model.is_cancelled = activeTraining.is_cancelled;
         } else {
-          model.replicate_training_id = model.trainings[0].replicate_training_id;
+          model.training_id = model.trainings[0].training_id;
           model.is_cancelled = model.trainings[0].is_cancelled;
         }
       }

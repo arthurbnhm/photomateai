@@ -49,7 +49,7 @@ async function downloadAndStoreImage(url: string): Promise<string | null> {
 export async function POST(request: Request) {
   try {
     const webhookData = await request.json();
-    console.log('Received prediction webhook:', webhookData);
+    console.log('Received webhook data:', webhookData);
 
     const supabase = createSupabaseClient();
     const replicate_id = webhookData.id;
@@ -59,7 +59,72 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'No replicate_id provided' }, { status: 400 });
     }
 
-    // Get the prediction from our database
+    // Determine if this is a training or prediction webhook
+    // First, try to find it in the trainings table
+    const { data: training, error: trainingError } = await supabase
+      .from('trainings')
+      .select('*')
+      .eq('training_id', replicate_id)
+      .maybeSingle();
+
+    if (trainingError) {
+      console.error('Error fetching training:', trainingError);
+    }
+
+    // If found in trainings table, handle as a training webhook
+    if (training) {
+      console.log('Found training with ID:', replicate_id);
+      
+      // Update the training status
+      const { error: updateError } = await supabase
+        .from('trainings')
+        .update({
+          status: webhookData.status,
+          error: webhookData.error,
+          logs: webhookData.logs,
+          updated_at: new Date().toISOString()
+        })
+        .eq('training_id', replicate_id);
+
+      if (updateError) {
+        console.error('Error updating training:', updateError);
+        return NextResponse.json({ error: 'Error updating training' }, { status: 500 });
+      }
+
+      // If training is completed, update the model status
+      if (webhookData.status === 'succeeded') {
+        const { error: modelUpdateError } = await supabase
+          .from('models')
+          .update({
+            status: 'trained',
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', training.model_id);
+
+        if (modelUpdateError) {
+          console.error('Error updating model status:', modelUpdateError);
+          // Continue anyway
+        }
+      } else if (webhookData.status === 'failed') {
+        // If training failed, update the model status
+        const { error: modelUpdateError } = await supabase
+          .from('models')
+          .update({
+            status: 'training_failed',
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', training.model_id);
+
+        if (modelUpdateError) {
+          console.error('Error updating model status:', modelUpdateError);
+          // Continue anyway
+        }
+      }
+
+      return NextResponse.json({ success: true, type: 'training' });
+    }
+
+    // If not found in trainings, check predictions table
     const { data: prediction, error: predictionError } = await supabase
       .from('predictions')
       .select('*')
@@ -72,11 +137,14 @@ export async function POST(request: Request) {
     }
 
     if (!prediction) {
-      console.error('No prediction found with replicate_id:', replicate_id);
-      return NextResponse.json({ error: 'Prediction not found' }, { status: 404 });
+      console.error('No prediction or training found with replicate_id:', replicate_id);
+      return NextResponse.json({ error: 'Webhook data not found in database' }, { status: 404 });
     }
 
-    // Handle different webhook statuses
+    // Handle prediction webhook
+    console.log('Found prediction with ID:', replicate_id);
+    
+    // Handle different webhook statuses for predictions
     if (webhookData.status === 'succeeded') {
       const urls = webhookData.output;
       if (!Array.isArray(urls)) {
@@ -146,7 +214,7 @@ export async function POST(request: Request) {
       }
     }
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ success: true, type: 'prediction' });
   } catch (error) {
     console.error('Error processing webhook:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

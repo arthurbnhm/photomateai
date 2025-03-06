@@ -66,37 +66,22 @@ async function getLatestModelVersion(owner: string, name: string): Promise<strin
 }
 
 export async function POST(request: NextRequest) {
-  let predictionId = '';
+  let predictionId = null;
   let dbRecordId = null;
+  let modelId = null;
   
   try {
-    const { 
-      prompt, 
-      aspectRatio, 
-      outputFormat, 
-      modelId, 
-      modelVersion,
-      modelName: requestModelName
-    } = await request.json();
+    // Parse the request body
+    const { prompt, aspectRatio, outputFormat, modelId: requestModelId, modelName: requestModelName, modelVersion } = await request.json();
     
+    // Initialize Supabase client
     const supabase = createSupabaseAdmin();
-
+    
     // Check if API token is available
     const apiToken = process.env.REPLICATE_API_TOKEN;
-    console.log('API request parameters:', { 
-      prompt, 
-      aspectRatio, 
-      outputFormat, 
-      modelId, 
-      modelVersion,
-      requestModelName
-    });
-    console.log('API token available:', apiToken ? `Yes (starts with ${apiToken.substring(0, 4)}...)` : 'No');
-    
     if (!apiToken) {
-      console.error('REPLICATE_API_TOKEN is not set');
       return NextResponse.json(
-        { 
+        {
           error: "Missing Replicate API token. Please add your token to the .env file or environment variables.",
           details: "You need a Replicate API token to use this feature. Get one at https://replicate.com/account/api-tokens"
         },
@@ -128,13 +113,13 @@ export async function POST(request: NextRequest) {
     }
     
     // Only fetch from Supabase if we don't have the model name from the request
-    if (modelId && !modelName) {
+    if (requestModelId && !modelName) {
       try {
         // Fetch the model details from Supabase
         const { data: model, error } = await supabase
           .from('models')
           .select('*')
-          .eq('id', modelId)
+          .eq('id', requestModelId)
           .eq('status', 'ready')
           .single();
         
@@ -145,7 +130,7 @@ export async function POST(request: NextRequest) {
           const { data: trainedModel, error: trainedError } = await supabase
             .from('models')
             .select('*')
-            .eq('id', modelId)
+            .eq('id', requestModelId)
             .eq('status', 'trained')
             .single();
             
@@ -156,16 +141,18 @@ export async function POST(request: NextRequest) {
               { status: 404 }
             );
           } else {
-            // Use the model's replicate_name
-            modelName = trainedModel.replicate_name;
+            // Use the model's model_id
+            modelName = trainedModel.model_id;
+            modelId = trainedModel.id;
             console.log(`Using custom model: ${MODEL_OWNER}/${modelName}`);
           }
         } else if (model) {
-          // Use the model's replicate_name
-          modelName = model.replicate_name;
+          // Use the model's model_id
+          modelName = model.model_id;
+          modelId = model.id;
           console.log(`Using custom model: ${MODEL_OWNER}/${modelName}`);
         } else {
-          console.error('No model found with ID:', modelId);
+          console.error('No model found with ID:', requestModelId);
           return NextResponse.json(
             { error: 'Selected model not found' },
             { status: 404 }
@@ -261,7 +248,8 @@ export async function POST(request: NextRequest) {
             prompt: prompt,
             aspect_ratio: aspectRatio || "1:1",
             status: prediction.status || "processing",
-            input: inputParams
+            input: inputParams,
+            model_id: modelId
           })
           .select()
           .single();

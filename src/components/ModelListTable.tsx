@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import {
   Table,
   TableBody,
@@ -20,25 +20,32 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Trash2, Loader2, XCircle } from "lucide-react";
+import { Trash2, XCircle } from "lucide-react";
+import { createClient } from "@supabase/supabase-js";
+
+// Initialize Supabase client for realtime subscriptions
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 interface Training {
   id: string;
   status: string;
   created_at: string;
   completed_at: string | null;
-  replicate_training_id: string;
+  training_id: string;
   is_cancelled?: boolean;
 }
 
 interface Model {
   id: string;
-  replicate_name: string;
-  replicate_owner: string;
+  model_id: string;
+  model_owner: string;
+  display_name: string;
   status: string;
   created_at: string;
   trainings: Training[];
-  replicate_training_id?: string;
+  training_id?: string;
   is_cancelled?: boolean;
 }
 
@@ -61,6 +68,7 @@ interface NewTraining {
   modelId?: string;
   modelName?: string;
   modelOwner?: string;
+  displayName?: string;
 }
 
 interface ModelListTableProps {
@@ -78,8 +86,7 @@ export function ModelListTable({ newTraining, onClearNewTraining }: ModelListTab
   const [isDeleting, setIsDeleting] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
   const [trainingToCancel, setTrainingToCancel] = useState<{id: string, modelId: string} | null>(null);
-  const [pollingCount, setPollingCount] = useState(0);
-  const pollTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const [realtimeSubscribed, setRealtimeSubscribed] = useState(false);
   
   // Check if newTraining is already in models list
   const isNewTrainingInModels = () => {
@@ -91,14 +98,14 @@ export function ModelListTable({ newTraining, onClearNewTraining }: ModelListTab
       
       // Check for name/owner match if modelId isn't available
       if (newTraining.modelName && newTraining.modelOwner) {
-        return model.replicate_name === newTraining.modelName && 
-               model.replicate_owner === newTraining.modelOwner;
+        return model.model_id === newTraining.modelName && 
+               model.model_owner === newTraining.modelOwner;
       }
       
       // Check for training ID match in any model's trainings
       return model.trainings.some(training => 
         training.id === newTraining.id || 
-        training.replicate_training_id === newTraining.id
+        training.training_id === newTraining.id
       );
     });
   };
@@ -125,9 +132,9 @@ export function ModelListTable({ newTraining, onClearNewTraining }: ModelListTab
       if (newTraining && data.models.some(model => {
         // Check if any model matches the newTraining
         if (newTraining.modelId && model.id === newTraining.modelId) return true;
-        if (newTraining.modelName && model.replicate_name === newTraining.modelName && 
-            newTraining.modelOwner && model.replicate_owner === newTraining.modelOwner) return true;
-        return model.trainings.some(t => t.id === newTraining.id || t.replicate_training_id === newTraining.id);
+        if (newTraining.modelName && model.model_id === newTraining.modelName && 
+            newTraining.modelOwner && model.model_owner === newTraining.modelOwner) return true;
+        return model.trainings.some(t => t.id === newTraining.id || t.training_id === newTraining.id);
       })) {
         onClearNewTraining?.();
       }
@@ -144,36 +151,62 @@ export function ModelListTable({ newTraining, onClearNewTraining }: ModelListTab
     fetchModels();
   }, []);
   
-  // Setup polling for updates (especially for webhook updates)
+  // Setup Supabase realtime subscription for trainings
   useEffect(() => {
-    // Poll every minute regardless of state
-    const pollInterval = 60000; // 1 minute
+    // Only setup the subscription once
+    if (realtimeSubscribed) return;
     
-    // Clear existing timer
-    if (pollTimerRef.current) {
-      clearTimeout(pollTimerRef.current);
-    }
+    // Subscribe to changes in the trainings table
+    const trainingSubscription = supabase
+      .channel('trainings-changes')
+      .on('postgres_changes', 
+        { 
+          event: '*', 
+          schema: 'public', 
+          table: 'trainings' 
+        }, 
+        (payload) => {
+          console.log('Training update received:', payload);
+          
+          // Refresh the models when a training changes
+          fetchModels(page);
+        }
+      )
+      .subscribe();
     
-    // Set up new timer
-    pollTimerRef.current = setTimeout(() => {
-      fetchModels(page);
-      setPollingCount(prev => prev + 1);
-    }, pollInterval);
+    // Subscribe to changes in the models table
+    const modelSubscription = supabase
+      .channel('models-changes')
+      .on('postgres_changes', 
+        { 
+          event: '*', 
+          schema: 'public', 
+          table: 'models' 
+        }, 
+        (payload) => {
+          console.log('Model update received:', payload);
+          
+          // Refresh the models when a model changes
+          fetchModels(page);
+        }
+      )
+      .subscribe();
     
-    // Cleanup
+    setRealtimeSubscribed(true);
+    
+    // Cleanup function
     return () => {
-      if (pollTimerRef.current) {
-        clearTimeout(pollTimerRef.current);
-      }
+      trainingSubscription.unsubscribe();
+      modelSubscription.unsubscribe();
     };
-  }, [models, newTraining, pollingCount, page]);
-  
-  // When newTraining changes, reset polling count to ensure frequent updates
+  }, [page]);
+
+  // When newTraining changes, refresh the models list
   useEffect(() => {
     if (newTraining) {
-      setPollingCount(0);
+      fetchModels(page);
     }
-  }, [newTraining]);
+  }, [newTraining, page]);
 
   const handlePageChange = (newPage: number) => {
     if (newPage >= 1 && newPage <= totalPages) {
@@ -184,11 +217,18 @@ export function ModelListTable({ newTraining, onClearNewTraining }: ModelListTab
 
   // Check if a model has an active training
   const hasActiveTraining = (model: Model) => {
-    // First check if the model itself is in training status
-    if (model.status === "training" || model.status === "created") return true;
+    // Check if model is valid
+    if (!model || Object.keys(model).length === 0) {
+      return false;
+    }
     
-    // Then check if any of its trainings are in an active state
-    return model.trainings.some(t => 
+    // Consider model in training if status is training, created, or queued
+    if (model.status === "training" || model.status === "created" || model.status === "queued") {
+      return true;
+    }
+    
+    // Also check if any of its trainings are in an active state
+    return model.trainings && model.trainings.some(t => 
       t.status === "training" || 
       t.status === "starting" || 
       t.status === "created" || 
@@ -209,17 +249,16 @@ export function ModelListTable({ newTraining, onClearNewTraining }: ModelListTab
 
   // Determine if we should show the cancel button for a model
   const shouldShowCancelButton = (model: Model): boolean => {
+    // Check if model is valid
+    if (!model || Object.keys(model).length === 0) {
+      return false;
+    }
     return hasActiveTraining(model);
   };
 
   // Get the training ID to use for cancellation
   const getTrainingIdForCancellation = (model: Model): string | null => {
-    // 1. Check if model has a direct replicate_training_id
-    if (model.replicate_training_id) {
-      return model.replicate_training_id;
-    }
-    
-    // 2. Look for active trainings in the trainings array
+    // Look for trainings in the trainings array
     if (model.trainings && model.trainings.length > 0) {
       // First try to find an active training
       const activeTraining = model.trainings.find(t => 
@@ -229,8 +268,9 @@ export function ModelListTable({ newTraining, onClearNewTraining }: ModelListTab
         t.status === "queued"
       );
       
-      if (activeTraining?.replicate_training_id) {
-        return activeTraining.replicate_training_id;
+      if (activeTraining && activeTraining.training_id) {
+        console.log('Using active training with training_id:', activeTraining.training_id);
+        return activeTraining.training_id;
       }
       
       // Otherwise use the most recent training
@@ -238,12 +278,14 @@ export function ModelListTable({ newTraining, onClearNewTraining }: ModelListTab
         new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
       )[0];
       
-      if (mostRecentTraining?.replicate_training_id) {
-        return mostRecentTraining.replicate_training_id;
+      if (mostRecentTraining && mostRecentTraining.training_id) {
+        console.log('Using most recent training with training_id:', mostRecentTraining.training_id);
+        return mostRecentTraining.training_id;
       }
     }
     
     // No valid training ID found
+    console.error('No valid training_id found for model:', model);
     return null;
   };
 
@@ -255,9 +297,15 @@ export function ModelListTable({ newTraining, onClearNewTraining }: ModelListTab
         size="icon"
         className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/20"
         onClick={() => {
+          // Check if model is empty or invalid
+          if (!model || !model.id || Object.keys(model).length === 0) {
+            console.error('Invalid model object received:', model);
+            toast.error("Invalid model data");
+            return;
+          }
+          
           const trainingId = getTrainingIdForCancellation(model);
           if (trainingId) {
-            console.log('Using training ID for cancellation:', trainingId);
             setTrainingToCancel({
               id: trainingId,
               modelId: model.id
@@ -292,16 +340,9 @@ export function ModelListTable({ newTraining, onClearNewTraining }: ModelListTab
   const getStatusBadge = (status: string) => {
     switch (status) {
       case "created":
-        // Treat 'created' status as 'training' for display purposes
-        return <Badge variant="secondary" className="flex items-center gap-1">
-          <Loader2 className="h-3 w-3 animate-spin" />
-          Training
-        </Badge>;
+        return <Badge variant="secondary">Created</Badge>;
       case "training":
-        return <Badge variant="secondary" className="flex items-center gap-1">
-          <Loader2 className="h-3 w-3 animate-spin" />
-          Training
-        </Badge>;
+        return <Badge variant="secondary">Training</Badge>;
       case "trained":
         return <Badge className="bg-green-500 hover:bg-green-600">Trained</Badge>;
       case "training_failed":
@@ -349,23 +390,8 @@ export function ModelListTable({ newTraining, onClearNewTraining }: ModelListTab
         throw new Error(data.error || 'Failed to cancel training');
       }
       
-      // Update the local state to reflect the cancellation
-      setModels(models.map(model => {
-        if (model.id === trainingToCancel.modelId) {
-          return {
-            ...model,
-            status: model.status === 'training' ? 'training_failed' : model.status,
-            is_cancelled: true,
-            trainings: model.trainings.map(t => {
-              if (t.replicate_training_id === trainingToCancel.id) {
-                return { ...t, status: 'canceled', is_cancelled: true };
-              }
-              return t;
-            })
-          };
-        }
-        return model;
-      }));
+      // Instead of updating the model status, just remove the model from the list
+      setModels(models.filter(model => model.id !== trainingToCancel.modelId));
       
       toast.success("Training cancelled successfully");
       
@@ -427,7 +453,14 @@ export function ModelListTable({ newTraining, onClearNewTraining }: ModelListTab
         size="icon"
         className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/20"
         onClick={() => {
-          if (newTraining?.id) {
+          // Check if newTraining exists and has an ID
+          if (!newTraining) {
+            console.error('newTraining is null or undefined');
+            toast.error("Invalid training data");
+            return;
+          }
+          
+          if (newTraining.id) {
             console.log('Using newTraining.id for cancellation:', newTraining.id);
             setTrainingToCancel({
               id: newTraining.id,
@@ -471,7 +504,7 @@ export function ModelListTable({ newTraining, onClearNewTraining }: ModelListTab
           {showNewTraining && (
             <TableRow className="animate-pulse bg-muted/20">
               <TableCell className="font-medium">
-                {newTraining.modelOwner || 'arthurbnhm'}/{newTraining.modelName || '...'}
+                {newTraining.displayName}
               </TableCell>
               <TableCell>
                 {getStatusBadge("training")}
@@ -498,7 +531,7 @@ export function ModelListTable({ newTraining, onClearNewTraining }: ModelListTab
               return (
                 <TableRow key={model.id}>
                   <TableCell className="font-medium">
-                    {model.replicate_owner}/{model.replicate_name}
+                    {model.display_name}
                   </TableCell>
                   <TableCell>{getStatusBadge(effectiveStatus)}</TableCell>
                   <TableCell>

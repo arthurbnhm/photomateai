@@ -27,8 +27,9 @@ import {
 // Define the model interface
 interface Model {
   id: string;
-  replicate_name: string;
-  replicate_owner: string;
+  model_id: string;
+  model_owner: string;
+  display_name: string;
   status: string;
 }
 
@@ -162,10 +163,13 @@ export function PromptForm({
             console.log('No available models found after filtering');
           }
           
-          // Sort models by name for better user experience
-          const sortedModels = [...availableModels].sort((a, b) => 
-            a.replicate_name.localeCompare(b.replicate_name)
-          );
+          // Sort models by display_name for better user experience
+          const sortedModels = [...availableModels].sort((a, b) => {
+            // Use only display_name without fallback
+            const displayNameA = a.display_name || '';
+            const displayNameB = b.display_name || '';
+            return displayNameA.localeCompare(displayNameB);
+          });
           setModels(sortedModels);
         } else {
           console.log('No models found or API response not successful');
@@ -279,13 +283,13 @@ export function PromptForm({
           const selectedModel = models.find(model => model.id === values.modelId);
           if (selectedModel) {
             console.log('Selected model:', selectedModel);
-            modelName = selectedModel.replicate_name;
+            modelName = selectedModel.model_id;
             
             // Fetch the latest version for this model at generation time
             if (modelName) {
               setFetchingModelVersion(true);
-              console.log(`Fetching latest version for arthurbnhm/${modelName}...`);
-              modelVersion = await fetchLatestModelVersion("arthurbnhm", modelName);
+              console.log(`Fetching latest version for ${selectedModel.model_owner}/${modelName}...`);
+              modelVersion = await fetchLatestModelVersion(selectedModel.model_owner, modelName);
               if (modelVersion) {
                 console.log(`Using latest version: ${modelVersion}`);
               } else {
@@ -554,7 +558,7 @@ export function PromptForm({
                         <SelectContent>
                           {models.map((model) => (
                             <SelectItem key={model.id} value={model.id}>
-                              {model.replicate_name}
+                              {model.display_name}
                             </SelectItem>
                           ))}
                         </SelectContent>

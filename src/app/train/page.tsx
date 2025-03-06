@@ -11,6 +11,25 @@ import { v4 as uuidv4 } from 'uuid';
 import { toast } from "sonner";
 import { ModelListTable } from "@/components/ModelListTable";
 import { Loader2 } from "lucide-react";
+import { createClient } from "@supabase/supabase-js";
+
+// Type for Supabase Realtime payload
+interface RealtimeTrainingPayload {
+  new: {
+    id: string;
+    status: string;
+    training_id: string;
+    error?: string;
+    completed_at?: string | null;
+    [key: string]: any;
+  };
+  old: {
+    id: string;
+    status: string;
+    [key: string]: any;
+  } | null;
+  [key: string]: any;
+}
 
 export default function TrainPage() {
   const [displayModelName, setDisplayModelName] = useState("");
@@ -25,9 +44,16 @@ export default function TrainPage() {
     modelId?: string;
     modelName?: string;
     modelOwner?: string;
+    displayName?: string;
   } | null>(null);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [nameError, setNameError] = useState<string | null>(null);
+  const [realtimeSubscribed, setRealtimeSubscribed] = useState(false);
+
+  // Supabase client for realtime updates
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+  const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
   // Initialize the bucket when the component mounts
   useEffect(() => {
@@ -103,9 +129,63 @@ export default function TrainPage() {
     }
   }, [displayModelName]);
 
+  // Setup Supabase realtime subscription for training updates
+  useEffect(() => {
+    // Only subscribe if we have an active training
+    if (!trainingStatus || realtimeSubscribed) return;
+    
+    console.log('Setting up realtime subscription for training:', trainingStatus.id);
+    
+    // Define a type-safe handler for the Supabase realtime event
+    function handleTrainingUpdate(payload: RealtimeTrainingPayload) {
+      console.log('Training update received:', payload);
+      
+      if (payload.new) {
+        // Update the training status
+        setTrainingStatus(prev => ({
+          ...prev!,
+          status: payload.new.status
+        }));
+        
+        // If training is completed or failed, show a message
+        if (payload.new.status === 'succeeded') {
+          toast.success('Model training completed successfully!');
+        } else if (payload.new.status === 'failed') {
+          toast.error(`Training failed: ${payload.new.error || 'Unknown error'}`);
+        } else if (payload.new.status === 'canceled') {
+          toast.info('Training was canceled');
+        }
+      }
+    }
+    
+    // Subscribe to changes on the trainings table for this training
+    const channel = supabase.channel(`training-${trainingStatus.id}`);
+    // Use type assertion to work around TypeScript limitations with Supabase Realtime
+    const trainingSubscription = (channel as any).on(
+      'postgres_changes', 
+      { 
+        event: '*', 
+        schema: 'public', 
+        table: 'trainings',
+        filter: `training_id=eq.${trainingStatus.id}`
+      }, 
+      handleTrainingUpdate
+    )
+    .subscribe();
+    
+    setRealtimeSubscribed(true);
+    
+    // Cleanup function
+    return () => {
+      trainingSubscription.unsubscribe();
+      setRealtimeSubscribed(false);
+    };
+  }, [trainingStatus, realtimeSubscribed, supabase]);
+
   // Called when the ModelListTable detects that newTraining is now in the models list
   const clearTrainingStatus = () => {
     setTrainingStatus(null);
+    setRealtimeSubscribed(false);
   };
 
   // Handle form submission - now combines model creation and training
@@ -137,7 +217,8 @@ export default function TrainPage() {
           modelName: actualModelName,
           owner: 'arthurbnhm',
           visibility: 'private',
-          hardware: 'gpu-t4'
+          hardware: 'gpu-t4',
+          displayName: displayModelName
         }),
       });
 
@@ -218,7 +299,8 @@ export default function TrainPage() {
         url: trainingData.training.url,
         modelId: modelData.model.id,
         modelName: modelData.model.name,
-        modelOwner: modelData.model.owner
+        modelOwner: modelData.model.owner,
+        displayName: displayModelName
       });
       
       // Complete progress
