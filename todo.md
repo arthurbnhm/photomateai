@@ -21,7 +21,10 @@
 - Use model name from user and modelname-id for replicate
 - ✅ cancel/route.ts should handle both training and image generation cancelation
 - ✅ rework cancel / delete button for image generations
-- Default to a model for image geneneration
+- Default to a model for image geneneration and other options
+- ✅ Add back the webp format
+- Download button with option to rename or download all of them
+- Buttons with predined options (blonde, linkedin profile)
 
 # App
 

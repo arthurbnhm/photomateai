@@ -197,7 +197,7 @@ export async function POST(request: NextRequest) {
       megapixels: "1",
       num_outputs: 4,
       aspect_ratio: aspectRatio || "1:1",
-      output_format: outputFormat || "webp",
+      output_format: outputFormat,
       guidance_scale: 3,
       output_quality: 80,
       prompt_strength: 0.8,

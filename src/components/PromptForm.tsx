@@ -78,7 +78,7 @@ const formSchema = z.object({
   }),
   aspectRatio: z.string().default("1:1"),
   outputFormat: z.string().default("png"),
-  modelId: z.string().optional(),
+  modelId: z.string(),
 })
 
 export function PromptForm({
@@ -171,6 +171,11 @@ export function PromptForm({
             return displayNameA.localeCompare(displayNameB);
           });
           setModels(sortedModels);
+          
+          // Set default model if available and form is not already filled
+          if (sortedModels.length > 0 && !form.getValues().modelId) {
+            form.setValue('modelId', sortedModels[0].id);
+          }
         } else {
           console.log('No models found or API response not successful');
         }
@@ -248,7 +253,7 @@ export function PromptForm({
       prompt: "",
       aspectRatio: "1:1",
       outputFormat: "png",
-      modelId: undefined,
+      modelId: "",
     },
   })
 
@@ -536,6 +541,7 @@ export function PromptForm({
                         <SelectContent>
                           <SelectItem value="png">PNG</SelectItem>
                           <SelectItem value="jpg">JPG</SelectItem>
+                          <SelectItem value="webp">WebP</SelectItem>
                         </SelectContent>
                       </Select>
                       <FormMessage />
@@ -552,7 +558,7 @@ export function PromptForm({
                       <Select onValueChange={field.onChange} defaultValue={field.value}>
                         <FormControl>
                           <SelectTrigger className="bg-background border-input">
-                            <SelectValue placeholder={loadingModels ? "Loading models..." : "Select model (optional)"} />
+                            <SelectValue placeholder={loadingModels ? "Loading models..." : "Select model"} />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
