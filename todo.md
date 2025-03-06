@@ -26,7 +26,7 @@
 - ✅ Add back the webp format
 - Download button with option to rename or download all of them
 - Buttons with predined options (blonde, linkedin profile)
-- Use same badges as in trainings models lists
+- ✅ Use same badges as in trainings models lists
 
 # App
 
