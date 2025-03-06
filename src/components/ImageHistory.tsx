@@ -13,6 +13,7 @@ import { createSupabaseClient } from "@/lib/supabase"
 // Define the type for image generation
 type ImageGeneration = {
   id: string
+  replicate_id: string  // Add replicate_id to the type
   prompt: string
   timestamp: string
   images: ImageWithStatus[]
@@ -155,6 +156,7 @@ export function ImageHistory({
           .filter((item: PredictionData) => item.status === 'succeeded' && item.storage_urls)
           .map((item: PredictionData) => ({
             id: item.id,
+            replicate_id: item.replicate_id,
             prompt: item.prompt,
             timestamp: item.created_at,
             images: processOutput(item.storage_urls),
@@ -241,6 +243,7 @@ export function ImageHistory({
                   // Add as new generation
                   const newGeneration = {
                     id: matchingPending.id,
+                    replicate_id: payload.new.replicate_id,
                     prompt: matchingPending.prompt,
                     timestamp: new Date().toISOString(),
                     images: processedImages,
@@ -378,6 +381,7 @@ export function ImageHistory({
               // Add as new generation
               updatedGenerations.unshift({
                 id: pendingGen.id,
+                replicate_id: prediction.replicate_id,
                 prompt: pendingGen.prompt,
                 timestamp: new Date().toISOString(),
                 images: processedImages,
@@ -522,29 +526,46 @@ export function ImageHistory({
     // First check if this is a pending generation with a timestamp ID
     const pendingGen = pendingGenerations.find(gen => gen.id === id);
     
-    // For completed generations, find the replicate_id from the generations array
-    const completedGen = generations.find(gen => gen.id === id);
-    
-    // Get the replicate_id from either the pending or completed generation
-    // Note: For completed generations, the id in the UI might actually be the replicate_id already
-    const replicateId = pendingGen?.replicate_id || completedGen?.id || id;
-    
     // Optimistically update the UI first
     const updatedGenerations = generations.filter(gen => gen.id !== id);
     setGenerations(updatedGenerations);
     localStorage.setItem(CACHE_KEY, JSON.stringify(updatedGenerations));
     
-    // If it's a pending generation with no replicate_id, just return
-    // since there's nothing to update in the database
-    if (pendingGen && !pendingGen.replicate_id) {
-      console.log('Pending generation with no replicate_id, skipping database update');
-      clearPendingGeneration(id);
-      return true;
+    // Handle pending generations
+    if (pendingGen) {
+      // If it's a pending generation with no replicate_id, just return
+      if (!pendingGen.replicate_id) {
+        console.log('Pending generation with no replicate_id, skipping database update');
+        clearPendingGeneration(id);
+        return true;
+      }
+      
+      // For pending generations with replicate_id, use that for deletion
+      const success = await sendDeleteRequest(pendingGen.replicate_id);
+      if (success) {
+        clearPendingGeneration(id);
+      }
+      return success;
     }
     
-    // Then try to update the database
+    // For completed generations, find the generation in our state
+    const completedGen = generations.find(gen => gen.id === id);
+    if (completedGen && completedGen.replicate_id) {
+      console.log('Using replicate_id from completed generation:', completedGen.replicate_id);
+      return await sendDeleteRequest(completedGen.replicate_id);
+    }
+    
+    // If we couldn't find the generation or it doesn't have a replicate_id,
+    // use the id as a fallback
+    console.warn('Could not find replicate_id, using id as fallback:', id);
+    return await sendDeleteRequest(id);
+  };
+  
+  // Helper function to send delete request to the API
+  const sendDeleteRequest = async (replicateId: string): Promise<boolean> => {
+    console.log('Sending delete request for replicate_id:', replicateId);
+    
     try {
-      // Use XMLHttpRequest instead of fetch for better error handling
       return new Promise((resolve) => {
         const xhr = new XMLHttpRequest();
         xhr.open('DELETE', `/api/history?id=${replicateId}`, true);
@@ -552,33 +573,24 @@ export function ImageHistory({
         xhr.onload = function() {
           if (xhr.status >= 200 && xhr.status < 300) {
             console.log('Generation deleted successfully with replicate_id:', replicateId);
-            // If it was a pending generation, clear it from the pending list
-            if (pendingGen) {
-              clearPendingGeneration(id);
-            }
             resolve(true);
           } else {
             console.error('Server error while deleting:', xhr.status, xhr.statusText);
             console.error('Response:', xhr.responseText);
-            
-            // We still resolve true because we've already updated the UI
-            // and the user has seen the generation disappear
-            resolve(true);
+            resolve(true); // Still resolve true as we've updated the UI
           }
         };
         
         xhr.onerror = function() {
           console.error('Network error while deleting generation with replicate_id:', replicateId);
-          // We still resolve true for the same reason as above
-          resolve(true);
+          resolve(true); // Still resolve true as we've updated the UI
         };
         
         xhr.send();
       });
     } catch (error) {
       console.error('Exception during deletion:', error);
-      // Return true anyway because we've already updated the UI
-      return true;
+      return true; // Return true anyway as we've updated the UI
     }
   };
 
@@ -792,21 +804,11 @@ export function ImageHistory({
                 >
                   <Card className="overflow-hidden border-primary/20 shadow-md hover:shadow-lg transition-shadow duration-300">
                     <CardHeader className="p-4 pb-0 space-y-0">
-                      {/* All controls in a single horizontal line */}
                       <div className="flex items-center justify-between gap-3">
                         <div className="flex items-center gap-2">
-                          <Button 
-                            variant="outline" 
-                            size="sm" 
-                            onClick={() => copyPromptToClipboard(generation.prompt)}
-                            className="flex items-center gap-1.5"
-                          >
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-clipboard">
-                              <rect width="8" height="4" x="8" y="2" rx="1" ry="1"/>
-                              <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>
-                            </svg>
-                            Copy Prompt
-                          </Button>
+                          <span className="text-xs font-medium px-3 py-1.5 bg-primary/10 text-primary rounded-full border border-primary/20">
+                            {generation.aspectRatio}
+                          </span>
                           
                           <div className="flex items-center gap-2 ml-2">
                             {generation.potentiallyStalled ? (
@@ -828,6 +830,22 @@ export function ImageHistory({
                               </>
                             )}
                           </div>
+                        </div>
+                        
+                        <div className="flex items-center gap-2">
+                          <Button 
+                            variant="outline" 
+                            size="icon"
+                            onClick={() => copyPromptToClipboard(generation.prompt)}
+                            className="h-8 w-8"
+                            aria-label="Copy Prompt"
+                            title="Copy Prompt"
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-clipboard">
+                              <rect width="8" height="4" x="8" y="2" rx="1" ry="1"/>
+                              <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>
+                            </svg>
+                          </Button>
                           
                           {generation.potentiallyStalled && (
                             <button 
@@ -836,9 +854,14 @@ export function ImageHistory({
                                 e.stopPropagation();
                                 clearPendingGeneration(generation.id);
                               }}
-                              className="ml-2 text-xs font-medium px-2 py-1 bg-destructive/10 text-destructive hover:bg-destructive/20 hover:text-destructive rounded-md transition-colors duration-200 cursor-pointer"
+                              className="h-8 w-8 flex items-center justify-center bg-destructive/10 text-destructive hover:bg-destructive/20 hover:text-destructive rounded-md transition-colors duration-200 cursor-pointer"
+                              aria-label="Clear"
+                              title="Clear"
                             >
-                              Clear
+                              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-x">
+                                <path d="M18 6 6 18"></path>
+                                <path d="m6 6 12 12"></path>
+                              </svg>
                             </button>
                           )}
                           
@@ -850,16 +873,24 @@ export function ImageHistory({
                                 handleDelete(generation.id);
                               }}
                               disabled={isCancelling === generation.id}
-                              className="ml-2 text-xs font-medium px-2 py-1 bg-destructive/10 text-destructive hover:bg-destructive/20 hover:text-destructive rounded-md transition-colors duration-200 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                              className="h-8 w-8 flex items-center justify-center bg-destructive/10 text-destructive hover:bg-destructive/20 hover:text-destructive rounded-md transition-colors duration-200 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                              aria-label="Cancel"
+                              title="Cancel"
                             >
-                              {isCancelling === generation.id ? 'Cancelling...' : 'Cancel'}
+                              {isCancelling === generation.id ? (
+                                <svg className="animate-spin h-4 w-4 text-destructive" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                              ) : (
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-x">
+                                  <path d="M18 6 6 18"></path>
+                                  <path d="m6 6 12 12"></path>
+                                </svg>
+                              )}
                             </button>
                           )}
                         </div>
-                        
-                        <span className="text-xs font-medium px-3 py-1.5 bg-primary/10 text-primary rounded-full border border-primary/20">
-                          {generation.aspectRatio}
-                        </span>
                       </div>
                     </CardHeader>
                     
@@ -938,55 +969,53 @@ export function ImageHistory({
             >
               <Card className="overflow-hidden border-border shadow-md hover:shadow-lg transition-shadow duration-300">
                 <CardHeader className="p-4 pb-0 space-y-0">
-                  {/* All controls in a single horizontal line */}
                   <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-medium px-3 py-1.5 bg-primary/10 text-primary rounded-full border border-primary/20">
+                        {generation.aspectRatio}
+                      </span>
+                    </div>
+                    
                     <div className="flex items-center gap-2">
                       <Button 
                         variant="outline" 
-                        size="sm" 
+                        size="icon"
                         onClick={() => copyPromptToClipboard(generation.prompt)}
-                        className="flex items-center gap-1.5"
+                        className="h-8 w-8"
+                        aria-label="Copy Prompt"
+                        title="Copy Prompt"
                       >
                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-clipboard">
                           <rect width="8" height="4" x="8" y="2" rx="1" ry="1"/>
                           <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>
                         </svg>
-                        Copy Prompt
                       </Button>
                       
                       <Button 
                         variant="outline" 
-                        size="sm"
+                        size="icon"
                         onClick={() => handleDelete(generation.id)}
                         disabled={isDeleting === generation.id}
-                        className="flex items-center gap-1.5"
+                        className="h-8 w-8"
+                        aria-label="Delete"
+                        title="Delete"
                       >
                         {isDeleting === generation.id ? (
-                          <>
-                            <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-primary" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                            </svg>
-                            Deleting...
-                          </>
+                          <svg className="animate-spin h-4 w-4 text-primary" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                          </svg>
                         ) : (
-                          <>
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-trash-2">
-                              <path d="M3 6h18"/>
-                              <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/>
-                              <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>
-                              <line x1="10" x2="10" y1="11" y2="17"/>
-                              <line x1="14" x2="14" y1="11" y2="17"/>
-                            </svg>
-                            Delete
-                          </>
+                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-trash-2">
+                            <path d="M3 6h18"/>
+                            <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/>
+                            <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>
+                            <line x1="10" x2="10" y1="11" y2="17"/>
+                            <line x1="14" x2="14" y1="11" y2="17"/>
+                          </svg>
                         )}
                       </Button>
                     </div>
-                    
-                    <span className="text-xs font-medium px-3 py-1.5 bg-primary/10 text-primary rounded-full border border-primary/20">
-                      {generation.aspectRatio}
-                    </span>
                   </div>
                 </CardHeader>
                 

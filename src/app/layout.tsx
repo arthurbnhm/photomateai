@@ -1,10 +1,10 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
-import { NavBar } from "@/components/NavBar";
 import { Toaster } from "@/components/ui/sonner";
 import { ThemeProvider } from "@/components/theme-provider";
 import { ModeToggle } from "@/components/mode-toggle";
+import { ClientNavBar } from "@/components/ClientNavBar";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -32,7 +32,7 @@ export default function RootLayout({
           </div>
           
           <div className="flex min-h-screen flex-col relative">
-            <NavBar />
+            <ClientNavBar />
             <main className="flex-1">
               {children}
             </main>
