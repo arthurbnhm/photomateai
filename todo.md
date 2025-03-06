@@ -26,12 +26,13 @@
 - ✅ Add back the webp format
 - Download button with option to rename or download all of them
 - Buttons with predined options (blonde, linkedin profile)
+- Use same badges as in trainings models lists
 
 # App
 
 - Let the user choose colors
 - ✅ Rework the navigation bar to something more native
-- Remove things related to current debugging
+- ✅ Remove things related to current debugging
 - ✅ Improve UI for model management
 - Implement better error handling and user feedback
 - ✅ Seperate train.tsx into components

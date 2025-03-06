@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import * as z from "zod"
@@ -78,7 +78,9 @@ const formSchema = z.object({
   }),
   aspectRatio: z.string().default("1:1"),
   outputFormat: z.string().default("png"),
-  modelId: z.string(),
+  modelId: z.string().min(1, {
+    message: "Please select a model.",
+  }),
 })
 
 export function PromptForm({
@@ -96,6 +98,26 @@ export function PromptForm({
   const [loadingModels, setLoadingModels] = useState(false)
   const [fetchingModelVersion, setFetchingModelVersion] = useState(false)
   const [isInitialized, setIsInitialized] = useState(false)
+  const [placeholderText, setPlaceholderText] = useState("Describe your image...")
+  const [isAnimating, setIsAnimating] = useState(true)
+  const placeholderExamples = [
+    "A serene landscape with mountains at sunset",
+    "A cyberpunk cityscape with neon lights",
+    "A photorealistic portrait of a fantasy character",
+    "An astronaut riding a horse in a meadow",
+    "A cozy cabin in the woods with snow falling",
+    "A futuristic spaceship orbiting a distant planet",
+    "A magical forest with glowing mushrooms",
+    "A steampunk-inspired mechanical creature"
+  ]
+  const currentExampleIndex = useRef(0)
+  const currentCharIndex = useRef(0)
+  const isDeleting = useRef(false)
+  const typingSpeed = useRef(80) // milliseconds per character
+  const deletingSpeed = useRef(40) // faster deletion
+  const pauseBeforeDelete = useRef(2000) // pause before deleting
+  const pauseBeforeNewExample = useRef(500) // pause before new example
+  const animationTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   
   useEffect(() => {
     // Set pageReloaded to false after component mounts
@@ -177,6 +199,13 @@ export function PromptForm({
   useEffect(() => {
     fetchModels();
   }, []);
+  
+  // Set default model when models are loaded
+  useEffect(() => {
+    if (models.length > 0 && !form.getValues().modelId) {
+      form.setValue('modelId', models[0].id);
+    }
+  }, [models]);
   
   // Function to fetch the latest model version
   const fetchLatestModelVersion = async (owner: string, name: string): Promise<string | null> => {
@@ -272,6 +301,13 @@ export function PromptForm({
       setError(null);
       setErrorDetails(null);
       
+      // Validate that a model is selected
+      if (!values.modelId) {
+        setError("Please select a model");
+        setSubmitting(false);
+        return;
+      }
+      
       // Generate a unique ID for this generation
       const generationId = Date.now().toString();
       
@@ -309,7 +345,10 @@ export function PromptForm({
         }
         
         if (!modelName) {
-          throw new Error('No model selected');
+          setError("Please select a valid model");
+          setSubmitting(false);
+          removePendingGeneration(generationId);
+          return;
         }
         
         // Call the API to generate the image
@@ -354,8 +393,17 @@ export function PromptForm({
           );
         }
         
+        // Store the current modelId before resetting the form
+        const currentModelId = form.getValues().modelId;
+        
         // Reset form and UI state
-        form.reset();
+        form.reset({
+          prompt: "",
+          aspectRatio: "1:1",
+          outputFormat: "png",
+          modelId: currentModelId, // Preserve the model selection
+        });
+        
         setSubmitting(false);
         
         // If the generation has already completed and returned results
@@ -391,6 +439,9 @@ export function PromptForm({
         
         // Remove from pending generations
         removePendingGeneration(generationId);
+        
+        // Don't reset the form on error to preserve user input
+        // Just set submitting to false
       }
       
       setSubmitting(false);
@@ -403,6 +454,68 @@ export function PromptForm({
 
   // Display a warning message if there are pending generations on page load
   const hasPendingGenerationsOnReload = pageReloaded && pendingGenerations.length > 0;
+
+  // Function to stop the animation
+  const stopAnimation = () => {
+    setIsAnimating(false)
+    if (animationTimeoutRef.current) {
+      clearTimeout(animationTimeoutRef.current)
+      animationTimeoutRef.current = null
+    }
+    // Reset to default placeholder when animation stops
+    setPlaceholderText("Describe your image...")
+  }
+  
+  // Typing animation effect
+  useEffect(() => {
+    if (!isAnimating) return
+    
+    const animatePlaceholder = () => {
+      if (!isAnimating) return
+      
+      const currentExample = placeholderExamples[currentExampleIndex.current]
+      
+      if (isDeleting.current) {
+        // Deleting text
+        if (currentCharIndex.current > 0) {
+          setPlaceholderText(currentExample.substring(0, currentCharIndex.current - 1))
+          currentCharIndex.current -= 1
+          animationTimeoutRef.current = setTimeout(animatePlaceholder, deletingSpeed.current)
+        } else {
+          // Finished deleting
+          isDeleting.current = false
+          currentExampleIndex.current = (currentExampleIndex.current + 1) % placeholderExamples.length
+          
+          // If we've gone through all examples, stop the animation
+          if (currentExampleIndex.current === 0) {
+            stopAnimation()
+            return
+          }
+          
+          animationTimeoutRef.current = setTimeout(animatePlaceholder, pauseBeforeNewExample.current)
+        }
+      } else {
+        // Typing text
+        if (currentCharIndex.current < currentExample.length) {
+          setPlaceholderText(currentExample.substring(0, currentCharIndex.current + 1))
+          currentCharIndex.current += 1
+          animationTimeoutRef.current = setTimeout(animatePlaceholder, typingSpeed.current)
+        } else {
+          // Finished typing
+          isDeleting.current = true
+          animationTimeoutRef.current = setTimeout(animatePlaceholder, pauseBeforeDelete.current)
+        }
+      }
+    }
+    
+    animationTimeoutRef.current = setTimeout(animatePlaceholder, 1000) // Initial delay
+    
+    return () => {
+      if (animationTimeoutRef.current) {
+        clearTimeout(animationTimeoutRef.current)
+      }
+    }
+  }, [isAnimating])
 
   return (
     <div className="w-full">
@@ -445,8 +558,10 @@ export function PromptForm({
                     <FormLabel className="text-foreground">Prompt</FormLabel>
                     <FormControl>
                       <Input 
-                        placeholder="Describe your image..." 
+                        placeholder={placeholderText}
                         className="bg-background border-input" 
+                        onFocus={stopAnimation}
+                        onClick={stopAnimation}
                         {...field} 
                       />
                     </FormControl>
@@ -541,14 +656,15 @@ export function PromptForm({
                 <div className="md:col-span-2 flex justify-end">
                   <Button 
                     type="submit" 
-                    className="w-full"
-                    disabled={submitting}
+                    className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-medium transition-all duration-200"
+                    disabled={submitting || loadingModels || fetchingModelVersion}
+                    aria-label="Generate image"
                   >
                     {submitting ? (
-                      <>
+                      <div className="flex items-center justify-center">
                         <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                        {fetchingModelVersion ? 'Fetching latest model version...' : 'Generating...'}
-                      </>
+                        <span>Generate</span>
+                      </div>
                     ) : (
                       "Generate Image"
                     )}
