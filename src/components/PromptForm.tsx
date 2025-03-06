@@ -24,6 +24,10 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 
+// Local storage keys
+const PENDING_GENERATIONS_KEY = 'photomate_pending_generations';
+const CLIENT_HISTORY_KEY = 'photomate_client_history';
+
 // Define the model interface
 interface Model {
   id: string;
@@ -51,10 +55,6 @@ type ImageGeneration = {
   images: string[]
   aspectRatio: string
 }
-
-// Local storage keys
-const PENDING_GENERATIONS_KEY = 'photomate_pending_generations';
-const CLIENT_HISTORY_KEY = 'photomate_client_history';
 
 // Process output to ensure we have valid string URLs
 const processOutput = (output: unknown[]): string[] => {
@@ -135,57 +135,58 @@ export function PromptForm({
   }, [pendingGenerations, isInitialized]);
   
   // Fetch available models
-  useEffect(() => {
-    const fetchModels = async () => {
-      setLoadingModels(true);
-      try {
-        // Fetch models that are trained or ready (not cancelled, not deleted)
-        // Note: In the database, models have status 'trained' not 'ready'
-        const response = await fetch('/api/model-list?is_cancelled=false&is_deleted=false');
-        if (!response.ok) {
-          throw new Error('Failed to fetch models');
-        }
-        
-        const data = await response.json();
-        console.log('API response:', data);
-        
-        if (data.success && data.models) {
-          console.log('Models found:', data.models.length);
-          
-          // Filter models to only include those with status 'trained'
-          const availableModels = data.models.filter((model: Model) => 
-            model.status === 'trained' || model.status === 'ready'
-          );
-          
-          console.log('Available models after filtering:', availableModels.length);
-          
-          if (availableModels.length === 0) {
-            console.log('No available models found after filtering');
-          }
-          
-          // Sort models by display_name for better user experience
-          const sortedModels = [...availableModels].sort((a, b) => {
-            // Use only display_name without fallback
-            const displayNameA = a.display_name || '';
-            const displayNameB = b.display_name || '';
-            return displayNameA.localeCompare(displayNameB);
-          });
-          setModels(sortedModels);
-          
-          // Set default model if available and form is not already filled
-          if (sortedModels.length > 0 && !form.getValues().modelId) {
-            form.setValue('modelId', sortedModels[0].id);
-          }
-        } else {
-          console.log('No models found or API response not successful');
-        }
-      } catch (err) {
-        console.error('Error fetching models:', err);
-      } finally {
-        setLoadingModels(false);
+  const fetchModels = async () => {
+    setLoadingModels(true);
+    try {
+      // Fetch models that are trained or ready (not cancelled, not deleted)
+      // Note: In the database, models have status 'trained' not 'ready'
+      const response = await fetch('/api/model-list?is_cancelled=false&is_deleted=false');
+      if (!response.ok) {
+        throw new Error('Failed to fetch models');
       }
-    };
-    
+      
+      const data = await response.json();
+      console.log('API response:', data);
+      
+      if (data.success && data.models) {
+        console.log('Models found:', data.models.length);
+        
+        // Filter models to only include those with status 'trained'
+        const availableModels = data.models.filter((model: Model) => 
+          model.status === 'trained' || model.status === 'ready'
+        );
+        
+        console.log('Available models after filtering:', availableModels.length);
+        
+        if (availableModels.length === 0) {
+          console.log('No available models found after filtering');
+        }
+        
+        // Sort models by display_name for better user experience
+        const sortedModels = [...availableModels].sort((a, b) => {
+          // Use only display_name without fallback
+          const displayNameA = a.display_name || '';
+          const displayNameB = b.display_name || '';
+          return displayNameA.localeCompare(displayNameB);
+        });
+        setModels(sortedModels);
+        
+        // Set default model if available and form is not already filled
+        if (sortedModels.length > 0 && !form.getValues().modelId) {
+          form.setValue('modelId', sortedModels[0].id);
+        }
+      } else {
+        console.log('No models found or API response not successful');
+      }
+    } catch (err) {
+      console.error('Error fetching models:', err);
+    } finally {
+      setLoadingModels(false);
+    }
+  };
+  
+  // Initial fetch
+  useEffect(() => {
     fetchModels();
   }, []);
   
@@ -244,8 +245,34 @@ export function PromptForm({
     setPendingGenerations(prev => prev.filter(gen => gen.id !== id))
   }
   
-  // Display a warning message if there are pending generations on page load
-  const hasPendingGenerationsOnReload = pageReloaded && pendingGenerations.length > 0;
+  // Clear stale pending generations
+  const clearStalePendingGenerations = () => {
+    setPendingGenerations([]);
+  };
+
+  // Add to client history
+  const addToClientHistory = (generation: ImageGeneration) => {
+    // Get current history
+    const currentHistory = localStorage.getItem(CLIENT_HISTORY_KEY);
+    let history: ImageGeneration[] = [];
+    
+    try {
+      if (currentHistory) {
+        history = JSON.parse(currentHistory);
+      }
+    } catch (e) {
+      console.error('Error parsing client history:', e);
+    }
+    
+    // Add new generation at the start
+    history = [generation, ...history];
+    
+    // Keep only the last 20 generations
+    history = history.slice(0, 20);
+    
+    // Save back to localStorage
+    localStorage.setItem(CLIENT_HISTORY_KEY, JSON.stringify(history));
+  }
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -298,37 +325,17 @@ export function PromptForm({
               if (modelVersion) {
                 console.log(`Using latest version: ${modelVersion}`);
               } else {
-                console.log('Failed to fetch latest version, will use model without specific version');
-                setError('Failed to fetch the latest model version. Please try again.');
-                setSubmitting(false);
-                removePendingGeneration(generationId);
-                return;
+                console.warn('Could not fetch latest version, will use default');
               }
             }
-          } else {
-            console.error('Selected model not found in models list:', values.modelId);
-            setError('Selected model not found. Please try again or select a different model.');
-            setSubmitting(false);
-            removePendingGeneration(generationId);
-            return;
           }
-        } else {
-          setError('Please select a model before generating an image.');
-          setSubmitting(false);
-          removePendingGeneration(generationId);
-          return;
         }
         
-        // Log the request we're about to make
-        console.log('Sending generation request with:', {
-          prompt: values.prompt,
-          aspectRatio: values.aspectRatio,
-          outputFormat: values.outputFormat,
-          modelId: values.modelId,
-          modelVersion,
-          modelName
-        });
+        if (!modelName) {
+          throw new Error('No model selected');
+        }
         
+        // Call the API to generate the image
         const response = await fetch('/api/generate', {
           method: 'POST',
           headers: {
@@ -338,7 +345,7 @@ export function PromptForm({
             prompt: values.prompt,
             aspectRatio: values.aspectRatio,
             outputFormat: values.outputFormat,
-            modelId: values.modelId,
+            generationId: generationId,
             modelVersion: modelVersion,
             modelName: modelName
           }),
@@ -417,40 +424,12 @@ export function PromptForm({
       setSubmitting(false);
     }
   };
-  
-  // Clear stale pending generations
-  const clearStalePendingGenerations = () => {
-    setPendingGenerations([]);
-  };
 
-  // Add to client history
-  const addToClientHistory = (generation: ImageGeneration) => {
-    // Get current history
-    const currentHistory = localStorage.getItem(CLIENT_HISTORY_KEY);
-    let history: ImageGeneration[] = [];
-    
-    try {
-      if (currentHistory) {
-        history = JSON.parse(currentHistory);
-      }
-    } catch (e) {
-      console.error('Error parsing client history:', e);
-    }
-    
-    // Add new generation at the start
-    history = [generation, ...history];
-    
-    // Keep only the last 20 generations
-    history = history.slice(0, 20);
-    
-    // Save back to localStorage
-    localStorage.setItem(CLIENT_HISTORY_KEY, JSON.stringify(history));
-  }
+  // Display a warning message if there are pending generations on page load
+  const hasPendingGenerationsOnReload = pageReloaded && pendingGenerations.length > 0;
 
   return (
-    <div className="w-full mb-8">
-      <h2 className="text-2xl font-bold mb-6">Generate Image</h2>
-      
+    <div className="w-full">
       <div className="w-full bg-card border border-border rounded-xl overflow-hidden shadow-lg">
         {hasPendingGenerationsOnReload && (
           <div className="m-5 p-3 bg-yellow-50 dark:bg-yellow-950 border border-yellow-200 dark:border-yellow-800 rounded-lg">
@@ -500,16 +479,19 @@ export function PromptForm({
                 )}
               />
               
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <FormField
                   control={form.control}
                   name="aspectRatio"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel className="text-foreground">Aspect Ratio</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <FormLabel>Aspect Ratio</FormLabel>
+                      <Select 
+                        onValueChange={field.onChange} 
+                        defaultValue={field.value}
+                      >
                         <FormControl>
-                          <SelectTrigger className="bg-background border-input">
+                          <SelectTrigger>
                             <SelectValue placeholder="Select aspect ratio" />
                           </SelectTrigger>
                         </FormControl>
@@ -531,17 +513,19 @@ export function PromptForm({
                   name="outputFormat"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel className="text-foreground">Format</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <FormLabel>Format</FormLabel>
+                      <Select 
+                        onValueChange={field.onChange} 
+                        defaultValue={field.value}
+                      >
                         <FormControl>
-                          <SelectTrigger className="bg-background border-input">
+                          <SelectTrigger>
                             <SelectValue placeholder="Select format" />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
                           <SelectItem value="png">PNG</SelectItem>
-                          <SelectItem value="jpg">JPG</SelectItem>
-                          <SelectItem value="webp">WebP</SelectItem>
+                          <SelectItem value="jpeg">JPEG</SelectItem>
                         </SelectContent>
                       </Select>
                       <FormMessage />
@@ -554,10 +538,14 @@ export function PromptForm({
                   name="modelId"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel className="text-foreground">Model</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <FormLabel>Model</FormLabel>
+                      <Select 
+                        onValueChange={field.onChange} 
+                        defaultValue={field.value}
+                        disabled={loadingModels || models.length === 0}
+                      >
                         <FormControl>
-                          <SelectTrigger className="bg-background border-input">
+                          <SelectTrigger>
                             <SelectValue placeholder={loadingModels ? "Loading models..." : "Select model"} />
                           </SelectTrigger>
                         </FormControl>
@@ -592,17 +580,17 @@ export function PromptForm({
             </form>
           </Form>
         </div>
+        
+        {error && (
+          <div className="mt-4 p-4 bg-destructive/10 border border-destructive/20 rounded-lg">
+            <h3 className="text-lg font-semibold text-destructive mb-1">Error</h3>
+            <p className="text-sm text-destructive/90">{error}</p>
+            {errorDetails && (
+              <p className="text-xs text-destructive/80 mt-1">{errorDetails}</p>
+            )}
+          </div>
+        )}
       </div>
-      
-      {error && (
-        <div className="mt-4 p-4 bg-destructive/10 border border-destructive/20 rounded-lg">
-          <h3 className="text-lg font-semibold text-destructive mb-1">Error</h3>
-          <p className="text-sm text-destructive/90">{error}</p>
-          {errorDetails && (
-            <p className="text-xs text-destructive/80 mt-1">{errorDetails}</p>
-          )}
-        </div>
-      )}
     </div>
-  )
+  );
 } 

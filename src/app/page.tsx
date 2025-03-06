@@ -28,7 +28,7 @@ export default function Home() {
               <Link href="/create">Start Creating</Link>
             </Button>
             <Button asChild variant="outline" size="lg" className="font-medium">
-              <Link href="/train">Train Your Model</Link>
+              <Link href="/create?tab=train">Train Your Model</Link>
             </Button>
           </div>
         </div>

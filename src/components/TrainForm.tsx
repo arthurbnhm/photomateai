@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -54,6 +54,8 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
   const [uploadProgress, setUploadProgress] = useState(0);
   const [nameError, setNameError] = useState<string | null>(null);
   const [realtimeSubscribed, setRealtimeSubscribed] = useState(false);
+  // Add a ref to track subscription status without triggering re-renders
+  const subscriptionActiveRef = useRef(false);
 
   // Supabase client for realtime updates
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
@@ -134,10 +136,10 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
     }
   }, [displayModelName]);
 
-  // Setup Supabase realtime subscription for training updates
+  // Set up realtime subscription to track training status
   useEffect(() => {
-    // Only subscribe if we have an active training
-    if (!trainingStatus || realtimeSubscribed) return;
+    // Use the ref to check if already subscribed, but still keep realtimeSubscribed in deps
+    if (!trainingStatus || subscriptionActiveRef.current) return;
     
     console.log('Setting up realtime subscription for training:', trainingStatus.id);
     
@@ -185,12 +187,15 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
     )
     .subscribe();
     
+    // Update both the state and the ref
     setRealtimeSubscribed(true);
+    subscriptionActiveRef.current = true;
     
     // Cleanup function
     return () => {
       trainingSubscription.unsubscribe();
       setRealtimeSubscribed(false);
+      subscriptionActiveRef.current = false;
     };
   }, [trainingStatus?.id, realtimeSubscribed, supabase, onTrainingStatusChange]);
 
@@ -460,7 +465,7 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
   }, []);
 
   return (
-    <>
+    <div className="w-full">
       {/* Overlay that appears when dragging image files over the page */}
       {isDraggingImages && (
         <div 
@@ -487,141 +492,151 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
           </div>
         </div>
       )}
-
-      <form className="space-y-8">
-        <div className="space-y-4">
-          <div>
-            <Label htmlFor="model-name">Model Name</Label>
-            <Input
-              id="model-name" 
-              placeholder="Enter a name for your model"
-              value={displayModelName}
-              onChange={(e) => setDisplayModelName(e.target.value)}
-              className={`mt-1 ${nameError ? 'border-red-500' : ''}`}
-            />
-            {nameError ? (
-              <p className="text-xs text-red-500 mt-1">{nameError}</p>
-            ) : (
-              <p className="text-xs text-muted-foreground mt-1">
-                Your model will be created as a private model with owner &quot;arthurbnhm&quot; using T4 GPU.
-              </p>
-            )}
-            {actualModelName && !nameError && (
-              <p className="text-xs text-green-600 mt-1">
-                Model will be created as: <span className="font-mono">{actualModelName}</span>
-              </p>
-            )}
-          </div>
-          
-          <div className="space-y-2">
-            <Label>Upload Images (10 max)</Label>
-            <div 
-              {...getRootProps()} 
-              className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors ${
-                isDragActive ? 'border-primary bg-primary/5' : 'border-muted-foreground/20 hover:border-primary/50'
-              }`}
-            >
-              <input {...getInputProps()} />
-              <div className="flex flex-col items-center justify-center gap-2">
-                <svg
-                  xmlns="http://www.w3.org/2000/svg" 
-                  width="24" 
-                  height="24" 
-                  viewBox="0 0 24 24" 
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2" 
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  className="text-muted-foreground"
+      
+      <div 
+        className="w-full bg-card border border-border rounded-xl overflow-hidden shadow-lg"
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDragEnd={handleDragEnd}
+        onDrop={handleDrop}
+      >
+        <div className="p-5">
+          <form className="space-y-6">
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="model-name">Model Name</Label>
+                <Input
+                  id="model-name" 
+                  placeholder="Enter a name for your model"
+                  value={displayModelName}
+                  onChange={(e) => setDisplayModelName(e.target.value)}
+                  className={`mt-1 ${nameError ? 'border-red-500' : ''}`}
+                />
+                {nameError ? (
+                  <p className="text-xs text-red-500 mt-1">{nameError}</p>
+                ) : (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Your model will be created as a private model with owner &quot;arthurbnhm&quot; using T4 GPU.
+                  </p>
+                )}
+                {actualModelName && !nameError && (
+                  <p className="text-xs text-green-600 mt-1">
+                    Model will be created as: <span className="font-mono">{actualModelName}</span>
+                  </p>
+                )}
+              </div>
+              
+              <div className="space-y-2">
+                <Label>Upload Images (10 max)</Label>
+                <div 
+                  {...getRootProps()} 
+                  className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors ${
+                    isDragActive || isDraggingImages ? 'border-primary bg-primary/5' : 'border-muted-foreground/20 hover:border-primary/50'
+                  }`}
                 >
-                  <path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"></path>
-                  <path d="M12 12v9"></path>
-                  <path d="m16 16-4-4-4 4"></path>
-                </svg>
-                <p className="text-sm font-medium">
-                  Drag and drop images here, or click to select files
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  JPG, PNG, WebP up to 10 images
-                </p>
+                  <input {...getInputProps()} />
+                  <div className="flex flex-col items-center justify-center gap-2">
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg" 
+                      width="24" 
+                      height="24" 
+                      viewBox="0 0 24 24" 
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2" 
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      className="text-muted-foreground"
+                    >
+                      <path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"></path>
+                      <path d="M12 12v9"></path>
+                      <path d="m16 16-4-4-4 4"></path>
+                    </svg>
+                    <p className="text-sm font-medium">
+                      Drag and drop images here, or click to select files
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      JPG, PNG, WebP up to 10 images
+                    </p>
+                  </div>
+                </div>
               </div>
+              
+              {uploadedImages.length > 0 && (
+                <div className="space-y-2">
+                  <Label>{uploadedImages.length} of 10 images uploaded</Label>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4 mt-2">
+                    {uploadedImages.map((file, index) => (
+                      <Card key={index} className="overflow-hidden relative group">
+                        <CardContent className="p-0">
+                          <div className="relative aspect-square">
+                            <Image
+                              src={URL.createObjectURL(file)}
+                              alt={`Uploaded image ${index + 1}`}
+                              fill
+                              className="object-cover"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => removeImage(index)}
+                              className="absolute top-1 right-1 bg-background/80 dark:bg-foreground/20 text-foreground dark:text-background rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                              aria-label="Remove image"
+                            >
+                              <svg
+                                xmlns="http://www.w3.org/2000/svg" 
+                                width="16" 
+                                height="16" 
+                                viewBox="0 0 24 24" 
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2" 
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                              >
+                                <path d="M18 6 6 18"></path>
+                                <path d="m6 6 12 12"></path>
+                              </svg>
+                            </button>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                </div>
+              )}
+              
+              {isProcessing && uploadProgress > 0 && (
+                <div className="mt-4">
+                  <div className="flex justify-between mb-1">
+                    <span className="text-sm font-medium">Processing...</span>
+                    <span className="text-sm font-medium">{uploadProgress}%</span>
+                  </div>
+                  <div className="w-full bg-muted rounded-full h-2.5">
+                    <div
+                      className="bg-primary h-2.5 rounded-full" 
+                      style={{ width: `${uploadProgress}%` }}
+                    ></div>
+                  </div>
+                </div>
+              )}
             </div>
-          </div>
-          
-          {uploadedImages.length > 0 && (
-            <div className="space-y-2">
-              <Label>{uploadedImages.length} of 10 images uploaded</Label>
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4 mt-2">
-                {uploadedImages.map((file, index) => (
-                  <Card key={index} className="overflow-hidden relative group">
-                    <CardContent className="p-0">
-                      <div className="relative aspect-square">
-                        <Image
-                          src={URL.createObjectURL(file)}
-                          alt={`Uploaded image ${index + 1}`}
-                          fill
-                          className="object-cover"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => removeImage(index)}
-                          className="absolute top-1 right-1 bg-background/80 dark:bg-foreground/20 text-foreground dark:text-background rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                          aria-label="Remove image"
-                        >
-                          <svg
-                            xmlns="http://www.w3.org/2000/svg" 
-                            width="16" 
-                            height="16" 
-                            viewBox="0 0 24 24" 
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2" 
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          >
-                            <path d="M18 6 6 18"></path>
-                            <path d="m6 6 12 12"></path>
-                          </svg>
-                        </button>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            </div>
-          )}
-          
-          {isProcessing && uploadProgress > 0 && (
-            <div className="mt-4">
-              <div className="flex justify-between mb-1">
-                <span className="text-sm font-medium">Processing...</span>
-                <span className="text-sm font-medium">{uploadProgress}%</span>
-              </div>
-              <div className="w-full bg-muted rounded-full h-2.5">
-                <div
-                  className="bg-primary h-2.5 rounded-full" 
-                  style={{ width: `${uploadProgress}%` }}
-                ></div>
-              </div>
-            </div>
-          )}
+            
+            <Button
+              type="submit"
+              className="w-full"
+              disabled={!displayModelName || nameError !== null || uploadedImages.length === 0 || isProcessing}
+              onClick={handleSubmit}
+            >
+              {isProcessing ? (
+                <span className="flex items-center justify-center">
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Processing...
+                </span>
+              ) : 'Create & Train Model'}
+            </Button>
+          </form>
         </div>
-        
-        <Button
-          type="submit"
-          className="w-full"
-          disabled={!displayModelName || nameError !== null || uploadedImages.length === 0 || isProcessing}
-          onClick={handleSubmit}
-        >
-          {isProcessing ? (
-            <span className="flex items-center justify-center">
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Processing...
-            </span>
-          ) : 'Create & Train Model'}
-        </Button>
-      </form>
-    </>
+      </div>
+    </div>
   );
 } 

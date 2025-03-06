@@ -19,7 +19,7 @@
 - ✅ Generate multiple images at a time
 - ✅ Delete the images
 - ✅ Don't delete the supabase row, just set is_deleted to true and filter
-- Use model name from user and modelname-id for replicate
+- ✅ Use model name from user and modelname-id for replicate
 - ✅ cancel/route.ts should handle both training and image generation cancelation
 - ✅ rework cancel / delete button for image generations
 - Default to a model for image geneneration and other options
@@ -34,7 +34,8 @@
 - Remove things related to current debugging
 - ✅ Improve UI for model management
 - Implement better error handling and user feedback
-- Seperate train.tsx into components
+- ✅ Seperate train.tsx into components
+- ✅ Have a single page for both training and creation
 
 # Authentication
 

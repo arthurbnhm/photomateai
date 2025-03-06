@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   Table,
   TableBody,
@@ -87,6 +87,7 @@ export function ModelListTable({ newTraining, onClearNewTraining }: ModelListTab
   const [isCancelling, setIsCancelling] = useState(false);
   const [trainingToCancel, setTrainingToCancel] = useState<{id: string, modelId: string} | null>(null);
   const [realtimeSubscribed, setRealtimeSubscribed] = useState(false);
+  const fetchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   
   // Check if newTraining is already in models list
   const isNewTrainingInModels = useCallback(() => {
@@ -110,134 +111,323 @@ export function ModelListTable({ newTraining, onClearNewTraining }: ModelListTab
     });
   }, [newTraining, models]);
 
+  // Memoize the fetch function to prevent it from changing on every render
   const fetchModels = useCallback(async (pageNum = 1) => {
+    console.log(`Fetching models for page ${pageNum}...`);
     setLoading(true);
     try {
+      const startTime = Date.now();
       const response = await fetch(`/api/model-list?page=${pageNum}&limit=5`);
+      
       if (!response.ok) {
-        throw new Error("Failed to fetch models");
+        console.error(`API error: ${response.status} ${response.statusText}`);
+        throw new Error(`Failed to fetch models: ${response.status} ${response.statusText}`);
       }
       
       const data: ModelListResponse = await response.json();
+      const fetchTime = Date.now() - startTime;
       
       if (data.success) {
+        console.log(`Models fetched successfully in ${fetchTime}ms. Found ${data.models.length} models.`);
+        
+        // Log model statuses for debugging
+        data.models.forEach(model => {
+          console.log(`Model ${model.display_name} (${model.id}): status=${model.status}, trainings=${model.trainings.length}`);
+          
+          // Log training statuses
+          if (model.trainings.length > 0) {
+            model.trainings.forEach(training => {
+              console.log(`  - Training ${training.id}: status=${training.status}, created=${new Date(training.created_at).toLocaleString()}`);
+            });
+          }
+        });
+        
         setModels(data.models);
         setTotalPages(data.pagination.pages);
-        
-        // If we have a newTraining and it's now in the models list, clear it
-        if (newTraining && isNewTrainingInModels() && onClearNewTraining) {
-          onClearNewTraining();
-        }
       } else {
+        console.error('API returned error:', data.error);
         setError(data.error || "Failed to fetch models");
       }
     } catch (err) {
+      console.error('Error fetching models:', err);
       setError(err instanceof Error ? err.message : "An error occurred");
     } finally {
       setLoading(false);
     }
-  }, [newTraining, onClearNewTraining, isNewTrainingInModels]);
+  }, []);
 
-  // Initial fetch
+  // Immediate fetch function without debouncing for critical updates
+  const fetchModelsImmediate = useCallback((pageNum = 1) => {
+    console.log('Immediate fetch triggered');
+    fetchModels(pageNum);
+  }, [fetchModels]);
+
+  // Debounced version with minimal delay for non-critical updates
+  const debouncedFetchModels = useCallback((pageNum = 1) => {
+    console.log('Debounced fetch models called');
+    if (fetchTimeoutRef.current) {
+      clearTimeout(fetchTimeoutRef.current);
+    }
+    
+    fetchTimeoutRef.current = setTimeout(() => {
+      fetchModels(pageNum);
+    }, 100); // Reduced from 300ms to 100ms for faster updates
+  }, [fetchModels]);
+
+  // Initial fetch only once on mount
   useEffect(() => {
-    fetchModels();
+    fetchModels(1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   
-  // Setup Supabase realtime subscription for trainings
+  // Handle page changes
+  useEffect(() => {
+    if (page > 1) {
+      fetchModels(page);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page]);
+
+  // Check if newTraining is in models and clear it if needed
+  useEffect(() => {
+    // Skip if no newTraining or no onClearNewTraining callback
+    if (!newTraining || !onClearNewTraining) return;
+    
+    // Check if the training is in the models list
+    const trainingInModels = isNewTrainingInModels();
+    if (trainingInModels) {
+      onClearNewTraining();
+    }
+    
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [models, newTraining?.id]);
+  
+  // Setup Supabase realtime subscription for trainings - only once
   useEffect(() => {
     // Only setup the subscription once
     if (realtimeSubscribed) return;
     
-    // Subscribe to changes in the trainings table
-    const trainingSubscription = supabase
-      .channel('trainings-changes')
-      .on('postgres_changes', 
-        { 
-          event: '*', 
-          schema: 'public', 
-          table: 'trainings' 
-        }, 
-        (payload) => {
-          console.log('Training update received:', payload);
-          
-          // Refresh the models when a training changes
-          fetchModels(page);
+    console.log('Setting up realtime subscriptions');
+    
+    try {
+      // Subscribe to changes in the trainings table - monitor ALL status changes
+      const trainingSubscription = supabase
+        .channel('trainings-changes')
+        .on(
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          'postgres_changes' as any, 
+          { 
+            event: '*', 
+            schema: 'public', 
+            table: 'trainings' 
+          }, 
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (payload: any) => {
+            console.log('Training update received:', payload);
+            
+            // Process ALL status changes to ensure we catch everything
+            if (payload?.new?.status) {
+              const status = payload.new.status;
+              const trainingId = payload.new.training_id;
+              const modelId = payload.new.model_id;
+              
+              console.log(`Training status changed to ${status} for training ${trainingId}`);
+              
+              // Simple approach: directly update the models state for immediate UI refresh
+              if (modelId) {
+                // Use React 18's flushSync to ensure immediate update
+                // This forces React to update the state immediately without batching
+                setModels(prevModels => {
+                  return prevModels.map(model => {
+                    // Check if this is the model that needs updating
+                    if (model.id === modelId) {
+                      console.log(`Updating model ${model.id} with training status: ${status}`);
+                      
+                      // Update the training in the model's trainings array
+                      const updatedTrainings = model.trainings.map(training => {
+                        if (training.training_id === trainingId) {
+                          return {
+                            ...training,
+                            status: status,
+                            completed_at: status === 'succeeded' ? new Date().toISOString() : training.completed_at
+                          };
+                        }
+                        return training;
+                      });
+                      
+                      // Simple status update logic:
+                      // If training succeeded, model is trained
+                      // If training is active, model is training
+                      // Otherwise keep current status
+                      let newModelStatus = model.status;
+                      if (status === 'succeeded') {
+                        newModelStatus = 'trained';
+                      } else if (['training', 'processing', 'starting', 'queued', 'created'].includes(status)) {
+                        newModelStatus = 'training';
+                      }
+                      
+                      return {
+                        ...model,
+                        trainings: updatedTrainings,
+                        status: newModelStatus
+                      };
+                    }
+                    return model;
+                  });
+                });
+                
+                // For critical status changes, fetch immediately to ensure we have the latest data
+                if (status === 'succeeded') {
+                  // No timeout - fetch immediately
+                  fetchModelsImmediate(page);
+                }
+              }
+              
+              // If this is a newTraining and it's completed, clear it immediately
+              if (newTraining && onClearNewTraining && status === 'succeeded') {
+                onClearNewTraining();
+              }
+            }
+          }
+        )
+        .subscribe((status) => {
+          console.log('Training subscription status:', status);
+        });
+      
+      // Also subscribe to changes in the models table
+      const modelSubscription = supabase
+        .channel('models-changes')
+        .on(
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          'postgres_changes' as any, 
+          { 
+            event: '*', 
+            schema: 'public', 
+            table: 'models' 
+          }, 
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (payload: any) => {
+            console.log('Model update received:', payload);
+            
+            // Process model status changes
+            if (payload?.new?.status) {
+              const status = payload.new.status;
+              const modelId = payload.new.id;
+              
+              console.log(`Model status changed to ${status} for model ${modelId}`);
+              
+              // Directly update the model in state for immediate UI refresh
+              if (modelId) {
+                setModels(prevModels => {
+                  return prevModels.map(model => 
+                    model.id === modelId ? { ...model, ...payload.new } : model
+                  );
+                });
+                
+                // For trained status, fetch immediately
+                if (status === 'trained') {
+                  fetchModelsImmediate(page);
+                }
+              }
+            }
+          }
+        )
+        .subscribe((status) => {
+          console.log('Model subscription status:', status);
+        });
+      
+      // Set up a periodic refresh to ensure data consistency, but with longer interval
+      const refreshInterval = setInterval(() => {
+        console.log('Performing periodic refresh');
+        debouncedFetchModels(page);
+      }, 60000); // Refresh every 60 seconds (reduced frequency)
+      
+      setRealtimeSubscribed(true);
+      
+      // Cleanup function
+      return () => {
+        console.log('Cleaning up realtime subscriptions');
+        trainingSubscription.unsubscribe();
+        modelSubscription.unsubscribe();
+        clearInterval(refreshInterval);
+        setRealtimeSubscribed(false);
+        
+        // Clear any pending timeouts
+        if (fetchTimeoutRef.current) {
+          clearTimeout(fetchTimeoutRef.current);
+          fetchTimeoutRef.current = null;
         }
-      )
-      .subscribe();
-    
-    // Subscribe to changes in the models table
-    const modelSubscription = supabase
-      .channel('models-changes')
-      .on('postgres_changes', 
-        { 
-          event: '*', 
-          schema: 'public', 
-          table: 'models' 
-        }, 
-        (payload) => {
-          console.log('Model update received:', payload);
-          
-          // Refresh the models when a model changes
-          fetchModels(page);
-        }
-      )
-      .subscribe();
-    
-    setRealtimeSubscribed(true);
-    
-    // Cleanup function
-    return () => {
-      trainingSubscription.unsubscribe();
-      modelSubscription.unsubscribe();
-      setRealtimeSubscribed(false);
-    };
-  }, [fetchModels]);
-
-  // When newTraining changes, refresh the models list
-  useEffect(() => {
-    if (newTraining) {
-      fetchModels(page);
+      };
+    } catch (error) {
+      console.error('Error setting up realtime subscriptions:', error);
+      // Fallback to periodic polling
+      const intervalId = setInterval(() => {
+        fetchModels(page);
+      }, 5000);
+      
+      return () => {
+        clearInterval(intervalId);
+        setRealtimeSubscribed(false);
+      };
     }
-  }, [newTraining, page]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Manual refresh when newTraining changes (with debounce)
+  useEffect(() => {
+    if (!newTraining) return;
+    
+    console.log('New training detected, scheduling refresh');
+    const timer = setTimeout(() => {
+      console.log('Refreshing models due to new training');
+      fetchModels(page);
+    }, 2000);
+    
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [newTraining?.id, newTraining?.status]);
 
   const handlePageChange = (newPage: number) => {
     if (newPage >= 1 && newPage <= totalPages) {
       setPage(newPage);
-      fetchModels(newPage);
     }
+  };
+
+  // Get the effective status for a model considering its trainings
+  const getEffectiveStatus = (model: Model) => {
+    // Check if model is valid
+    if (!model || Object.keys(model).length === 0) {
+      return "";
+    }
+
+    // Simple approach: if model status is "trained", show as trained
+    if (model.status === "trained") {
+      return "trained";
+    }
+
+    // If any training has succeeded, show as trained
+    if (model.trainings && model.trainings.some(t => t.status === "succeeded")) {
+      return "trained";
+    }
+
+    // If any training is active, show as training
+    if (model.trainings && model.trainings.some(t => 
+      t.status === "training" || 
+      t.status === "starting" || 
+      t.status === "created" || 
+      t.status === "queued" ||
+      t.status === "processing"
+    )) {
+      return "training";
+    }
+
+    // Otherwise, use the model's own status
+    return model.status;
   };
 
   // Check if a model has an active training
   const hasActiveTraining = (model: Model) => {
-    // Check if model is valid
-    if (!model || Object.keys(model).length === 0) {
-      return false;
-    }
-    
-    // Consider model in training if status is training, created, or queued
-    if (model.status === "training" || model.status === "created" || model.status === "queued") {
-      return true;
-    }
-    
-    // Also check if any of its trainings are in an active state
-    return model.trainings && model.trainings.some(t => 
-      t.status === "training" || 
-      t.status === "starting" || 
-      t.status === "created" || 
-      t.status === "queued"
-    );
-  };
-  
-  // Get the effective status for a model considering its trainings
-  const getEffectiveStatus = (model: Model) => {
-    // If model has active trainings, it should be shown as "training"
-    if (hasActiveTraining(model)) {
-      return "training";
-    }
-    
-    // Otherwise, use the model's own status
-    return model.status;
+    return getEffectiveStatus(model) === "training";
   };
 
   // Determine if we should show the cancel button for a model
@@ -252,29 +442,49 @@ export function ModelListTable({ newTraining, onClearNewTraining }: ModelListTab
   // Get the training ID to use for cancellation
   const getTrainingIdForCancellation = (model: Model): string | null => {
     // Look for trainings in the trainings array
-    if (model.trainings && model.trainings.length > 0) {
-      // First try to find an active training
-      const activeTraining = model.trainings.find(t => 
-        t.status === "training" || 
-        t.status === "starting" || 
-        t.status === "created" || 
-        t.status === "queued"
-      );
-      
-      if (activeTraining && activeTraining.training_id) {
-        console.log('Using active training with training_id:', activeTraining.training_id);
-        return activeTraining.training_id;
+    if (!model.trainings || model.trainings.length === 0) {
+      console.error('No valid training_id found for model:', model);
+      return null;
+    }
+    
+    // First try to find an active training
+    const activeTraining = model.trainings.find(t => 
+      t.status === "training" || 
+      t.status === "starting" || 
+      t.status === "created" || 
+      t.status === "queued"
+    );
+    
+    if (activeTraining?.training_id) {
+      console.log('Using active training with training_id:', activeTraining.training_id);
+      return activeTraining.training_id;
+    }
+    
+    // Otherwise use the most recent training - avoid expensive sort if possible
+    if (model.trainings.length === 1) {
+      const training = model.trainings[0];
+      if (training?.training_id) {
+        console.log('Using only training with training_id:', training.training_id);
+        return training.training_id;
       }
-      
-      // Otherwise use the most recent training
-      const mostRecentTraining = [...model.trainings].sort((a, b) => 
-        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-      )[0];
-      
-      if (mostRecentTraining && mostRecentTraining.training_id) {
-        console.log('Using most recent training with training_id:', mostRecentTraining.training_id);
-        return mostRecentTraining.training_id;
+    }
+    
+    // Find most recent training by created_at date
+    let mostRecent = model.trainings[0];
+    let mostRecentTime = new Date(mostRecent.created_at).getTime();
+    
+    for (let i = 1; i < model.trainings.length; i++) {
+      const training = model.trainings[i];
+      const time = new Date(training.created_at).getTime();
+      if (time > mostRecentTime) {
+        mostRecent = training;
+        mostRecentTime = time;
       }
+    }
+    
+    if (mostRecent?.training_id) {
+      console.log('Using most recent training with training_id:', mostRecent.training_id);
+      return mostRecent.training_id;
     }
     
     // No valid training ID found
@@ -331,15 +541,31 @@ export function ModelListTable({ newTraining, onClearNewTraining }: ModelListTab
   };
 
   const getStatusBadge = (status: string) => {
-    switch (status) {
+    switch (status.toLowerCase()) {
       case "created":
         return <Badge variant="secondary">Created</Badge>;
       case "training":
-        return <Badge variant="secondary">Training</Badge>;
+      case "processing":
+      case "starting":
+        return (
+          <Badge variant="secondary" className="flex items-center gap-1">
+            <span className="h-2 w-2 rounded-full bg-blue-400 animate-pulse"></span>
+            Training
+          </Badge>
+        );
       case "trained":
-        return <Badge className="bg-green-500 hover:bg-green-600">Trained</Badge>;
+      case "succeeded":
+        return (
+          <Badge variant="secondary" className="flex items-center gap-1">
+            <span className="h-2 w-2 rounded-full bg-green-500"></span>
+            Trained
+          </Badge>
+        );
       case "training_failed":
+      case "failed":
         return <Badge variant="destructive">Failed</Badge>;
+      case "canceled":
+        return <Badge variant="outline" className="bg-yellow-100 text-yellow-800 hover:bg-yellow-200 border-yellow-300">Canceled</Badge>;
       default:
         return <Badge variant="outline">{status}</Badge>;
     }
