@@ -1,7 +1,6 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { LoadingIndicator } from "@/components/ui/loading-indicator"
 import { Button } from "@/components/ui/button"
 import { toast } from "sonner"
 import { Toaster } from "@/components/ui/sonner"
@@ -742,15 +741,6 @@ export function ImageHistory({
     <div className="w-full">
       <Toaster />
       <h2 className="text-2xl font-bold mb-6">Your Image History</h2>
-      
-      {/* Loading indicator for initial history fetch - only show when no generations are loaded yet */}
-      {isLoading && generations.length === 0 && pendingGenerations.length === 0 && (
-        <LoadingIndicator 
-          isLoading={true}
-          text="Loading image history..." 
-          className="mb-4"
-        />
-      )}
       
       {/* Pending generations section */}
       {pendingGenerations.length > 0 && (

@@ -638,7 +638,7 @@ export function PromptForm({
                       >
                         <FormControl>
                           <SelectTrigger>
-                            <SelectValue placeholder={loadingModels ? "Loading models..." : "Select model"} />
+                            <SelectValue placeholder="Select model" />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
