@@ -24,11 +24,8 @@ export default function Home() {
           </p>
           
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Button asChild size="lg" className="font-medium">
-              <Link href="/create">Start Creating</Link>
-            </Button>
             <Button asChild variant="outline" size="lg" className="font-medium">
-              <Link href="/create?tab=train">Train Your Model</Link>
+              <Link href="/create?tab=train">Signin</Link>
             </Button>
           </div>
         </div>
