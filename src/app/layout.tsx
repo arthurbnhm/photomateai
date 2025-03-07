@@ -8,7 +8,7 @@ import { ModeToggle } from "@/components/mode-toggle";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "AI Image Generator",
+  title: "Photomate AI",
   description: "Generate stunning images with AI using simple text prompts",
 };
 
