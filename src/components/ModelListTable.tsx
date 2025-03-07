@@ -115,6 +115,7 @@ export function ModelListTable({ newTraining, onClearNewTraining }: ModelListTab
     setLoading(true);
     try {
       const startTime = Date.now();
+      void startTime; // Explicitly indicate we're ignoring this variable
       const response = await fetch(`/api/model-list?page=${pageNum}&limit=5`);
       
       if (!response.ok) {
@@ -261,6 +262,7 @@ export function ModelListTable({ newTraining, onClearNewTraining }: ModelListTab
           }
         )
         .subscribe((_status) => {
+          void _status; // Explicitly indicate we're ignoring this variable
         });
       
       // Also subscribe to changes in the models table
@@ -298,6 +300,7 @@ export function ModelListTable({ newTraining, onClearNewTraining }: ModelListTab
           }
         )
         .subscribe((_status) => {
+          void _status; // Explicitly indicate we're ignoring this variable
         });
       
       // Set up a periodic refresh to ensure data consistency, but with longer interval
@@ -321,6 +324,7 @@ export function ModelListTable({ newTraining, onClearNewTraining }: ModelListTab
         }
       };
     } catch (_error) {
+      void _error; // Explicitly indicate we're ignoring this variable
       // Fallback to periodic polling
       const intervalId = setInterval(() => {
         fetchModels(page);
@@ -541,6 +545,7 @@ export function ModelListTable({ newTraining, onClearNewTraining }: ModelListTab
       try {
         data = await response.json();
       } catch (_parseError) {
+        void _parseError; // Explicitly indicate we're ignoring this variable
         throw new Error(`Invalid response from server: ${await response.text()}`);
       }
       

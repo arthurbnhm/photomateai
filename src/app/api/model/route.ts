@@ -260,9 +260,11 @@ async function trainModel(modelOwner: string, modelName: string, zipUrl: string)
         if (trainingError) {
           // Continue anyway since the training was created in Replicate
         } else {
+          void trainingData; // Explicitly indicate we're using this variable
           // Training stored successfully
         }
       } catch (_) {
+        void _; // Explicitly indicate we're ignoring this variable
         // Continue anyway since the training was created in Replicate
       }
 
@@ -326,6 +328,8 @@ async function initializeBucket() {
     
     // Check if the bucket exists
     const { data: buckets, error: bucketsError } = await supabase.storage.listBuckets();
+    void buckets; // Explicitly indicate we're ignoring this variable
+    void bucketsError; // Explicitly indicate we're ignoring this variable
     const bucketExists = buckets?.some(bucket => bucket.name === 'training-files');
     
     if (!bucketExists) {
@@ -341,6 +345,7 @@ async function initializeBucket() {
         } else {
         }
       } catch (error) {
+        void error; // Explicitly indicate we're ignoring this variable
         // Continue anyway, as the bucket might already exist
       }
     }
@@ -351,8 +356,9 @@ async function initializeBucket() {
         public: true,
         fileSizeLimit: 50 * 1024 * 1024, // 50MB limit
       });
-      
+      void updateError; // Explicitly indicate we're ignoring this variable
     } catch (error) {
+      void error; // Explicitly indicate we're ignoring this variable
     }
     
     return NextResponse.json({
@@ -392,6 +398,8 @@ async function handleFileUpload(request: NextRequest) {
 
     // Check available buckets
     const { data: buckets, error: bucketsError } = await supabase.storage.listBuckets();
+    void buckets; // Explicitly indicate we're ignoring this variable
+    void bucketsError; // Explicitly indicate we're ignoring this variable
     if (bucketsError) {
       console.error('Error listing buckets:', bucketsError);
     }

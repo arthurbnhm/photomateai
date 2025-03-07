@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { PromptForm } from "@/components/PromptForm";
 import { ImageHistory } from "@/components/ImageHistory";
@@ -18,7 +18,8 @@ type PendingGeneration = {
   potentiallyStalled?: boolean
 }
 
-export default function CreatePage() {
+// Create a client component that uses useSearchParams
+function CreatePageContent() {
   const searchParams = useSearchParams();
   
   // Shared state for pending generations
@@ -104,5 +105,14 @@ export default function CreatePage() {
         
       </footer>
     </div>
+  );
+}
+
+// Main component that wraps the content in a Suspense boundary
+export default function CreatePage() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center min-h-screen">Loading...</div>}>
+      <CreatePageContent />
+    </Suspense>
   );
 } 

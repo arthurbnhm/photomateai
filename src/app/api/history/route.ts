@@ -185,6 +185,7 @@ export async function DELETE(request: Request) {
       try {
         storageUrls = JSON.parse(urlsParam);
       } catch (_error) {
+        void _error; // Explicitly indicate we're ignoring this variable
         // Continue even if we can't parse the URLs
       }
     }
@@ -227,6 +228,7 @@ export async function DELETE(request: Request) {
             }
           }
         } catch (_error) {
+          void _error; // Explicitly indicate we're ignoring this variable
           // Continue with other files even if one fails
         }
       }

@@ -42,7 +42,8 @@ async function getLatestModelVersion(owner: string, name: string): Promise<strin
     }
     
     return null;
-  } catch (_error) {
+  } catch (_) {
+    void _; // Explicitly indicate we're ignoring this variable
     return null;
   }
 }
@@ -191,14 +192,11 @@ export async function POST(request: NextRequest) {
         console.warn('No webhook URL available, falling back to synchronous prediction');
       }
       
-      // Create a unique prediction ID for tracking
-      const modelIdentifier = `${MODEL_OWNER}/${modelName}:${finalModelVersion}`;
-      
       // Use predictions.create instead of replicate.run to support webhooks
       const prediction = await replicate.predictions.create({
         version: finalModelVersion,
         input: inputParams,
-        webhook: webhookUrl,
+        webhook: webhookUrl || undefined,
         webhook_events_filter: ["completed"]
       });
       

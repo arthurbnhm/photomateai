@@ -39,6 +39,7 @@ async function getLatestModelVersion(owner: string, name: string): Promise<strin
     
     return null;
   } catch (_error) {
+    void _error; // Explicitly indicate we're ignoring this variable
     return null;
   }
 }
