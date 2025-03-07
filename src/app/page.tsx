@@ -14,7 +14,7 @@ export default function Home() {
         <div className="absolute top-0 left-0 right-0 h-[500px] bg-gradient-to-br from-purple-500/20 to-blue-500/20 blur-3xl opacity-50 -z-10"></div>
         
         <div className="max-w-4xl mx-auto z-10 mt-4 sm:mt-0">
-          <h1 className="text-4xl md:text-6xl font-bold mb-6 bg-clip-text text-transparent bg-gradient-to-r from-purple-600 to-blue-600">
+          <h1 className="text-4xl md:text-6xl font-bold mb-6 bg-clip-text text-transparent bg-gradient-to-r from-purple-600 to-blue-600 leading-tight py-1">
             Create Stunning AI Images
           </h1>
           
