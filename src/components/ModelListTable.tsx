@@ -20,12 +20,10 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Trash2, XCircle } from "lucide-react";
-import { createClient } from "@supabase/supabase-js";
+import { createSupabaseClient } from "@/lib/supabase";
 
 // Initialize Supabase client
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
-const supabase = createClient(supabaseUrl, supabaseAnonKey);
+const supabase = createSupabaseClient();
 
 interface Training {
   id: string;

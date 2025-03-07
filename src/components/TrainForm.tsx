@@ -10,7 +10,7 @@ import Image from "next/image";
 import { v4 as uuidv4 } from 'uuid';
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
-import { createClient } from "@supabase/supabase-js";
+import { createSupabaseClient } from "@/lib/supabase";
 
 // Type for Supabase Realtime payload
 interface RealtimeTrainingPayload {
@@ -57,10 +57,8 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
   // Add a ref to track subscription status without triggering re-renders
   const subscriptionActiveRef = useRef(false);
 
-  // Supabase client for realtime updates
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
-  const supabase = createClient(supabaseUrl, supabaseAnonKey);
+  // Initialize Supabase client
+  const supabase = createSupabaseClient();
 
   // Initialize the bucket when the component mounts
   useEffect(() => {

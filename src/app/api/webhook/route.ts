@@ -1,12 +1,5 @@
-import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
-
-// Create a Supabase client for the API route
-const createSupabaseClient = () => {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-  return createClient(supabaseUrl, supabaseServiceKey);
-};
+import { createSupabaseAdmin } from '@/lib/supabase';
 
 // Function to download and store an image
 async function downloadAndStoreImage(url: string): Promise<string | null> {
@@ -21,7 +14,7 @@ async function downloadAndStoreImage(url: string): Promise<string | null> {
     const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.png`;
     const filePath = `generations/${fileName}`;
 
-    const supabase = createSupabaseClient();
+    const supabase = createSupabaseAdmin();
     const { error: uploadError } = await supabase.storage
       .from('images')
       .upload(filePath, blob, {
@@ -50,7 +43,7 @@ export async function POST(request: Request) {
   try {
     const webhookData = await request.json();
 
-    const supabase = createSupabaseClient();
+    const supabase = createSupabaseAdmin();
     const replicate_id = webhookData.id;
 
     if (!replicate_id) {
