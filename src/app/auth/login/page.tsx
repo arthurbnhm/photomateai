@@ -33,6 +33,7 @@ export default function LoginPage() {
         return
       }
 
+      console.log("Sign in successful, redirecting to /create")
       router.push("/create")
       router.refresh()
     } catch (error) {
