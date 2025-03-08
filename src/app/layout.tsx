@@ -3,7 +3,7 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
 import { ThemeProvider } from "@/components/ThemeProvider";
-import { ModeToggle } from "@/components/ModeToggle";
+import { ActionButtons } from "@/components/ActionButtons";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -26,9 +26,10 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange={false}
         >
-          <div className="fixed top-6 right-6 z-[100] pointer-events-auto">
-            <ModeToggle />
-          </div>
+          <ActionButtons 
+            position="top-right" 
+            hideSignOutOnHomepage={true}
+          />
           
           <div className="flex min-h-screen flex-col relative">
             <main className="flex-1">

@@ -1,5 +1,5 @@
 {
-  "name": "egirl",
+  "name": "photomateai",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -23,6 +23,7 @@
     "@radix-ui/react-tooltip": "^1.1.8",
     "@stripe/stripe-js": "^5.7.0",
     "@supabase/auth-helpers-nextjs": "^0.10.0",
+    "@supabase/ssr": "^0.5.2",
     "@supabase/supabase-js": "^2.49.1",
     "@types/archiver": "^6.0.3",
     "archiver": "^7.0.1",

@@ -1,8 +1,5 @@
 "use client"
 
-import { Button } from "@/components/ui/button";
-import Link from "next/link";
-
 export default function Home() {
   return (
     <div className="flex flex-col min-h-screen">
@@ -22,12 +19,6 @@ export default function Home() {
             Generate beautiful, unique images with our AI image generator. 
             From artistic creations to realistic scenes - bring your ideas to life.
           </p>
-          
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Button asChild variant="outline" size="lg" className="font-medium">
-              <Link href="/create?tab=train">Signin</Link>
-            </Button>
-          </div>
         </div>
       </section>
     </div>

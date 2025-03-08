@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useMemo } from "react"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import * as z from "zod"
@@ -100,7 +100,7 @@ export function PromptForm({
   const [isInitialized, setIsInitialized] = useState(false)
   const [placeholderText, setPlaceholderText] = useState("Describe your image...")
   const [isAnimating, setIsAnimating] = useState(true)
-  const placeholderExamples = [
+  const placeholderExamples = useMemo(() => [
     "A serene landscape with mountains at sunset",
     "A cyberpunk cityscape with neon lights",
     "A photorealistic portrait of a fantasy character",
@@ -109,7 +109,7 @@ export function PromptForm({
     "A futuristic spaceship orbiting a distant planet",
     "A magical forest with glowing mushrooms",
     "A steampunk-inspired mechanical creature"
-  ]
+  ], []);
   const currentExampleIndex = useRef(0)
   const currentCharIndex = useRef(0)
   const isDeleting = useRef(false)
@@ -153,59 +153,97 @@ export function PromptForm({
     if (isInitialized && typeof window !== 'undefined') {
       localStorage.setItem(PENDING_GENERATIONS_KEY, JSON.stringify(pendingGenerations));
     }
-  }, [pendingGenerations, isInitialized]);
+  }, [pendingGenerations, isInitialized, setPendingGenerations]);
   
-  // Fetch available models
-  const fetchModels = async () => {
-    setLoadingModels(true);
-    try {
-      // Fetch models that are trained or ready (not cancelled, not deleted)
-      // Note: In the database, models have status 'trained' not 'ready'
-      const response = await fetch('/api/model-list?is_cancelled=false&is_deleted=false');
-      if (!response.ok) {
-        throw new Error('Failed to fetch models');
-      }
-      
-      const data = await response.json();
-      
-      if (data.success && data.models) {
-        // Filter models to only include those with status 'trained'
-        const availableModels = data.models.filter((model: Model) => 
-          model.status === 'trained' || model.status === 'ready'
-        );
-        
-        // Sort models by display_name for better user experience
-        const sortedModels = [...availableModels].sort((a, b) => {
-          // Use only display_name without fallback
-          const displayNameA = a.display_name || '';
-          const displayNameB = b.display_name || '';
-          return displayNameA.localeCompare(displayNameB);
-        });
-        setModels(sortedModels);
-        
-        // Set default model if available and form is not already filled
-        if (sortedModels.length > 0 && !form.getValues().modelId) {
-          form.setValue('modelId', sortedModels[0].id);
-        }
-      }
-    } catch (err) {
-      console.error('Error fetching models:', err);
-    } finally {
-      setLoadingModels(false);
-    }
+  // Clear stale pending generations
+  const clearStalePendingGenerations = () => {
+    setPendingGenerations([]);
   };
-  
+
+  // Add to client history
+  const addToClientHistory = (generation: ImageGeneration) => {
+    // Get current history
+    const currentHistory = localStorage.getItem(CLIENT_HISTORY_KEY);
+    let history: ImageGeneration[] = [];
+    
+    try {
+      if (currentHistory) {
+        history = JSON.parse(currentHistory);
+      }
+    } catch (e) {
+      console.error('Error parsing client history:', e);
+    }
+    
+    // Add new generation at the start
+    history = [generation, ...history];
+    
+    // Keep only the last 20 generations
+    history = history.slice(0, 20);
+    
+    // Save back to localStorage
+    localStorage.setItem(CLIENT_HISTORY_KEY, JSON.stringify(history));
+  }
+
+  const form = useForm<z.infer<typeof formSchema>>({
+    resolver: zodResolver(formSchema),
+    defaultValues: {
+      prompt: "",
+      aspectRatio: "1:1",
+      outputFormat: "png",
+      modelId: "",
+    },
+  })
+
   // Initial fetch
   useEffect(() => {
+    const fetchModels = async () => {
+      setLoadingModels(true);
+      try {
+        // Fetch models that are trained or ready (not cancelled, not deleted)
+        // Note: In the database, models have status 'trained' not 'ready'
+        const response = await fetch('/api/model-list?is_cancelled=false&is_deleted=false');
+        if (!response.ok) {
+          throw new Error('Failed to fetch models');
+        }
+        
+        const data = await response.json();
+        
+        if (data.success && data.models) {
+          // Filter models to only include those with status 'trained'
+          const availableModels = data.models.filter((model: Model) => 
+            model.status === 'trained' || model.status === 'ready'
+          );
+          
+          // Sort models by display_name for better user experience
+          const sortedModels = [...availableModels].sort((a, b) => {
+            // Use only display_name without fallback
+            const displayNameA = a.display_name || '';
+            const displayNameB = b.display_name || '';
+            return displayNameA.localeCompare(displayNameB);
+          });
+          setModels(sortedModels);
+          
+          // Set default model if available and form is not already filled
+          if (sortedModels.length > 0 && !form.getValues().modelId) {
+            form.setValue('modelId', sortedModels[0].id);
+          }
+        }
+      } catch (err) {
+        console.error('Error fetching models:', err);
+      } finally {
+        setLoadingModels(false);
+      }
+    };
+    
     fetchModels();
-  }, []);
+  }, [form]);
   
   // Set default model when models are loaded
   useEffect(() => {
     if (models.length > 0 && !form.getValues().modelId) {
       form.setValue('modelId', models[0].id);
     }
-  }, [models]);
+  }, [models, form]);
   
   // Function to fetch the latest model version
   const fetchLatestModelVersion = async (owner: string, name: string): Promise<string | null> => {
@@ -255,45 +293,6 @@ export function PromptForm({
   const removePendingGeneration = (id: string) => {
     setPendingGenerations(prev => prev.filter(gen => gen.id !== id))
   }
-  
-  // Clear stale pending generations
-  const clearStalePendingGenerations = () => {
-    setPendingGenerations([]);
-  };
-
-  // Add to client history
-  const addToClientHistory = (generation: ImageGeneration) => {
-    // Get current history
-    const currentHistory = localStorage.getItem(CLIENT_HISTORY_KEY);
-    let history: ImageGeneration[] = [];
-    
-    try {
-      if (currentHistory) {
-        history = JSON.parse(currentHistory);
-      }
-    } catch (e) {
-      console.error('Error parsing client history:', e);
-    }
-    
-    // Add new generation at the start
-    history = [generation, ...history];
-    
-    // Keep only the last 20 generations
-    history = history.slice(0, 20);
-    
-    // Save back to localStorage
-    localStorage.setItem(CLIENT_HISTORY_KEY, JSON.stringify(history));
-  }
-
-  const form = useForm<z.infer<typeof formSchema>>({
-    resolver: zodResolver(formSchema),
-    defaultValues: {
-      prompt: "",
-      aspectRatio: "1:1",
-      outputFormat: "png",
-      modelId: "",
-    },
-  })
 
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
     try {
@@ -515,7 +514,7 @@ export function PromptForm({
         clearTimeout(animationTimeoutRef.current)
       }
     }
-  }, [isAnimating])
+  }, [isAnimating, placeholderExamples])
 
   return (
     <div className="w-full">

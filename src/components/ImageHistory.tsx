@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { toast } from "sonner"
 import { Toaster } from "@/components/ui/sonner"
@@ -91,7 +91,7 @@ export function ImageHistory({
   }, [])
 
   // Load from cache or fetch from Supabase
-  const loadGenerations = async (forceFetch: boolean = false, silentUpdate: boolean = false) => {
+  const loadGenerations = useCallback(async (forceFetch: boolean = false, silentUpdate: boolean = false) => {
     try {
       // Only set loading state if this isn't a silent update
       if (!silentUpdate) {
@@ -108,7 +108,7 @@ export function ImageHistory({
           if (isLoading) {
             setIsLoading(false);
           }
-        }, 100);
+        }, 0);
       };
       
       // Check cache first
@@ -184,7 +184,7 @@ export function ImageHistory({
       setError('Failed to load image history. Please try again later.');
       setIsLoading(false);
     }
-  };
+  }, [generations, generations.length, isLoading, setIsLoading, setGenerations, setError]);
 
   // Initial load and Supabase Realtime setup
   useEffect(() => {
@@ -406,12 +406,11 @@ export function ImageHistory({
       }
     };
     
-    // Check immediately and then every 3 seconds
     checkPendingGenerations();
     const interval = setInterval(checkPendingGenerations, 3000);
     
     return () => clearInterval(interval);
-  }, [isMounted, pendingGenerations, generations]);
+  }, [isMounted, pendingGenerations, generations, loadGenerations, setPendingGenerations]);
 
   // Keep the visibility change effect to reload when the tab becomes visible again
   useEffect(() => {
@@ -425,7 +424,7 @@ export function ImageHistory({
     return () => {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, []);
+  }, [loadGenerations]);
 
   // Check for stalled generations
   useEffect(() => {
@@ -463,7 +462,7 @@ export function ImageHistory({
     checkForStalledGenerations();
     const interval = setInterval(checkForStalledGenerations, 60 * 1000);
     return () => clearInterval(interval);
-  }, [pendingGenerations]);
+  }, [pendingGenerations, setPendingGenerations]);
 
   // Update UI when generations change
   useEffect(() => {
@@ -480,7 +479,7 @@ export function ImageHistory({
         );
       }
     }
-  }, [generations, pendingGenerations]);
+  }, [generations, pendingGenerations, setPendingGenerations]);
 
   // Update elapsed times
   useEffect(() => {
@@ -505,7 +504,7 @@ export function ImageHistory({
     updateElapsedTimes();
     const interval = setInterval(updateElapsedTimes, 1000);
     return () => clearInterval(interval);
-  }, [pendingGenerations]);
+  }, [pendingGenerations, setPendingGenerations]);
 
   // Function to delete a generation
   const deleteGeneration = async (id: string): Promise<boolean> => {

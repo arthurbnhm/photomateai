@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { Toaster } from "@/components/ui/sonner";
-import { ModeToggle } from "@/components/ModeToggle";
+import { ActionButtons } from "@/components/ActionButtons";
 
 export const metadata: Metadata = {
   title: "Photomate AI - App",
@@ -14,9 +14,7 @@ export default function AppLayout({
 }>) {
   return (
     <div className="flex min-h-screen flex-col relative">
-      <div className="fixed top-6 right-6 z-[100] pointer-events-auto">
-        <ModeToggle />
-      </div>
+      <ActionButtons position="top-right" showAuthButton={false} />
       
       <main className="flex-1">
         {children}

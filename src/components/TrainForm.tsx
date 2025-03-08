@@ -188,7 +188,7 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
       setRealtimeSubscribed(false);
       subscriptionActiveRef.current = false;
     };
-  }, [trainingStatus?.id, realtimeSubscribed, supabase, onTrainingStatusChange]);
+  }, [trainingStatus?.id, realtimeSubscribed, supabase, onTrainingStatusChange, trainingStatus]);
 
   // Handle form submission - now combines model creation and training
   const handleSubmit = async (e: React.FormEvent) => {
