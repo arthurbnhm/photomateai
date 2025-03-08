@@ -11,7 +11,6 @@ import { Badge } from "@/components/ui/badge"
 import { createSupabaseClient } from "@/lib/supabase"
 import { useImageViewer } from "@/contexts/ImageViewerContext"
 import { MediaFocus } from "@/components/MediaFocus"
-import Image from "next/image"
 
 // Define the type for image generation
 type ImageGeneration = {
@@ -220,7 +219,7 @@ export function ImageHistory({
       setError('Failed to load image history. Please try again later.');
       setIsLoading(false);
     }
-  }, [generations, isLoading, setIsLoading, setGenerations, setError]);
+  }, [generations, generations.length, isLoading, setIsLoading, setGenerations, setError]);
 
   // Initial load and Supabase Realtime setup
   useEffect(() => {
@@ -259,7 +258,7 @@ export function ImageHistory({
               
               // Update generations state
               setGenerations(prev => {
-                const existingIndex = prev.findIndex(g => g.replicate_id === payload.new.replicate_id);
+                const existingIndex = prev.findIndex(g => g.id === matchingPending.id);
                 const updatedGenerations = [...prev];
                 
                 if (existingIndex >= 0) {
@@ -293,17 +292,8 @@ export function ImageHistory({
               setPendingGenerations(prev => 
                 prev.filter(g => g.id !== matchingPending.id)
               );
-
-              // Show a success toast
-              toast.success("New images generated successfully!");
             } else {
-              // If no matching pending generation but we got a successful update,
-              // check if we already have this generation in our list
-              const existingGen = generations.find(g => g.replicate_id === payload.new.replicate_id);
-              if (!existingGen) {
-                // This is a new generation we don't have yet, reload
-                loadGenerations(false);
-              }
+              loadGenerations(true);
             }
           }
         }
@@ -358,99 +348,104 @@ export function ImageHistory({
       try {
         const supabase = createSupabaseClient();
         
-        // Get all pending generation IDs
-        const pendingIds = pendingGenerations.map(pg => pg.replicate_id).filter(Boolean);
+        // Get all pending replicate_ids that we need to check
+        const replicateIds = pendingGenerations
+          .filter(gen => gen.replicate_id)
+          .map(gen => gen.replicate_id);
         
-        if (pendingIds.length === 0) return;
+        if (replicateIds.length === 0) return;
         
-        // Query the database for these generations
-        const { data, error } = await supabase
+        // Fetch all predictions with these replicate_ids in a single query
+        const { data: predictions, error } = await supabase
           .from('predictions')
           .select('*')
-          .in('replicate_id', pendingIds);
+          .in('replicate_id', replicateIds);
         
         if (error) {
-          console.error('Error checking pending generations:', error);
+          console.error('Error fetching predictions:', error);
           return;
         }
         
-        if (data && data.length > 0) {
-          // Process each returned prediction
-          for (const prediction of data) {
-            if (prediction.status === 'succeeded' && prediction.storage_urls) {
-              // Find the matching pending generation
-              const matchingPending = pendingGenerations.find(pg => 
-                pg.replicate_id === prediction.replicate_id
-              );
-              
-              if (matchingPending) {
-                // Process the new image data
-                const processedImages = processOutput(prediction.storage_urls);
-                
-                // Update generations state
-                setGenerations(prev => {
-                  const existingIndex = prev.findIndex(g => g.replicate_id === prediction.replicate_id);
-                  const updatedGenerations = [...prev];
-                  
-                  if (existingIndex >= 0) {
-                    // Update existing generation
-                    updatedGenerations[existingIndex] = {
-                      ...updatedGenerations[existingIndex],
-                      images: processedImages
-                    };
-                  } else {
-                    // Add as new generation
-                    const newGeneration = {
-                      id: matchingPending.id,
-                      replicate_id: prediction.replicate_id,
-                      prompt: matchingPending.prompt,
-                      timestamp: new Date().toISOString(),
-                      images: processedImages,
-                      aspectRatio: matchingPending.aspectRatio
-                    };
-                    // Add to the beginning of the array
-                    updatedGenerations.unshift(newGeneration);
-                  }
-                  
-                  // Update localStorage cache
-                  localStorage.setItem(CACHE_KEY, JSON.stringify(updatedGenerations));
-                  localStorage.setItem(CACHE_TIMESTAMP_KEY, Date.now().toString());
-                  
-                  return updatedGenerations;
-                });
-                
-                // Remove from pending
-                setPendingGenerations(prev => 
-                  prev.filter(g => g.id !== matchingPending.id)
-                );
-                
-                // Show a success toast
-                toast.success("New images generated successfully!");
+        if (!predictions || predictions.length === 0) return;
+        
+        // Process each prediction
+        let hasUpdates = false;
+        const completedIds: string[] = [];
+        const updatedGenerations = [...generations];
+        
+        for (const prediction of predictions) {
+          // Find the corresponding pending generation
+          const pendingGen = pendingGenerations.find(
+            gen => gen.replicate_id === prediction.replicate_id
+          );
+          
+          if (!pendingGen) continue;
+          
+          // Handle completed generations
+          if (prediction.status === 'succeeded' && prediction.storage_urls && prediction.storage_urls.length > 0) {
+            // Create processed images
+            const processedImages = processOutput(prediction.storage_urls);
+            
+            // Check if we need to update
+            const existingIndex = updatedGenerations.findIndex(gen => gen.id === pendingGen.id);
+            
+            if (existingIndex >= 0) {
+              // Update existing generation
+              if (updatedGenerations[existingIndex].images.length !== processedImages.length) {
+                updatedGenerations[existingIndex] = {
+                  ...updatedGenerations[existingIndex],
+                  images: processedImages
+                };
+                hasUpdates = true;
               }
-            } else if (prediction.status === 'failed' || prediction.status === 'canceled') {
-              // This generation failed, remove from pending
-              const matchingPending = pendingGenerations.find(pg => 
-                pg.replicate_id === prediction.replicate_id
-              );
-              
-              if (matchingPending) {
-                clearPendingGeneration(matchingPending.id);
-                toast.error(`Generation failed: ${prediction.error || 'Unknown error'}`);
-              }
+            } else {
+              // Add as new generation
+              updatedGenerations.unshift({
+                id: pendingGen.id,
+                replicate_id: prediction.replicate_id,
+                prompt: pendingGen.prompt,
+                timestamp: new Date().toISOString(),
+                images: processedImages,
+                aspectRatio: pendingGen.aspectRatio
+              });
+              hasUpdates = true;
             }
+            
+            // Mark for removal from pending
+            completedIds.push(pendingGen.id);
+          }
+          
+          // Handle cancelled or errored generations
+          if (prediction.is_cancelled || prediction.error) {
+            completedIds.push(pendingGen.id);
           }
         }
-      } catch (err) {
-        console.error('Error in polling check:', err);
+        
+        // Update state if needed
+        if (hasUpdates) {
+          setGenerations(updatedGenerations);
+          
+          // Update localStorage cache
+          localStorage.setItem(CACHE_KEY, JSON.stringify(updatedGenerations));
+          localStorage.setItem(CACHE_TIMESTAMP_KEY, Date.now().toString());
+        }
+        
+        // Remove completed generations from pending
+        if (completedIds.length > 0) {
+          setPendingGenerations(prev => 
+            prev.filter(gen => !completedIds.includes(gen.id))
+          );
+        }
+      } catch (error) {
+        console.error('Error in fallback polling:', error);
       }
     };
     
-    // Run the check immediately and then every 10 seconds
     checkPendingGenerations();
-    const intervalId = setInterval(checkPendingGenerations, 10000);
+    const interval = setInterval(checkPendingGenerations, 3000);
     
-    return () => clearInterval(intervalId);
-  }, [isMounted, pendingGenerations, loadGenerations, setPendingGenerations]);
+    return () => clearInterval(interval);
+  }, [isMounted, pendingGenerations, generations, loadGenerations, setPendingGenerations]);
 
   // Keep the visibility change effect to reload when the tab becomes visible again
   useEffect(() => {
@@ -997,13 +992,11 @@ export function ImageHistory({
                                     <p className="text-sm text-muted-foreground">Image expired</p>
                                   </div>
                                 ) : (
-                                  <Image 
+                                  <img 
                                     src={image.url} 
                                     alt={`Generated image ${index + 1} for "${generation.prompt}"`}
                                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300 animate-fade-in"
-                                    width={200}
-                                    height={200}
-                                    unoptimized={true}
+                                    loading="lazy"
                                     onError={() => handleImageError(generation.id, index)}
                                   />
                                 )}
@@ -1125,13 +1118,11 @@ export function ImageHistory({
                               <p className="text-sm text-muted-foreground">Image expired</p>
                             </div>
                           ) : (
-                            <Image 
+                            <img 
                               src={image.url} 
                               alt={`Generated image ${index + 1} for "${generation.prompt}"`}
                               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300 animate-fade-in"
-                              width={200}
-                              height={200}
-                              unoptimized={true}
+                              loading="lazy"
                               onError={() => handleImageError(generation.id, index)}
                             />
                           )}

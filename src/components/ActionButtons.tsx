@@ -1,9 +1,15 @@
 "use client"
 
-import { ReactNode, useState, useEffect } from 'react'
+import { ReactNode, useState, useEffect, useContext } from 'react'
 import { usePathname } from 'next/navigation'
 import { AuthButton } from '@/components/AuthButton'
 import { ModeToggle } from '@/components/ModeToggle'
+import { Button } from '@/components/ui/button'
+import { ThemeToggle } from '@/components/ThemeToggle'
+import { SignInButton, SignOutButton } from '@/components/auth/AuthButtons'
+import { useAuth } from '@/lib/auth'
+import Link from 'next/link'
+import { ImageViewerContext } from '@/components/ImageHistory'
 import { useImageViewer } from '@/contexts/ImageViewerContext'
 
 export interface ActionButtonsProps {
