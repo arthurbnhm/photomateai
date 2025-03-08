@@ -543,14 +543,9 @@ export function ImageHistory({
   }, [pendingGenerations, setPendingGenerations]);
 
   // Function to delete a generation
-  const deleteGeneration = async (id: string): Promise<boolean> => {
+  const performDeletion = async (id: string): Promise<boolean> => {
     // First check if this is a pending generation with a timestamp ID
     const pendingGen = pendingGenerations.find(gen => gen.id === id);
-    
-    // Optimistically update the UI first
-    const updatedGenerations = generations.filter(gen => gen.id !== id);
-    setGenerations(updatedGenerations);
-    localStorage.setItem(CACHE_KEY, JSON.stringify(updatedGenerations));
     
     // Handle pending generations
     if (pendingGen) {
@@ -573,13 +568,31 @@ export function ImageHistory({
     if (completedGen && completedGen.replicate_id) {
       // Extract the URLs from the images array
       const imageUrls = completedGen.images.map(img => img.url);
-      return await sendDeleteRequest(completedGen.replicate_id, imageUrls);
+      const success = await sendDeleteRequest(completedGen.replicate_id, imageUrls);
+      
+      if (success) {
+        // Only update the UI after successful deletion
+        const updatedGenerations = generations.filter(gen => gen.id !== id);
+        setGenerations(updatedGenerations);
+        localStorage.setItem(CACHE_KEY, JSON.stringify(updatedGenerations));
+      }
+      
+      return success;
     }
     
     // If we couldn't find the generation or it doesn't have a replicate_id,
     // use the id as a fallback
     console.warn('Could not find replicate_id, using id as fallback:', id);
-    return await sendDeleteRequest(id);
+    const success = await sendDeleteRequest(id);
+    
+    if (success) {
+      // Only update the UI after successful deletion
+      const updatedGenerations = generations.filter(gen => gen.id !== id);
+      setGenerations(updatedGenerations);
+      localStorage.setItem(CACHE_KEY, JSON.stringify(updatedGenerations));
+    }
+    
+    return success;
   };
   
   // Helper function to send delete request to the API
@@ -595,20 +608,20 @@ export function ImageHistory({
           } else {
             console.error('Server error while deleting:', xhr.status, xhr.statusText);
             console.error('Response:', xhr.responseText);
-            resolve(true); // Still resolve true as we've updated the UI
+            resolve(false); // Return false to indicate failure
           }
         };
         
         xhr.onerror = function() {
           console.error('Network error while deleting generation with replicate_id:', replicateId);
-          resolve(true); // Still resolve true as we've updated the UI
+          resolve(false); // Return false to indicate failure
         };
         
         xhr.send();
       });
     } catch (error) {
       console.error('Exception during deletion:', error);
-      return true; // Return true anyway as we've updated the UI
+      return false; // Return false to indicate failure
     }
   };
 
@@ -748,16 +761,24 @@ export function ImageHistory({
       // If we get here, try to delete from database
       setIsDeleting(id);
       
-      // Call the deleteGeneration function
-      // Since our implementation is optimistic, we treat this as always successful
-      await deleteGeneration(id);
-      toast.success('Image deleted from history');
+      // Call the performDeletion function
+      const success = await performDeletion(id);
+      
+      if (success) {
+        toast.success('Image deleted from history');
+      } else {
+        toast.error('Failed to delete image');
+        // Refresh the generations to ensure UI is in sync with server
+        loadGenerations(true, true);
+      }
       
       setIsDeleting('');
     } catch (error) {
       console.error('Error handling delete:', error);
       toast.error('An error occurred while processing your request');
       setIsDeleting('');
+      // Refresh the generations to ensure UI is in sync with server
+      loadGenerations(true, true);
     }
   };
 
