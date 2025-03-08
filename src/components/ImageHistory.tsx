@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import Image from "next/image"
 import { Button } from "@/components/ui/button"
 import { toast } from "sonner"
@@ -102,6 +102,10 @@ export function ImageHistory({
   const [isCancelling, setIsCancelling] = useState<string | null>(null)
   const [elapsedTimes, setElapsedTimes] = useState<Record<string, number>>({})
   const [isMounted, setIsMounted] = useState(false)
+  
+  // Refs for polling mechanism
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const intervalRef = useRef<NodeJS.Timeout | null>(null);
   
   // Use the image viewer context
   const { setImageViewerOpen } = useImageViewer()
@@ -361,8 +365,21 @@ export function ImageHistory({
   useEffect(() => {
     if (!isMounted || pendingGenerations.length === 0) return;
     
+    // Check if any generation has been running for at least 30 seconds
+    const shouldStartPolling = () => {
+      const now = Date.now();
+      return pendingGenerations.some(gen => {
+        if (!gen.startTime) return false;
+        const startTime = new Date(gen.startTime).getTime();
+        return (now - startTime) >= 30000; // 30 seconds threshold
+      });
+    };
+    
     const checkPendingGenerations = async () => {
       try {
+        // Skip if no generation has been running long enough
+        if (!shouldStartPolling()) return;
+        
         const supabase = createSupabaseClient();
         
         // Get all pending replicate_ids that we need to check
@@ -464,10 +481,31 @@ export function ImageHistory({
       }
     };
     
-    checkPendingGenerations();
-    const interval = setInterval(checkPendingGenerations, 3000);
+    // Set up the initial check
+    const startPollingIfNeeded = () => {
+      if (shouldStartPolling()) {
+        // Run the first check
+        checkPendingGenerations();
+        
+        // Set up an interval for subsequent checks every 5 seconds
+        const interval = setInterval(checkPendingGenerations, 5000);
+        intervalRef.current = interval;
+      } else {
+        // Check again in 5 seconds if we should start polling
+        const timeout = setTimeout(startPollingIfNeeded, 5000);
+        timeoutRef.current = timeout;
+      }
+    };
     
-    return () => clearInterval(interval);
+    // Start the process
+    const initialTimeout = setTimeout(startPollingIfNeeded, 1000);
+    
+    // Cleanup function
+    return () => {
+      clearTimeout(initialTimeout);
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    };
   }, [isMounted, pendingGenerations, setPendingGenerations]);
 
   // Keep the visibility change effect to reload when the tab becomes visible again
