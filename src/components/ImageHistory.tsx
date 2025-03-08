@@ -914,54 +914,58 @@ export function ImageHistory({
                   <Card className="overflow-hidden border-primary/20 shadow-md hover:shadow-lg transition-shadow duration-300">
                     <CardHeader className="p-4 pb-0 space-y-0">
                       <div className="flex items-center justify-between gap-3">
+                        {/* Left side - Tags */}
                         <div className="flex items-center gap-2 flex-wrap">
-                          <div className="flex items-center gap-2">
-                            {generation.potentiallyStalled ? (
-                              <>
-                                <span className="inline-block w-2.5 h-2.5 bg-amber-500 rounded-full animate-pulse"></span>
-                                <span className="text-sm font-medium text-amber-500">Stalled</span>
-                              </>
-                            ) : (
-                              <>
-                                {hasPartialResults ? (
-                                  <>
-                                    <span className="inline-block w-2.5 h-2.5 bg-primary rounded-full animate-pulse"></span>
-                                    <span className="text-sm font-medium text-primary">
-                                      Partially Complete
-                                    </span>
-                                  </>
-                                ) : (
-                                  <Badge variant="secondary" className="flex items-center gap-1">
-                                    <span className="h-2 w-2 rounded-full bg-blue-400 animate-pulse"></span>
-                                    Generating
-                                  </Badge>
-                                )}
-                                {elapsedTimes[generation.id] !== undefined && (
-                                  <span className="text-xs text-muted-foreground ml-1">
-                                    ({elapsedTimes[generation.id]}s)
-                                  </span>
-                                )}
-                              </>
-                            )}
-                          </div>
-                          
-                          {/* Add badges for aspect ratio, format, and model */}
+                          {/* Aspect ratio badge */}
                           <Badge variant="outline" className="bg-blue-100 text-blue-800 hover:bg-blue-200 border-blue-200">
                             {generation.aspectRatio}
                           </Badge>
                           
+                          {/* Format badge */}
                           {generation.format && (
                             <Badge variant="outline" className="bg-green-100 text-green-800 hover:bg-green-200 border-green-200">
                               {generation.format.toUpperCase()}
                             </Badge>
                           )}
                           
+                          {/* Model badge */}
                           {generation.modelName && (
                             <Badge variant="outline" className="bg-purple-100 text-purple-800 hover:bg-purple-200 border-purple-200 max-w-[150px] truncate">
                               {generation.modelName}
                             </Badge>
                           )}
+                          
+                          {/* Status indicators */}
+                          {generation.potentiallyStalled ? (
+                            <div className="flex items-center gap-1 ml-2">
+                              <span className="inline-block w-2.5 h-2.5 bg-amber-500 rounded-full animate-pulse"></span>
+                              <span className="text-sm font-medium text-amber-500">Stalled</span>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-1 ml-2">
+                              {hasPartialResults ? (
+                                <>
+                                  <span className="inline-block w-2.5 h-2.5 bg-primary rounded-full animate-pulse"></span>
+                                  <span className="text-sm font-medium text-primary">
+                                    Partially Complete
+                                  </span>
+                                </>
+                              ) : (
+                                <Badge variant="secondary" className="flex items-center gap-1">
+                                  <span className="h-2 w-2 rounded-full bg-blue-400 animate-pulse"></span>
+                                  Generating
+                                </Badge>
+                              )}
+                              {elapsedTimes[generation.id] !== undefined && (
+                                <span className="text-xs text-muted-foreground ml-1">
+                                  ({elapsedTimes[generation.id]}s)
+                                </span>
+                              )}
+                            </div>
+                          )}
                         </div>
+                        
+                        {/* Right side - Action buttons */}
                         <div className="flex items-center gap-2">
                           <Button 
                             variant="outline" 
@@ -977,7 +981,7 @@ export function ImageHistory({
                             </svg>
                           </Button>
                           
-                          {generation.potentiallyStalled && (
+                          {generation.potentiallyStalled ? (
                             <button 
                               onClick={(e) => {
                                 e.preventDefault();
@@ -993,9 +997,7 @@ export function ImageHistory({
                                 <path d="m6 6 12 12"></path>
                               </svg>
                             </button>
-                          )}
-                          
-                          {!generation.potentiallyStalled && (
+                          ) : (
                             <button 
                               onClick={(e) => {
                                 e.preventDefault();
@@ -1106,18 +1108,21 @@ export function ImageHistory({
               <Card className="overflow-hidden border-border shadow-md hover:shadow-lg transition-shadow duration-300">
                 <CardHeader className="p-4 pb-0 space-y-0">
                   <div className="flex items-center justify-between gap-3">
+                    {/* Left side - Tags */}
                     <div className="flex items-center gap-2 flex-wrap">
-                      {/* Add badges for aspect ratio, format, and model */}
+                      {/* Aspect ratio badge */}
                       <Badge variant="outline" className="bg-blue-100 text-blue-800 hover:bg-blue-200 border-blue-200">
                         {generation.aspectRatio}
                       </Badge>
                       
+                      {/* Format badge */}
                       {generation.format && (
                         <Badge variant="outline" className="bg-green-100 text-green-800 hover:bg-green-200 border-green-200">
                           {generation.format.toUpperCase()}
                         </Badge>
                       )}
                       
+                      {/* Model badge */}
                       {generation.modelName && (
                         <Badge variant="outline" className="bg-purple-100 text-purple-800 hover:bg-purple-200 border-purple-200 max-w-[150px] truncate">
                           {generation.modelName}
@@ -1125,6 +1130,7 @@ export function ImageHistory({
                       )}
                     </div>
                     
+                    {/* Right side - Actions */}
                     <div className="flex items-center gap-2">
                       <Button 
                         variant="outline" 

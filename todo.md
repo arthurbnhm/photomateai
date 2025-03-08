@@ -28,6 +28,7 @@
 - Buttons with predined options (blonde, linkedin profile)
 - ✅ Use same badges as in trainings models lists
 - Image focus
+- ✅ Add the badges
 
 # App
 
