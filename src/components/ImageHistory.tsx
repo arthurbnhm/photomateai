@@ -141,18 +141,17 @@ export function ImageHistory({
       // Only set loading state if this isn't a silent update
       if (!silentUpdate) {
         // Set loading state only if we're not already showing generations
-        if (generations.length === 0) {
-          setIsLoading(true);
-        }
+        setIsLoading(prev => {
+          if (prev) return prev;
+          return true;
+        });
       }
       
       // Always ensure loading state is reset, even in case of errors
       const resetLoadingState = () => {
         // Use setTimeout to avoid state updates conflicting
         setTimeout(() => {
-          if (isLoading) {
-            setIsLoading(false);
-          }
+          setIsLoading(false);
         }, 0);
       };
       
@@ -210,18 +209,22 @@ export function ImageHistory({
             modelName: item.model_name || 'Default Model'
           }));
         
-        // Only update state if data has actually changed
-        const currentDataStr = JSON.stringify(generations);
-        const newDataStr = JSON.stringify(processedData);
-        
-        if (currentDataStr !== newDataStr) {
-          // Update state
-          setGenerations(processedData);
+        // Update state with functional update to avoid dependency on current state
+        setGenerations(prevGenerations => {
+          // Only update if data has actually changed
+          const currentDataStr = JSON.stringify(prevGenerations);
+          const newDataStr = JSON.stringify(processedData);
           
-          // Update cache
-          localStorage.setItem(CACHE_KEY, JSON.stringify(processedData));
-          localStorage.setItem(CACHE_TIMESTAMP_KEY, Date.now().toString());
-        }
+          if (currentDataStr !== newDataStr) {
+            // Update cache
+            localStorage.setItem(CACHE_KEY, JSON.stringify(processedData));
+            localStorage.setItem(CACHE_TIMESTAMP_KEY, Date.now().toString());
+            return processedData;
+          }
+          
+          // No change needed
+          return prevGenerations;
+        });
       }
       
       // Always ensure loading state is reset
@@ -231,7 +234,7 @@ export function ImageHistory({
       setError('Failed to load image history. Please try again later.');
       setIsLoading(false);
     }
-  }, [generations, isLoading, setIsLoading, setGenerations, setError]);
+  }, [setIsLoading, setGenerations, setError]);
 
   // Initial load and Supabase Realtime setup
   useEffect(() => {
@@ -307,7 +310,7 @@ export function ImageHistory({
                 prev.filter(g => g.id !== matchingPending.id)
               );
             } else {
-              loadGenerations(true);
+              loadGenerations(true, true); // Use silent update to avoid UI loading flicker
             }
           }
         }
@@ -352,7 +355,7 @@ export function ImageHistory({
       supabase.removeChannel(successChannel);
       supabase.removeChannel(errorChannel);
     };
-  }, [isMounted, pendingGenerations, generations, loadGenerations, setPendingGenerations]);
+  }, [isMounted, pendingGenerations, loadGenerations, setPendingGenerations]);
   
   // Add a fallback polling mechanism for pending generations
   useEffect(() => {
@@ -385,66 +388,70 @@ export function ImageHistory({
         // Process each prediction
         let hasUpdates = false;
         const completedIds: string[] = [];
-        const updatedGenerations = [...generations];
         
-        for (const prediction of predictions) {
-          // Find the corresponding pending generation
-          const pendingGen = pendingGenerations.find(
-            gen => gen.replicate_id === prediction.replicate_id
-          );
+        // Use a function update to get the current generations state
+        setGenerations(prevGenerations => {
+          const updatedGenerations = [...prevGenerations];
           
-          if (!pendingGen) continue;
-          
-          // Handle completed generations
-          if (prediction.status === 'succeeded' && prediction.storage_urls && prediction.storage_urls.length > 0) {
-            // Create processed images
-            const processedImages = processOutput(prediction.storage_urls);
+          for (const prediction of predictions) {
+            // Find the corresponding pending generation
+            const pendingGen = pendingGenerations.find(
+              gen => gen.replicate_id === prediction.replicate_id
+            );
             
-            // Check if we need to update
-            const existingIndex = updatedGenerations.findIndex(gen => gen.id === pendingGen.id);
+            if (!pendingGen) continue;
             
-            if (existingIndex >= 0) {
-              // Update existing generation
-              if (updatedGenerations[existingIndex].images.length !== processedImages.length) {
-                updatedGenerations[existingIndex] = {
-                  ...updatedGenerations[existingIndex],
-                  images: processedImages
-                };
+            // Handle completed generations
+            if (prediction.status === 'succeeded' && prediction.storage_urls && prediction.storage_urls.length > 0) {
+              // Create processed images
+              const processedImages = processOutput(prediction.storage_urls);
+              
+              // Check if we need to update
+              const existingIndex = updatedGenerations.findIndex(gen => gen.id === pendingGen.id);
+              
+              if (existingIndex >= 0) {
+                // Update existing generation
+                if (updatedGenerations[existingIndex].images.length !== processedImages.length) {
+                  updatedGenerations[existingIndex] = {
+                    ...updatedGenerations[existingIndex],
+                    images: processedImages
+                  };
+                  hasUpdates = true;
+                }
+              } else {
+                // Add as new generation
+                updatedGenerations.unshift({
+                  id: pendingGen.id,
+                  replicate_id: prediction.replicate_id,
+                  prompt: pendingGen.prompt,
+                  timestamp: new Date().toISOString(),
+                  images: processedImages,
+                  aspectRatio: pendingGen.aspectRatio,
+                  format: pendingGen.format || prediction.input?.output_format || 'png',
+                  modelName: pendingGen.modelName || prediction.model_name || 'Default Model'
+                });
                 hasUpdates = true;
               }
-            } else {
-              // Add as new generation
-              updatedGenerations.unshift({
-                id: pendingGen.id,
-                replicate_id: prediction.replicate_id,
-                prompt: pendingGen.prompt,
-                timestamp: new Date().toISOString(),
-                images: processedImages,
-                aspectRatio: pendingGen.aspectRatio,
-                format: pendingGen.format || prediction.input?.output_format || 'png',
-                modelName: pendingGen.modelName || prediction.model_name || 'Default Model'
-              });
-              hasUpdates = true;
+              
+              // Mark for removal from pending
+              completedIds.push(pendingGen.id);
             }
             
-            // Mark for removal from pending
-            completedIds.push(pendingGen.id);
+            // Handle cancelled or errored generations
+            if (prediction.is_cancelled || prediction.error) {
+              completedIds.push(pendingGen.id);
+            }
           }
           
-          // Handle cancelled or errored generations
-          if (prediction.is_cancelled || prediction.error) {
-            completedIds.push(pendingGen.id);
+          // Update localStorage cache if needed
+          if (hasUpdates) {
+            localStorage.setItem(CACHE_KEY, JSON.stringify(updatedGenerations));
+            localStorage.setItem(CACHE_TIMESTAMP_KEY, Date.now().toString());
           }
-        }
-        
-        // Update state if needed
-        if (hasUpdates) {
-          setGenerations(updatedGenerations);
           
-          // Update localStorage cache
-          localStorage.setItem(CACHE_KEY, JSON.stringify(updatedGenerations));
-          localStorage.setItem(CACHE_TIMESTAMP_KEY, Date.now().toString());
-        }
+          // Return the updated generations
+          return hasUpdates ? updatedGenerations : prevGenerations;
+        });
         
         // Remove completed generations from pending
         if (completedIds.length > 0) {
@@ -461,7 +468,7 @@ export function ImageHistory({
     const interval = setInterval(checkPendingGenerations, 3000);
     
     return () => clearInterval(interval);
-  }, [isMounted, pendingGenerations, generations, loadGenerations, setPendingGenerations]);
+  }, [isMounted, pendingGenerations, setPendingGenerations]);
 
   // Keep the visibility change effect to reload when the tab becomes visible again
   useEffect(() => {
@@ -526,7 +533,7 @@ export function ImageHistory({
       
       if (pendingToRemove.length > 0) {
         setPendingGenerations(prev => 
-          prev.filter(gen => !pendingToRemove.map(p => p.id).includes(gen.id))
+          prev.filter(gen => !pendingToRemove.some(p => p.id === gen.id))
         );
       }
     }
