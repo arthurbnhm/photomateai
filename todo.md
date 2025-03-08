@@ -39,6 +39,7 @@
 - ✅ Seperate train.tsx into components
 - ✅ Have a single page for both training and creation
 - Use a generated profile pic as avatar
+- Improve the navbar, do not display when scrolling
 
 # Authentication
 
