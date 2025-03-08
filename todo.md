@@ -24,7 +24,7 @@
 - ✅ rework cancel / delete button for image generations
 - Default to a model for image geneneration and other options
 - ✅ Add back the webp format
-- Download button with option to rename or download all of them
+- ✅ Download button with option to rename or download all of them
 - Buttons with predined options (blonde, linkedin profile)
 - ✅ Use same badges as in trainings models lists
 - Image focus

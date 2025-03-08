@@ -175,7 +175,7 @@ export async function POST(request: NextRequest) {
       aspect_ratio: aspectRatio || "1:1",
       output_format: outputFormat,
       guidance_scale: 3,
-      output_quality: 80,
+      output_quality: 100,
       prompt_strength: 0.8,
       extra_lora_scale: 1,
       num_inference_steps: 28,

@@ -149,11 +149,12 @@ export function PromptForm({
   }, []);
 
   // Save pending generations to localStorage whenever they change
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (isInitialized && typeof window !== 'undefined') {
       localStorage.setItem(PENDING_GENERATIONS_KEY, JSON.stringify(pendingGenerations));
     }
-  }, [pendingGenerations, isInitialized, setPendingGenerations]);
+  }, [pendingGenerations, isInitialized]);
   
   // Clear stale pending generations
   const clearStalePendingGenerations = () => {
