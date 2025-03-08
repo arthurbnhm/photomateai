@@ -8,6 +8,27 @@ import { TrainForm, TrainingStatus } from "@/components/TrainForm";
 import { ModelListTable } from "@/components/ModelListTable";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
+// Debug component to show URL parameters
+function DebugInfo() {
+  const searchParams = useSearchParams();
+  const [url, setUrl] = useState('');
+  
+  useEffect(() => {
+    setUrl(window.location.href);
+  }, []);
+  
+  // Only show in development
+  if (process.env.NODE_ENV !== 'development') return null;
+  
+  return (
+    <div className="fixed bottom-0 left-0 right-0 bg-black/80 text-white p-2 text-xs z-50">
+      <div>Current URL: {url}</div>
+      <div>Tab param: {searchParams.get('tab') || 'none'}</div>
+      <div>All params: {JSON.stringify(Object.fromEntries([...searchParams.entries()]))}</div>
+    </div>
+  );
+}
+
 // Define the PendingGeneration type
 type PendingGeneration = {
   id: string
@@ -22,6 +43,14 @@ type PendingGeneration = {
 function CreatePageContent() {
   const searchParams = useSearchParams();
   
+  // Add debugging logs
+  console.log("URL searchParams:", {
+    tab: searchParams.get("tab"),
+    allParams: Object.fromEntries([...searchParams.entries()]),
+    url: typeof window !== 'undefined' ? window.location.href : 'SSR',
+    origin: typeof window !== 'undefined' ? window.location.origin : 'SSR'
+  });
+  
   // Shared state for pending generations
   const [pendingGenerations, setPendingGenerations] = useState<PendingGeneration[]>([]);
   // State for training status
@@ -30,13 +59,42 @@ function CreatePageContent() {
   const [activeTab, setActiveTab] = useState(() => {
     // Initialize tab from URL query parameter if available
     const tabParam = searchParams.get("tab");
-    return tabParam === "train" ? "train" : "generate";
+    console.log("Initial tab parameter:", tabParam);
+    
+    // Handle different tab values
+    if (tabParam === "train") return "train";
+    if (tabParam === "create") return "generate"; // Map 'create' to 'generate'
+    return "generate"; // Default to generate
   });
 
   // Handle tab change
   const handleTabChange = (tab: string) => {
+    console.log("Tab changed to:", tab);
     setActiveTab(tab);
   };
+
+  // Update URL when tab changes
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const url = new URL(window.location.href);
+      // Only update URL if the tab parameter is different
+      const currentTabParam = url.searchParams.get('tab');
+      
+      if (activeTab === 'generate') {
+        // For generate tab, we can either have no tab parameter or tab=create
+        if (currentTabParam && currentTabParam !== 'create') {
+          url.searchParams.set('tab', 'create');
+          window.history.replaceState({}, '', url.toString());
+        }
+      } else if (activeTab === 'train') {
+        // For train tab, we should have tab=train
+        if (currentTabParam !== 'train') {
+          url.searchParams.set('tab', 'train');
+          window.history.replaceState({}, '', url.toString());
+        }
+      }
+    }
+  }, [activeTab]);
 
   // Called when the ModelListTable detects that newTraining is now in the models list
   const clearTrainingStatus = () => {
@@ -66,7 +124,12 @@ function CreatePageContent() {
       </header>
       
       <main className="flex-1 w-full max-w-4xl mx-auto flex flex-col gap-12 z-10 mt-4">
-        <Tabs defaultValue="generate" value={activeTab} onValueChange={handleTabChange} className="w-full">
+        <Tabs 
+          value={activeTab} 
+          onValueChange={handleTabChange} 
+          className="w-full"
+          defaultValue="generate" // This is a fallback and should be consistent with the state
+        >
           <TabsList className="w-fit mx-auto mb-6">
             <TabsTrigger value="generate" className="px-4">Generate Images</TabsTrigger>
             <TabsTrigger value="train" className="px-4">Train New Model</TabsTrigger>
@@ -111,8 +174,11 @@ function CreatePageContent() {
 // Main component that wraps the content in a Suspense boundary
 export default function CreatePage() {
   return (
-    <Suspense fallback={<div className="flex items-center justify-center min-h-screen">Loading...</div>}>
-      <CreatePageContent />
-    </Suspense>
+    <>
+      <Suspense fallback={<div className="flex items-center justify-center min-h-screen">Loading...</div>}>
+        <CreatePageContent />
+      </Suspense>
+      <DebugInfo />
+    </>
   );
 } 
