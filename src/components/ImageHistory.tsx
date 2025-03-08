@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { toast } from "sonner"
 import { Toaster } from "@/components/ui/sonner"
@@ -9,6 +9,8 @@ import { motion } from "framer-motion"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Badge } from "@/components/ui/badge"
 import { createSupabaseClient } from "@/lib/supabase"
+import { useImageViewer } from "@/contexts/ImageViewerContext"
+import { X, Download, ChevronLeft, ChevronRight } from "lucide-react"
 
 // Define the type for image generation
 type ImageGeneration = {
@@ -69,6 +71,13 @@ const processOutput = (storageUrls: string[] | null): ImageWithStatus[] => {
   }));
 };
 
+// Add new types for image viewing
+type ImageViewerState = {
+  isOpen: boolean
+  currentGeneration: ImageGeneration | null
+  currentImageIndex: number
+}
+
 export function ImageHistory({
   pendingGenerations,
   setPendingGenerations
@@ -83,12 +92,38 @@ export function ImageHistory({
   const [isCancelling, setIsCancelling] = useState<string | null>(null)
   const [elapsedTimes, setElapsedTimes] = useState<Record<string, number>>({})
   const [isMounted, setIsMounted] = useState(false)
+  
+  // Use the image viewer context
+  const { setImageViewerOpen } = useImageViewer()
+  
+  // Add state for image viewer
+  const [imageViewer, setImageViewer] = useState<ImageViewerState>({
+    isOpen: false,
+    currentGeneration: null,
+    currentImageIndex: 0
+  })
 
   // Set mounted state on component init
   useEffect(() => {
     setIsMounted(true)
     return () => setIsMounted(false)
   }, [])
+
+  // Add effect to prevent scrolling when modal is open
+  useEffect(() => {
+    if (imageViewer.isOpen) {
+      // Prevent scrolling on the body when modal is open
+      document.body.style.overflow = 'hidden';
+    } else {
+      // Re-enable scrolling when modal is closed
+      document.body.style.overflow = '';
+    }
+    
+    // Cleanup function to ensure scrolling is re-enabled when component unmounts
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [imageViewer.isOpen]);
 
   // Load from cache or fetch from Supabase
   const loadGenerations = useCallback(async (forceFetch: boolean = false, silentUpdate: boolean = false) => {
@@ -736,17 +771,326 @@ export function ImageHistory({
       });
   };
 
+  // Add function to open image viewer
+  const openImageViewer = (generation: ImageGeneration, imageIndex: number) => {
+    setImageViewer({
+      isOpen: true,
+      currentGeneration: generation,
+      currentImageIndex: imageIndex
+    })
+    // Update the global context
+    setImageViewerOpen(true)
+  }
+
+  // Add function to close image viewer
+  const closeImageViewer = () => {
+    setImageViewer({
+      ...imageViewer,
+      isOpen: false
+    })
+    // Update the global context
+    setImageViewerOpen(false)
+  }
+
+  // Add function to navigate to next image
+  const nextImage = () => {
+    if (!imageViewer.currentGeneration) return
+    
+    const totalImages = imageViewer.currentGeneration.images.length
+    setImageViewer({
+      ...imageViewer,
+      currentImageIndex: (imageViewer.currentImageIndex + 1) % totalImages
+    })
+  }
+
+  // Add function to navigate to previous image
+  const prevImage = () => {
+    if (!imageViewer.currentGeneration) return
+    
+    const totalImages = imageViewer.currentGeneration.images.length
+    setImageViewer({
+      ...imageViewer,
+      currentImageIndex: (imageViewer.currentImageIndex - 1 + totalImages) % totalImages
+    })
+  }
+
+  // Reference for touch handling
+  const touchStartXRef = useRef<number | null>(null);
+  
+  // Handle touch start
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStartXRef.current = e.touches[0].clientX;
+  };
+  
+  // Handle touch end for swipe navigation
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (touchStartXRef.current === null) return;
+    
+    const touchEndX = e.changedTouches[0].clientX;
+    const diff = touchStartXRef.current - touchEndX;
+    
+    // Detect left/right swipe (with a threshold of 50px)
+    if (Math.abs(diff) > 50) {
+      if (diff > 0) {
+        // Swiped left, go to next image
+        nextImage();
+      } else {
+        // Swiped right, go to previous image
+        prevImage();
+      }
+    }
+    
+    touchStartXRef.current = null;
+  };
+  
+  // Preload adjacent images when current image changes
+  useEffect(() => {
+    if (imageViewer.isOpen && imageViewer.currentGeneration) {
+      const totalImages = imageViewer.currentGeneration.images.length;
+      const currentIndex = imageViewer.currentImageIndex;
+      
+      // Calculate next and previous indices
+      const nextIndex = (currentIndex + 1) % totalImages;
+      const prevIndex = (currentIndex - 1 + totalImages) % totalImages;
+      
+      // Preload next and previous images
+      if (nextIndex !== currentIndex) {
+        const nextImage = new Image();
+        nextImage.src = imageViewer.currentGeneration.images[nextIndex].url;
+      }
+      
+      if (prevIndex !== currentIndex) {
+        const prevImage = new Image();
+        prevImage.src = imageViewer.currentGeneration.images[prevIndex].url;
+      }
+    }
+  }, [imageViewer.isOpen, imageViewer.currentGeneration, imageViewer.currentImageIndex]);
+  
+  // Add keyboard navigation
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (!imageViewer.isOpen) return;
+      
+      switch (e.key) {
+        case 'ArrowRight':
+          nextImage();
+          break;
+        case 'ArrowLeft':
+          prevImage();
+          break;
+        case 'Escape':
+          closeImageViewer();
+          break;
+        default:
+          break;
+      }
+    };
+    
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [imageViewer.isOpen, imageViewer.currentGeneration, imageViewer.currentImageIndex]);
+
+  // Add function to download the current image
+  const downloadImage = async () => {
+    if (!imageViewer.currentGeneration || !imageViewer.currentGeneration.images[imageViewer.currentImageIndex]) {
+      return;
+    }
+    
+    try {
+      const imageUrl = imageViewer.currentGeneration.images[imageViewer.currentImageIndex].url;
+      const promptText = imageViewer.currentGeneration.prompt.slice(0, 20).replace(/[^a-z0-9]/gi, '_');
+      const filename = `photomate_${promptText}_${imageViewer.currentImageIndex + 1}.png`;
+      
+      // Check if we're on a mobile device
+      const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+      
+      // Try to use Web Share API for mobile devices if available
+      if (isMobile && navigator.share && navigator.canShare) {
+        try {
+          // Fetch the image and create a blob
+          const response = await fetch(imageUrl);
+          const blob = await response.blob();
+          
+          // Create a file from the blob
+          const file = new File([blob], filename, { type: 'image/png' });
+          
+          // Check if we can share this file
+          const shareData = { files: [file] };
+          
+          if (navigator.canShare(shareData)) {
+            await navigator.share(shareData);
+            toast.success('Image shared successfully');
+            return;
+          }
+        } catch (shareError) {
+          console.error('Error sharing image:', shareError);
+          // Fall back to regular download if sharing fails
+        }
+      }
+      
+      // Regular download for desktop or if sharing fails/isn't available
+      const response = await fetch(imageUrl);
+      const blob = await response.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      
+      // Create a temporary anchor element
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      
+      // Set the download attribute to force download instead of navigation
+      link.setAttribute('download', filename);
+      
+      // Simulate a click without adding to DOM (prevents navigation)
+      link.style.display = 'none';
+      document.body.appendChild(link);
+      link.click();
+      
+      // Clean up
+      setTimeout(() => {
+        document.body.removeChild(link);
+        URL.revokeObjectURL(blobUrl); // Free up memory
+      }, 100);
+      
+      toast.success('Image downloaded successfully');
+    } catch (error) {
+      console.error('Error downloading image:', error);
+      toast.error('Failed to download image');
+    }
+  };
+
   return (
-    <div className="w-full">
+    <div className="w-full space-y-6">
       <Toaster />
-      <h2 className="text-2xl font-bold mb-6">Your Image History</h2>
+      
+      {/* Image Viewer Modal */}
+      {imageViewer.isOpen && imageViewer.currentGeneration && (
+        <div 
+          className="fixed inset-0 bg-white z-[9999] flex items-center justify-center overflow-hidden"
+          onClick={closeImageViewer}
+          style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, width: '100vw', height: '100vh' }}
+        >
+          <div 
+            className="relative w-full h-full flex flex-col items-center justify-center"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Current image with detached thumbnails - fixed for mobile viewport */}
+            <div 
+              className="w-full h-full flex flex-col items-center justify-center p-4 sm:p-6 md:p-8 overflow-y-auto"
+              onTouchStart={handleTouchStart}
+              onTouchEnd={handleTouchEnd}
+            >
+              {/* Image counter indicator */}
+              <div className="fixed top-4 left-1/2 -translate-x-1/2 z-10">
+                <div className="bg-background/80 backdrop-blur-sm px-3 py-1.5 rounded-full text-sm font-medium shadow-sm">
+                  {imageViewer.currentImageIndex + 1} / {imageViewer.currentGeneration?.images.length}
+                </div>
+              </div>
+              
+              {/* Main content container */}
+              <div className="flex flex-col items-center justify-center min-h-0 w-full max-w-4xl mx-auto py-4">
+                {/* Main image container with adaptive sizing and loading state */}
+                <div className="flex items-center justify-center w-full relative">
+                  <motion.img 
+                    key={imageViewer.currentImageIndex} // Key helps with animation
+                    src={imageViewer.currentGeneration.images[imageViewer.currentImageIndex].url} 
+                    alt={`Generated image for "${imageViewer.currentGeneration.prompt}"`}
+                    className="object-contain max-h-[50vh] sm:max-h-[55vh] md:max-h-[60vh] max-w-[85vw] sm:max-w-[80vw] md:max-w-[75vw] h-auto w-auto rounded-md"
+                    loading="eager" // Ensure current image loads immediately
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ duration: 0.2 }}
+                    onError={() => toast.error("Failed to load image")}
+                  />
+                </div>
+              </div>
+              
+              {/* Navigation buttons positioned relative to viewport */}
+              <div className="fixed left-0 right-0 top-1/2 -translate-y-1/2 flex justify-between px-4 sm:px-8 md:px-12 pointer-events-none">
+                <Button 
+                  onClick={prevImage}
+                  variant="outline"
+                  size="icon"
+                  className="h-10 w-10 pointer-events-auto shadow-sm bg-background border-border"
+                  aria-label="Previous image"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                
+                <Button 
+                  onClick={nextImage}
+                  variant="outline"
+                  size="icon"
+                  className="h-10 w-10 pointer-events-auto shadow-sm bg-background border-border"
+                  aria-label="Next image"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+              
+              {/* Close and download buttons */}
+              <div className="fixed top-4 right-4 flex gap-2 z-10">
+                <Button 
+                  onClick={downloadImage}
+                  variant="outline"
+                  size="icon"
+                  className="h-10 w-10 shadow-sm bg-background border-border"
+                  aria-label="Download image"
+                  title="Download image"
+                >
+                  <Download className="h-4 w-4" />
+                </Button>
+                
+                <Button 
+                  onClick={closeImageViewer}
+                  variant="outline"
+                  size="icon"
+                  className="h-10 w-10 shadow-sm bg-background border-border"
+                  aria-label="Close"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+              
+              {/* Image thumbnails - fixed at bottom of viewport */}
+              <div className="fixed bottom-0 left-0 right-0 flex items-center justify-center pb-4 sm:pb-6 md:pb-8 pt-2 bg-gradient-to-t from-background to-transparent">
+                <motion.div 
+                  className="flex items-center justify-center flex-wrap gap-2 sm:gap-3 bg-background/90 backdrop-blur-sm p-3 rounded-lg shadow-md z-10 max-w-[90vw] sm:max-w-[85vw] md:max-w-[80vw]"
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.3 }}
+                >
+                  {imageViewer.currentGeneration.images.map((image, index) => (
+                    <motion.button
+                      key={index}
+                      onClick={() => setImageViewer({...imageViewer, currentImageIndex: index})}
+                      className={`w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 rounded-md overflow-hidden border-2 transition-all ${
+                        index === imageViewer.currentImageIndex ? 'border-primary scale-110 shadow-md' : 'border-transparent opacity-70 hover:opacity-100'
+                      }`}
+                      aria-label={`View image ${index + 1}`}
+                      aria-current={index === imageViewer.currentImageIndex ? 'true' : 'false'}
+                      whileHover={{ scale: index === imageViewer.currentImageIndex ? 1.1 : 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                    >
+                      <img 
+                        src={image.url} 
+                        alt={`Thumbnail ${index + 1}`}
+                        className="w-full h-full object-cover"
+                        loading="lazy" // Lazy load thumbnails
+                      />
+                    </motion.button>
+                  ))}
+                </motion.div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       
       {/* Pending generations section */}
       {pendingGenerations.length > 0 && (
-        <div className="mb-8">
-          <div className="space-y-6">
+        <div className="space-y-4">
+          <div className="space-y-4">
             {pendingGenerations.map((generation) => {
-              // Check if this generation already has results in the completed generations
               const completedGeneration = generations.find(item => item.id === generation.id);
               
               // If we already have complete results for this generation, don't show the pending card
@@ -869,14 +1213,19 @@ export function ImageHistory({
                     </CardHeader>
                     
                     <CardContent className="p-4 pt-4">
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                      <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-3">
                         {hasPartialResults && partialGeneration && partialGeneration.images ? (
                           // Show partial results with skeletons for missing images
                           <>
                             {partialGeneration.images.map((image, index) => (
                               <div 
                                 key={index} 
-                                className="aspect-square relative overflow-hidden rounded-lg shadow-sm hover:shadow-md transition-all duration-300 group"
+                                className="aspect-square relative overflow-hidden rounded-lg shadow-sm hover:shadow-md transition-all duration-300 group cursor-pointer"
+                                onClick={() => {
+                                  if (!image.isExpired && partialGeneration) {
+                                    openImageViewer(partialGeneration, index);
+                                  }
+                                }}
                               >
                                 <div className="absolute inset-0 bg-gradient-to-br from-primary/10 to-primary/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-10"></div>
                                 {image.isExpired ? (
@@ -945,7 +1294,7 @@ export function ImageHistory({
                 <CardHeader className="p-4 pb-0 space-y-0">
                   <div className="flex items-center justify-between gap-3">
                     <div className="flex items-center gap-2">
-                      {/* Aspect ratio badge removed */}
+                      {/* Removing the timestamp display */}
                     </div>
                     
                     <div className="flex items-center gap-2">
@@ -992,12 +1341,17 @@ export function ImageHistory({
                 </CardHeader>
                 
                 <CardContent className="p-4 pt-4">
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-3">
                     {generation.images.length > 0 ? (
                       generation.images.map((image, index) => (
                         <div 
                           key={index} 
-                          className="aspect-square relative overflow-hidden rounded-lg shadow-sm hover:shadow-md transition-all duration-300 group"
+                          className="aspect-square relative overflow-hidden rounded-lg shadow-sm hover:shadow-md transition-all duration-300 group cursor-pointer"
+                          onClick={() => {
+                            if (!image.isExpired) {
+                              openImageViewer(generation, index);
+                            }
+                          }}
                         >
                           <div className="absolute inset-0 bg-gradient-to-br from-primary/10 to-primary/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-10"></div>
                           {image.isExpired ? (

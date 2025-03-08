@@ -1,9 +1,16 @@
 "use client"
 
-import { ReactNode, useState, useEffect } from 'react'
+import { ReactNode, useState, useEffect, useContext } from 'react'
 import { usePathname } from 'next/navigation'
 import { AuthButton } from '@/components/AuthButton'
 import { ModeToggle } from '@/components/ModeToggle'
+import { Button } from '@/components/ui/button'
+import { ThemeToggle } from '@/components/ThemeToggle'
+import { SignInButton, SignOutButton } from '@/components/auth/AuthButtons'
+import { useAuth } from '@/lib/auth'
+import Link from 'next/link'
+import { ImageViewerContext } from '@/components/ImageHistory'
+import { useImageViewer } from '@/contexts/ImageViewerContext'
 
 export interface ActionButtonsProps {
   /**
@@ -63,10 +70,23 @@ export function ActionButtons({
   const pathname = usePathname()
   const [mounted, setMounted] = useState(false)
   
+  // Use the image viewer context
+  const { isImageViewerOpen } = useImageViewer()
+  
   // Set mounted to true after hydration
   useEffect(() => {
     setMounted(true)
   }, [])
+  
+  // Don't render anything until client-side hydration is complete
+  if (!mounted) {
+    return null
+  }
+  
+  // If the image viewer is open, don't render the action buttons
+  if (isImageViewerOpen) {
+    return null
+  }
   
   // Automatically hide auth button on auth pages
   const isAuthPage = pathname?.startsWith('/auth')
@@ -82,11 +102,6 @@ export function ActionButtons({
   }
   
   const containerClasses = `z-[100] pointer-events-auto flex items-center ${gap} ${position !== 'custom' ? positionClasses[position] : ''} ${className}`
-  
-  // Don't render anything until client-side hydration is complete
-  if (!mounted) {
-    return null
-  }
   
   // If no buttons to show and no children, don't render anything
   if (!shouldShowAuthButton && !showThemeToggle && !children) {

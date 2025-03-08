@@ -4,6 +4,7 @@ import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { ActionButtons } from "@/components/ActionButtons";
+import { ImageViewerProvider } from "@/contexts/ImageViewerContext";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -26,17 +27,19 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange={false}
         >
-          <ActionButtons 
-            position="top-right" 
-            hideSignOutOnHomepage={true}
-          />
-          
-          <div className="flex min-h-screen flex-col relative">
-            <main className="flex-1">
-              {children}
-            </main>
-          </div>
-          <Toaster />
+          <ImageViewerProvider>
+            <ActionButtons 
+              position="top-right" 
+              hideSignOutOnHomepage={true}
+            />
+            
+            <div className="flex min-h-screen flex-col relative">
+              <main className="flex-1">
+                {children}
+              </main>
+            </div>
+            <Toaster />
+          </ImageViewerProvider>
         </ThemeProvider>
       </body>
     </html>
