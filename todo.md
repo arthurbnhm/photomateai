@@ -45,6 +45,7 @@
 - Integrate RLS in each table and bucket
 - Update all the routes with user filtering
 - Add user profiles with preferences
+- ✅ Add webhook secrets
 
 
 Attention to:

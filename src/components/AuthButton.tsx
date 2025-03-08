@@ -80,7 +80,7 @@ export function AuthButton({ hideSignOutOnHomepage = false }: AuthButtonProps) {
             className="h-9 w-auto px-3"
             asChild
           >
-            <Link href="/create?tab=create">Go to App</Link>
+            <Link href="/create">Go to App</Link>
           </Button>
           
           {/* Only show sign out button on homepage if not hidden */}
