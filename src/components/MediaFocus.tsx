@@ -1,6 +1,7 @@
 "use client"
 
 import React, { useEffect, useRef } from "react"
+import NextImage from "next/image"
 import { Button } from "@/components/ui/button"
 import { toast } from "sonner"
 import { motion } from "framer-motion"
@@ -115,12 +116,12 @@ export function MediaFocus({
       const prevIndex = (currentImageIndex - 1 + totalImages) % totalImages
       
       if (nextIndex !== currentImageIndex) {
-        const nextImg = new Image()
+        const nextImg = new window.Image()
         nextImg.src = currentGeneration.images[nextIndex].url
       }
       
       if (prevIndex !== currentImageIndex) {
-        const prevImg = new Image()
+        const prevImg = new window.Image()
         prevImg.src = currentGeneration.images[prevIndex].url
       }
     }
@@ -140,7 +141,7 @@ export function MediaFocus({
     
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [isOpen, currentGeneration, currentImageIndex])
+  }, [isOpen, currentGeneration, currentImageIndex, nextImage, prevImage, onClose])
 
   // Download functionality
   const downloadImage = async (e: React.MouseEvent) => {
@@ -244,17 +245,28 @@ export function MediaFocus({
       />
 
       {/* Main image */}
-      <motion.img 
-        key={currentImageIndex}
-        src={currentGeneration.images[currentImageIndex].url} 
-        alt={`Generated image for "${currentGeneration.prompt}"`}
-        className="object-contain max-h-[70vh] max-w-[90vw] h-auto w-auto rounded-md z-10 relative"
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ duration: 0.2 }}
-        onError={() => toast.error("Failed to load image")}
-        onClick={(e) => e.stopPropagation()}
-      />
+      <div className="relative z-10" style={{ width: 'auto', height: 'auto', maxWidth: '90vw', maxHeight: '70vh' }}>
+        <motion.div
+          key={currentImageIndex}
+          className="relative rounded-md overflow-hidden"
+          style={{ width: 'auto', height: 'auto', maxWidth: '90vw', maxHeight: '70vh', display: 'inline-block' }}
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.2 }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <NextImage
+            src={currentGeneration.images[currentImageIndex].url}
+            alt={`Generated image for "${currentGeneration.prompt}"`}
+            className="object-contain"
+            width={1024}
+            height={1024}
+            style={{ maxHeight: '70vh', maxWidth: '90vw', width: 'auto', height: 'auto' }}
+            onError={() => toast.error("Failed to load image")}
+            unoptimized
+          />
+        </motion.div>
+      </div>
 
       {/* Image counter (top center) */}
       <div 
@@ -322,17 +334,19 @@ export function MediaFocus({
             <button
               key={index}
               onClick={() => onNavigate(index)}
-              className={`w-12 h-12 sm:w-14 sm:h-14 rounded-md overflow-hidden border-2 flex-shrink-0 transition ${
+              className={`w-12 h-12 sm:w-14 sm:h-14 rounded-md overflow-hidden border-2 flex-shrink-0 transition relative ${
                 index === currentImageIndex ? 'border-primary scale-110' : 'border-transparent opacity-70 hover:opacity-100'
               }`}
               aria-label={`View image ${index + 1}`}
               aria-current={index === currentImageIndex ? 'true' : 'false'}
             >
-              <img 
+              <NextImage 
                 src={image.url} 
                 alt={`Thumbnail ${index + 1}`}
-                className="w-full h-full object-cover"
-                loading="lazy"
+                className="object-cover"
+                fill
+                sizes="(max-width: 640px) 48px, 56px"
+                priority={index === currentImageIndex}
               />
             </button>
           ))}

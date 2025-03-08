@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useMemo } from "react"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import * as z from "zod"
-import { RefreshCw, AlertCircle } from "lucide-react"
+import { AlertCircle } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import {
@@ -153,7 +153,7 @@ export function PromptForm({
     if (isInitialized && typeof window !== 'undefined') {
       localStorage.setItem(PENDING_GENERATIONS_KEY, JSON.stringify(pendingGenerations));
     }
-  }, [pendingGenerations, isInitialized, setPendingGenerations]);
+  }, [pendingGenerations, isInitialized]);
   
   // Clear stale pending generations
   const clearStalePendingGenerations = () => {
@@ -661,12 +661,9 @@ export function PromptForm({
                     aria-label="Generate image"
                   >
                     {submitting ? (
-                      <div className="flex items-center justify-center">
-                        <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                        <span>Generate</span>
-                      </div>
+                      "Generate"
                     ) : (
-                      "Generate Image"
+                      "Generate"
                     )}
                   </Button>
                 </div>

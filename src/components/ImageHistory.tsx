@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
+import Image from "next/image"
 import { Button } from "@/components/ui/button"
 import { toast } from "sonner"
 import { Toaster } from "@/components/ui/sonner"
@@ -219,7 +220,7 @@ export function ImageHistory({
       setError('Failed to load image history. Please try again later.');
       setIsLoading(false);
     }
-  }, [generations, generations.length, isLoading, setIsLoading, setGenerations, setError]);
+  }, [generations, isLoading, setIsLoading, setGenerations, setError]);
 
   // Initial load and Supabase Realtime setup
   useEffect(() => {
@@ -338,7 +339,7 @@ export function ImageHistory({
       supabase.removeChannel(successChannel);
       supabase.removeChannel(errorChannel);
     };
-  }, [isMounted]); // Only depend on mount status, not on pendingGenerations
+  }, [isMounted, pendingGenerations, generations, loadGenerations, setPendingGenerations]);
   
   // Add a fallback polling mechanism for pending generations
   useEffect(() => {
@@ -830,7 +831,7 @@ export function ImageHistory({
     
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [imageViewer.isOpen, imageViewer.currentGeneration, imageViewer.currentImageIndex]);
+  }, [imageViewer.isOpen, imageViewer.currentGeneration, imageViewer.currentImageIndex, closeImageViewer, handleNavigate]);
 
   return (
     <div className="w-full space-y-6">
@@ -992,11 +993,12 @@ export function ImageHistory({
                                     <p className="text-sm text-muted-foreground">Image expired</p>
                                   </div>
                                 ) : (
-                                  <img 
+                                  <Image 
                                     src={image.url} 
                                     alt={`Generated image ${index + 1} for "${generation.prompt}"`}
                                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300 animate-fade-in"
-                                    loading="lazy"
+                                    fill
+                                    sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
                                     onError={() => handleImageError(generation.id, index)}
                                   />
                                 )}
@@ -1118,11 +1120,12 @@ export function ImageHistory({
                               <p className="text-sm text-muted-foreground">Image expired</p>
                             </div>
                           ) : (
-                            <img 
+                            <Image 
                               src={image.url} 
                               alt={`Generated image ${index + 1} for "${generation.prompt}"`}
                               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300 animate-fade-in"
-                              loading="lazy"
+                              fill
+                              sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
                               onError={() => handleImageError(generation.id, index)}
                             />
                           )}
