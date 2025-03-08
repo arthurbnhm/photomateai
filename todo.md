@@ -40,6 +40,8 @@
 - ✅ Have a single page for both training and creation
 - Use a generated profile pic as avatar
 - Improve the navbar, do not display when scrolling
+- Vibe with music
+- A chat that interacts with my api, know the format to use etc
 
 # Authentication
 

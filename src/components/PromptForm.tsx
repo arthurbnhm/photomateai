@@ -45,6 +45,8 @@ type PendingGeneration = {
   aspectRatio: string
   startTime?: string // When the generation started
   potentiallyStalled?: boolean // Flag for generations that might be stalled
+  format?: string
+  modelName?: string
 }
 
 // Define the type for image generation
@@ -315,7 +317,8 @@ export function PromptForm({
         id: generationId,
         prompt: values.prompt,
         aspectRatio: values.aspectRatio,
-        startTime: new Date().toISOString()
+        startTime: new Date().toISOString(),
+        format: values.outputFormat
       });
       
       // Small delay to show initial loading state
@@ -323,13 +326,26 @@ export function PromptForm({
       
       try {
         // Find the selected model to get the name
-        let modelName = null;
-        let modelVersion = null;
+        let modelName: string | null = null;
+        let modelVersion: string | null = null;
+        let modelDisplayName = '';
         
         if (values.modelId) {
           const selectedModel = models.find(model => model.id === values.modelId);
           if (selectedModel) {
             modelName = selectedModel.model_id;
+            modelDisplayName = selectedModel.display_name || selectedModel.model_id || '';
+            
+            // Update the pending generation with model information
+            if (modelDisplayName) {
+              setPendingGenerations(prev => 
+                prev.map(gen => 
+                  gen.id === generationId 
+                    ? { ...gen, modelName: modelDisplayName } 
+                    : gen
+                )
+              );
+            }
             
             // Fetch the latest version for this model at generation time
             if (modelName) {

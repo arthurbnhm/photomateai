@@ -21,6 +21,8 @@ type ImageGeneration = {
   timestamp: string
   images: ImageWithStatus[]
   aspectRatio: string
+  format?: string      // Add format information
+  modelName?: string   // Add model name information
 }
 
 // Define the type for pending generations with potential stall status
@@ -31,6 +33,8 @@ type PendingGeneration = {
   aspectRatio: string
   startTime?: string // When the generation started
   potentiallyStalled?: boolean // Flag for generations that might be stalled
+  format?: string      // Add format information
+  modelName?: string   // Add model name information
 }
 
 // Define a type for prediction data from Supabase
@@ -47,6 +51,11 @@ type PredictionData = {
   completed_at: string | null
   is_deleted: boolean
   is_cancelled: boolean
+  input?: {
+    output_format?: string
+  }
+  model_name?: string
+  model_id?: string
 }
 
 // Add new type for image with status
@@ -196,7 +205,9 @@ export function ImageHistory({
             prompt: item.prompt,
             timestamp: item.created_at,
             images: processOutput(item.storage_urls),
-            aspectRatio: item.aspect_ratio
+            aspectRatio: item.aspect_ratio,
+            format: item.input?.output_format || 'png',
+            modelName: item.model_name || 'Default Model'
           }));
         
         // Only update state if data has actually changed
@@ -276,7 +287,9 @@ export function ImageHistory({
                     prompt: matchingPending.prompt,
                     timestamp: new Date().toISOString(),
                     images: processedImages,
-                    aspectRatio: matchingPending.aspectRatio
+                    aspectRatio: matchingPending.aspectRatio,
+                    format: matchingPending.format || payload.new.input?.output_format || 'png',
+                    modelName: matchingPending.modelName || payload.new.model_name || 'Default Model'
                   };
                   // Add to the beginning of the array
                   updatedGenerations.unshift(newGeneration);
@@ -407,7 +420,9 @@ export function ImageHistory({
                 prompt: pendingGen.prompt,
                 timestamp: new Date().toISOString(),
                 images: processedImages,
-                aspectRatio: pendingGen.aspectRatio
+                aspectRatio: pendingGen.aspectRatio,
+                format: pendingGen.format || prediction.input?.output_format || 'png',
+                modelName: pendingGen.modelName || prediction.model_name || 'Default Model'
               });
               hasUpdates = true;
             }
@@ -899,7 +914,7 @@ export function ImageHistory({
                   <Card className="overflow-hidden border-primary/20 shadow-md hover:shadow-lg transition-shadow duration-300">
                     <CardHeader className="p-4 pb-0 space-y-0">
                       <div className="flex items-center justify-between gap-3">
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
                           <div className="flex items-center gap-2">
                             {generation.potentiallyStalled ? (
                               <>
@@ -929,8 +944,24 @@ export function ImageHistory({
                               </>
                             )}
                           </div>
+                          
+                          {/* Add badges for aspect ratio, format, and model */}
+                          <Badge variant="outline" className="bg-blue-100 text-blue-800 hover:bg-blue-200 border-blue-200">
+                            {generation.aspectRatio}
+                          </Badge>
+                          
+                          {generation.format && (
+                            <Badge variant="outline" className="bg-green-100 text-green-800 hover:bg-green-200 border-green-200">
+                              {generation.format.toUpperCase()}
+                            </Badge>
+                          )}
+                          
+                          {generation.modelName && (
+                            <Badge variant="outline" className="bg-purple-100 text-purple-800 hover:bg-purple-200 border-purple-200 max-w-[150px] truncate">
+                              {generation.modelName}
+                            </Badge>
+                          )}
                         </div>
-                        
                         <div className="flex items-center gap-2">
                           <Button 
                             variant="outline" 
@@ -1075,8 +1106,23 @@ export function ImageHistory({
               <Card className="overflow-hidden border-border shadow-md hover:shadow-lg transition-shadow duration-300">
                 <CardHeader className="p-4 pb-0 space-y-0">
                   <div className="flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-2">
-                      {/* Removing the timestamp display */}
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {/* Add badges for aspect ratio, format, and model */}
+                      <Badge variant="outline" className="bg-blue-100 text-blue-800 hover:bg-blue-200 border-blue-200">
+                        {generation.aspectRatio}
+                      </Badge>
+                      
+                      {generation.format && (
+                        <Badge variant="outline" className="bg-green-100 text-green-800 hover:bg-green-200 border-green-200">
+                          {generation.format.toUpperCase()}
+                        </Badge>
+                      )}
+                      
+                      {generation.modelName && (
+                        <Badge variant="outline" className="bg-purple-100 text-purple-800 hover:bg-purple-200 border-purple-200 max-w-[150px] truncate">
+                          {generation.modelName}
+                        </Badge>
+                      )}
                     </div>
                     
                     <div className="flex items-center gap-2">
