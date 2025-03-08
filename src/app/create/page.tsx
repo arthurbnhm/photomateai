@@ -18,39 +18,23 @@ type PendingGeneration = {
   potentiallyStalled?: boolean
 }
 
-// Separate debug component to avoid nesting components
-function DebugInfo() {
-  const searchParams = useSearchParams();
-  const [url, setUrl] = useState('');
-  
-  useEffect(() => {
-    setUrl(window.location.href);
-  }, []);
-  
-  // Only show in development
-  if (process.env.NODE_ENV !== 'development') return null;
-  
-  return (
-    <div className="fixed bottom-0 left-0 right-0 bg-black/80 text-white p-2 text-xs z-50">
-      <div>Current URL: {url}</div>
-      <div>Environment: {process.env.NODE_ENV}</div>
-      <div>Search Params: {JSON.stringify(Object.fromEntries([...searchParams.entries()]))}</div>
-    </div>
-  );
-}
-
 // Create a client component that uses useSearchParams
 function CreatePageContent() {
+  const searchParams = useSearchParams();
+  
   // Shared state for pending generations
   const [pendingGenerations, setPendingGenerations] = useState<PendingGeneration[]>([]);
   // State for training status
   const [trainingStatus, setTrainingStatus] = useState<TrainingStatus | null>(null);
   // Track the active tab
-  const [activeTab, setActiveTab] = useState("generate"); // Always default to generate tab
+  const [activeTab, setActiveTab] = useState(() => {
+    // Initialize tab from URL query parameter if available
+    const tabParam = searchParams.get("tab");
+    return tabParam === "train" ? "train" : "generate";
+  });
 
   // Handle tab change
   const handleTabChange = (tab: string) => {
-    console.log("Tab changed to:", tab);
     setActiveTab(tab);
   };
 
@@ -82,12 +66,7 @@ function CreatePageContent() {
       </header>
       
       <main className="flex-1 w-full max-w-4xl mx-auto flex flex-col gap-12 z-10 mt-4">
-        <Tabs 
-          value={activeTab} 
-          onValueChange={handleTabChange} 
-          className="w-full"
-          defaultValue="generate" // This is a fallback and should be consistent with the state
-        >
+        <Tabs defaultValue="generate" value={activeTab} onValueChange={handleTabChange} className="w-full">
           <TabsList className="w-fit mx-auto mb-6">
             <TabsTrigger value="generate" className="px-4">Generate Images</TabsTrigger>
             <TabsTrigger value="train" className="px-4">Train New Model</TabsTrigger>
@@ -132,13 +111,8 @@ function CreatePageContent() {
 // Main component that wraps the content in a Suspense boundary
 export default function CreatePage() {
   return (
-    <>
-      <Suspense fallback={<div className="flex items-center justify-center min-h-screen">Loading...</div>}>
-        <CreatePageContent />
-      </Suspense>
-      <Suspense fallback={null}>
-        <DebugInfo />
-      </Suspense>
-    </>
+    <Suspense fallback={<div className="flex items-center justify-center min-h-screen">Loading...</div>}>
+      <CreatePageContent />
+    </Suspense>
   );
 } 

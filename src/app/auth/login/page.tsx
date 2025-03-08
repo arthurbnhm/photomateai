@@ -33,8 +33,7 @@ export default function LoginPage() {
         return
       }
 
-      console.log("Sign in successful, redirecting to /create")
-      router.push("/create")
+      router.push("/create?tab=create")
       router.refresh()
     } catch (error) {
       setError("An unexpected error occurred")

@@ -18,12 +18,8 @@ export async function middleware(request: NextRequest) {
   // Get the auth cookie
   const supabaseSession = request.cookies.get('sb-session')
   
-  // Log debugging information
-  console.log(`Middleware - Path: ${pathname}, Has Session: ${!!supabaseSession}`)
-  
   // If there's no session and the route is protected, redirect to login
   if (!supabaseSession && isProtectedRoute) {
-    console.log('No session found, redirecting to login')
     const redirectUrl = new URL('/auth/login', request.url)
     return NextResponse.redirect(redirectUrl)
   }
