@@ -7,6 +7,7 @@ import { toast } from "sonner"
 import { motion } from "framer-motion"
 import { X, Download, ChevronLeft, ChevronRight } from "lucide-react"
 import { useImageViewer } from "@/contexts/ImageViewerContext"
+import { AspectRatio } from "@/components/ui/aspect-ratio"
 
 // Define the types needed for the component
 export type ImageWithStatus = {
@@ -244,12 +245,24 @@ export function MediaFocus({
         style={{ pointerEvents: 'none' }}
       />
 
-      {/* Main image */}
-      <div className="relative z-10" style={{ width: 'auto', height: 'auto', maxWidth: '90vw', maxHeight: '70vh' }}>
+      {/* Main image container */}
+      <div className="relative z-10 flex flex-col items-center" style={{ 
+        width: 'auto', 
+        height: 'auto', 
+        maxWidth: '90vw', 
+        maxHeight: '60vh',
+        marginBottom: '5vh' // Add margin at the bottom for thumbnail spacing
+      }}>
         <motion.div
           key={currentImageIndex}
           className="relative rounded-md overflow-hidden"
-          style={{ width: 'auto', height: 'auto', maxWidth: '90vw', maxHeight: '70vh', display: 'inline-block' }}
+          style={{ 
+            width: 'auto', 
+            height: 'auto', 
+            maxWidth: '90vw', 
+            maxHeight: '60vh', 
+            display: 'inline-block' 
+          }}
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.2 }}
@@ -261,7 +274,12 @@ export function MediaFocus({
             className="object-contain"
             width={1024}
             height={1024}
-            style={{ maxHeight: '70vh', maxWidth: '90vw', width: 'auto', height: 'auto' }}
+            style={{ 
+              maxHeight: '60vh', 
+              maxWidth: '90vw', 
+              width: 'auto', 
+              height: 'auto' 
+            }}
             onError={() => toast.error("Failed to load image")}
             unoptimized
           />
@@ -324,30 +342,36 @@ export function MediaFocus({
 
       {/* Thumbnails (bottom) */}
       <div 
-        className="absolute bottom-4 left-1/2 transform -translate-x-1/2 
-                    bg-card/80 backdrop-blur-sm p-3 rounded-lg max-w-[90vw] 
+        className="fixed bottom-4 sm:bottom-6 left-1/2 transform -translate-x-1/2 
+                    bg-card/80 backdrop-blur-sm py-1.5 px-2 sm:p-3 rounded-lg 
                     overflow-x-auto z-20 text-foreground"
+        style={{ 
+          maxWidth: 'min(90vw, 600px)',
+          maxHeight: '15vh'
+        }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1 sm:gap-1.5 md:gap-2 justify-center flex-wrap">
           {currentGeneration.images.map((image, index) => (
             <button
               key={index}
               onClick={() => onNavigate(index)}
-              className={`w-12 h-12 sm:w-14 sm:h-14 rounded-md overflow-hidden border-2 flex-shrink-0 transition relative ${
-                index === currentImageIndex ? 'border-primary scale-110' : 'border-transparent opacity-70 hover:opacity-100'
+              className={`w-7 h-7 sm:w-9 sm:h-9 md:w-11 md:h-11 lg:w-13 lg:h-13 rounded-md overflow-hidden border-2 flex-shrink-0 transition relative ${
+                index === currentImageIndex ? 'border-primary scale-105 sm:scale-110' : 'border-transparent opacity-70 hover:opacity-100'
               }`}
               aria-label={`View image ${index + 1}`}
               aria-current={index === currentImageIndex ? 'true' : 'false'}
             >
-              <NextImage 
-                src={image.url} 
-                alt={`Thumbnail ${index + 1}`}
-                className="object-cover"
-                fill
-                sizes="(max-width: 640px) 48px, 56px"
-                priority={index === currentImageIndex}
-              />
+              <AspectRatio ratio={1} className="h-full w-full">
+                <NextImage 
+                  src={image.url} 
+                  alt={`Thumbnail ${index + 1}`}
+                  className="object-cover"
+                  fill
+                  sizes="(max-width: 640px) 28px, (max-width: 768px) 36px, (max-width: 1024px) 44px, 52px"
+                  priority={index === currentImageIndex}
+                />
+              </AspectRatio>
             </button>
           ))}
         </div>
