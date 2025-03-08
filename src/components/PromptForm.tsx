@@ -615,7 +615,7 @@ export function PromptForm({
                         </FormControl>
                         <SelectContent>
                           <SelectItem value="png">PNG</SelectItem>
-                          <SelectItem value="jpeg">JPEG</SelectItem>
+                          <SelectItem value="jpg">JPG</SelectItem>
                           <SelectItem value="webp">WebP</SelectItem>
                         </SelectContent>
                       </Select>
