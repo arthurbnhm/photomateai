@@ -8,27 +8,6 @@ import { TrainForm, TrainingStatus } from "@/components/TrainForm";
 import { ModelListTable } from "@/components/ModelListTable";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
-// Debug component to show URL parameters
-function DebugInfo() {
-  const searchParams = useSearchParams();
-  const [url, setUrl] = useState('');
-  
-  useEffect(() => {
-    setUrl(window.location.href);
-  }, []);
-  
-  // Only show in development
-  if (process.env.NODE_ENV !== 'development') return null;
-  
-  return (
-    <div className="fixed bottom-0 left-0 right-0 bg-black/80 text-white p-2 text-xs z-50">
-      <div>Current URL: {url}</div>
-      <div>Tab param: {searchParams.get('tab') || 'none'}</div>
-      <div>All params: {JSON.stringify(Object.fromEntries([...searchParams.entries()]))}</div>
-    </div>
-  );
-}
-
 // Define the PendingGeneration type
 type PendingGeneration = {
   id: string
@@ -56,45 +35,13 @@ function CreatePageContent() {
   // State for training status
   const [trainingStatus, setTrainingStatus] = useState<TrainingStatus | null>(null);
   // Track the active tab
-  const [activeTab, setActiveTab] = useState(() => {
-    // Initialize tab from URL query parameter if available
-    const tabParam = searchParams.get("tab");
-    console.log("Initial tab parameter:", tabParam);
-    
-    // Handle different tab values
-    if (tabParam === "train") return "train";
-    if (tabParam === "create") return "generate"; // Map 'create' to 'generate'
-    return "generate"; // Default to generate
-  });
+  const [activeTab, setActiveTab] = useState("generate"); // Always default to generate tab
 
   // Handle tab change
   const handleTabChange = (tab: string) => {
     console.log("Tab changed to:", tab);
     setActiveTab(tab);
   };
-
-  // Update URL when tab changes
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const url = new URL(window.location.href);
-      // Only update URL if the tab parameter is different
-      const currentTabParam = url.searchParams.get('tab');
-      
-      if (activeTab === 'generate') {
-        // For generate tab, we can either have no tab parameter or tab=create
-        if (currentTabParam && currentTabParam !== 'create') {
-          url.searchParams.set('tab', 'create');
-          window.history.replaceState({}, '', url.toString());
-        }
-      } else if (activeTab === 'train') {
-        // For train tab, we should have tab=train
-        if (currentTabParam !== 'train') {
-          url.searchParams.set('tab', 'train');
-          window.history.replaceState({}, '', url.toString());
-        }
-      }
-    }
-  }, [activeTab]);
 
   // Called when the ModelListTable detects that newTraining is now in the models list
   const clearTrainingStatus = () => {
@@ -116,69 +63,88 @@ function CreatePageContent() {
     };
   }, []);
 
+  // Debug component to show URL parameters
+  const DebugInfo = () => {
+    const [url, setUrl] = useState('');
+    
+    useEffect(() => {
+      setUrl(window.location.href);
+    }, []);
+    
+    // Only show in development
+    if (process.env.NODE_ENV !== 'development') return null;
+    
+    return (
+      <div className="fixed bottom-0 left-0 right-0 bg-black/80 text-white p-2 text-xs z-50">
+        <div>Current URL: {url}</div>
+        <div>Environment: {process.env.NODE_ENV}</div>
+      </div>
+    );
+  };
+
   return (
-    <div className="flex flex-col min-h-screen p-8 pb-28 sm:pb-20 gap-8 sm:p-20 font-[family-name:var(--font-geist-sans)] relative bg-background">
-      <header className="w-full max-w-4xl mx-auto text-center mt-8 sm:mt-6">
-        <h1 className="text-3xl sm:text-4xl font-bold mb-2">Photomate AI</h1>
-        <p className="text-muted-foreground">Create stunning images with AI using simple text prompts or train your own custom model</p>
-      </header>
-      
-      <main className="flex-1 w-full max-w-4xl mx-auto flex flex-col gap-12 z-10 mt-4">
-        <Tabs 
-          value={activeTab} 
-          onValueChange={handleTabChange} 
-          className="w-full"
-          defaultValue="generate" // This is a fallback and should be consistent with the state
-        >
-          <TabsList className="w-fit mx-auto mb-6">
-            <TabsTrigger value="generate" className="px-4">Generate Images</TabsTrigger>
-            <TabsTrigger value="train" className="px-4">Train New Model</TabsTrigger>
-          </TabsList>
-          
-          <TabsContent value="generate" className="space-y-4">
-            <PromptForm 
-              pendingGenerations={pendingGenerations}
-              setPendingGenerations={setPendingGenerations}
-            />
-            <div className="w-full border-t pt-8">
-              <ImageHistory 
+    <>
+      <div className="flex flex-col min-h-screen p-8 pb-28 sm:pb-20 gap-8 sm:p-20 font-[family-name:var(--font-geist-sans)] relative bg-background">
+        <header className="w-full max-w-4xl mx-auto text-center mt-8 sm:mt-6">
+          <h1 className="text-3xl sm:text-4xl font-bold mb-2">Photomate AI</h1>
+          <p className="text-muted-foreground">Create stunning images with AI using simple text prompts or train your own custom model</p>
+        </header>
+        
+        <main className="flex-1 w-full max-w-4xl mx-auto flex flex-col gap-12 z-10 mt-4">
+          <Tabs 
+            value={activeTab} 
+            onValueChange={handleTabChange} 
+            className="w-full"
+            defaultValue="generate" // This is a fallback and should be consistent with the state
+          >
+            <TabsList className="w-fit mx-auto mb-6">
+              <TabsTrigger value="generate" className="px-4">Generate Images</TabsTrigger>
+              <TabsTrigger value="train" className="px-4">Train New Model</TabsTrigger>
+            </TabsList>
+            
+            <TabsContent value="generate" className="space-y-4">
+              <PromptForm 
                 pendingGenerations={pendingGenerations}
                 setPendingGenerations={setPendingGenerations}
               />
-            </div>
-          </TabsContent>
-          
-          <TabsContent value="train" className="space-y-8">
-            <TrainForm 
-              onTrainingStatusChange={setTrainingStatus}
-              trainingStatus={trainingStatus}
-            />
-            <div className="mt-8 pt-8 border-t">
-              <h2 className="text-xl font-semibold mb-4">Your Models</h2>
-              <ModelListTable 
-                newTraining={trainingStatus} 
-                onClearNewTraining={clearTrainingStatus}
+              <div className="w-full border-t pt-8">
+                <ImageHistory 
+                  pendingGenerations={pendingGenerations}
+                  setPendingGenerations={setPendingGenerations}
+                />
+              </div>
+            </TabsContent>
+            
+            <TabsContent value="train" className="space-y-8">
+              <TrainForm 
+                onTrainingStatusChange={setTrainingStatus}
+                trainingStatus={trainingStatus}
               />
-            </div>
-          </TabsContent>
-        </Tabs>
-      </main>
-      
-      <footer className="w-full max-w-4xl mx-auto text-center text-sm text-muted-foreground pt-4">
+              <div className="mt-8 pt-8 border-t">
+                <h2 className="text-xl font-semibold mb-4">Your Models</h2>
+                <ModelListTable 
+                  newTraining={trainingStatus} 
+                  onClearNewTraining={clearTrainingStatus}
+                />
+              </div>
+            </TabsContent>
+          </Tabs>
+        </main>
         
-      </footer>
-    </div>
+        <footer className="w-full max-w-4xl mx-auto text-center text-sm text-muted-foreground pt-4">
+          
+        </footer>
+      </div>
+      <DebugInfo />
+    </>
   );
 }
 
 // Main component that wraps the content in a Suspense boundary
 export default function CreatePage() {
   return (
-    <>
-      <Suspense fallback={<div className="flex items-center justify-center min-h-screen">Loading...</div>}>
-        <CreatePageContent />
-      </Suspense>
-      <DebugInfo />
-    </>
+    <Suspense fallback={<div className="flex items-center justify-center min-h-screen">Loading...</div>}>
+      <CreatePageContent />
+    </Suspense>
   );
 } 

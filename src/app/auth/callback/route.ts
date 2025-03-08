@@ -15,7 +15,9 @@ export async function GET(request: Request) {
     
     if (user) {
       // Redirect to the create page if authenticated
-      return NextResponse.redirect(new URL('/create', requestUrl.origin))
+      // Use the origin from the request URL to ensure it works in all environments
+      const redirectUrl = new URL('/create', requestUrl.origin)
+      return NextResponse.redirect(redirectUrl)
     }
   }
 
