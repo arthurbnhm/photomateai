@@ -1,5 +1,61 @@
 import { NextResponse } from 'next/server';
 import { createSupabaseAdmin } from '@/lib/supabase';
+import * as crypto from 'crypto';
+
+// Function to verify webhook signature
+function verifyWebhookSignature(
+  webhookId: string | null,
+  webhookTimestamp: string | null,
+  webhookSignature: string | null,
+  body: string
+): boolean {
+  // If any of the required headers are missing, verification fails
+  if (!webhookId || !webhookTimestamp || !webhookSignature) {
+    console.error('Missing required webhook headers');
+    return false;
+  }
+
+  // Get the webhook secret from environment variables
+  const webhookSecret = process.env.REPLICATE_WEBHOOK_SECRET;
+  if (!webhookSecret) {
+    console.error('REPLICATE_WEBHOOK_SECRET is not set');
+    return false;
+  }
+
+  try {
+    // Construct the signed content
+    const signedContent = `${webhookId}.${webhookTimestamp}.${body}`;
+
+    // Extract the base64 portion of the secret (after whsec_ prefix)
+    const secretKey = webhookSecret.startsWith('whsec_') 
+      ? webhookSecret.substring(6) 
+      : webhookSecret;
+
+    // Base64 decode the secret
+    const secretBytes = Buffer.from(secretKey, 'base64');
+
+    // Calculate the expected signature
+    const computedSignature = crypto
+      .createHmac('sha256', secretBytes)
+      .update(signedContent)
+      .digest('base64');
+
+    // Parse the webhook signature header
+    const expectedSignatures = webhookSignature
+      .split(' ')
+      .map(sig => {
+        const parts = sig.split(',');
+        return parts.length > 1 ? parts[1] : null;
+      })
+      .filter(Boolean) as string[];
+
+    // Check if our computed signature matches any of the expected signatures
+    return expectedSignatures.some(expectedSig => expectedSig === computedSignature);
+  } catch (error) {
+    console.error('Error verifying webhook signature:', error);
+    return false;
+  }
+}
 
 // Function to download and store an image
 async function downloadAndStoreImage(url: string): Promise<string | null> {
@@ -41,7 +97,34 @@ async function downloadAndStoreImage(url: string): Promise<string | null> {
 
 export async function POST(request: Request) {
   try {
-    const webhookData = await request.json();
+    // Get the webhook headers
+    const webhookId = request.headers.get('webhook-id');
+    const webhookTimestamp = request.headers.get('webhook-timestamp');
+    const webhookSignature = request.headers.get('webhook-signature');
+
+    // Clone the request to get the body as text for signature verification
+    const clonedRequest = request.clone();
+    const bodyText = await clonedRequest.text();
+
+    // Verify the webhook signature
+    const isSignatureValid = verifyWebhookSignature(
+      webhookId,
+      webhookTimestamp,
+      webhookSignature,
+      bodyText
+    );
+
+    // If signature verification fails, reject the webhook
+    if (!isSignatureValid) {
+      console.error('Webhook signature verification failed');
+      return NextResponse.json(
+        { error: 'Invalid webhook signature' },
+        { status: 401 }
+      );
+    }
+
+    // Parse the webhook data
+    const webhookData = JSON.parse(bodyText);
 
     const supabase = createSupabaseAdmin();
     const replicate_id = webhookData.id;

@@ -37,7 +37,7 @@
 - Implement better error handling and user feedback
 - ✅ Seperate train.tsx into components
 - ✅ Have a single page for both training and creation
-- use a generated profile pic as avatar
+- Use a generated profile pic as avatar
 
 # Authentication
 
