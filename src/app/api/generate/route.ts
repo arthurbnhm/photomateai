@@ -52,14 +52,33 @@ export async function POST(request: NextRequest) {
   let predictionId = null;
   let dbRecordId = null;
   let modelId = null;
+  let userId = null;
   
   try {
     // Parse the request body
-    const { prompt, aspectRatio, outputFormat, modelId: requestModelId, modelName: requestModelName, modelVersion } = await request.json();
+    const { prompt, aspectRatio, outputFormat, modelId: requestModelId, modelName: requestModelName, modelVersion, userId: requestUserId } = await request.json();
     
     // Initialize Supabase client
     const supabase = createSupabaseAdmin();
     
+    // Try to get user ID from the session token if not provided in the request
+    if (!requestUserId) {
+      const sessionToken = request.headers.get('authorization')?.split('Bearer ')[1];
+      if (sessionToken) {
+        try {
+          const { data: { user }, error: userError } = await supabase.auth.getUser(sessionToken);
+          if (!userError && user) {
+            userId = user.id;
+          }
+        } catch (error) {
+          console.warn('Error getting user from session token:', error);
+          // Continue without user ID
+        }
+      }
+    } else {
+      userId = requestUserId;
+    }
+
     // Check if API token is available
     const apiToken = process.env.REPLICATE_API_TOKEN;
     if (!apiToken) {
@@ -212,7 +231,8 @@ export async function POST(request: NextRequest) {
             aspect_ratio: aspectRatio || "1:1",
             status: prediction.status || "processing",
             input: inputParams,
-            model_id: modelId
+            model_id: modelId,
+            user_id: userId
           })
           .select()
           .single();

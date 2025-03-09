@@ -5,6 +5,7 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import * as z from "zod"
 import { AlertCircle } from "lucide-react"
+import { createSupabaseClient } from "@/lib/supabase"
 
 import { Button } from "@/components/ui/button"
 import {
@@ -92,13 +93,18 @@ export function PromptForm({
   pendingGenerations: PendingGeneration[];
   setPendingGenerations: React.Dispatch<React.SetStateAction<PendingGeneration[]>>;
 }) {
-  const [submitting, setSubmitting] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [errorDetails, setErrorDetails] = useState<string | null>(null)
+  // Initialize Supabase client
+  const supabase = createSupabaseClient();
+  
+  // State variables
+  const [models, setModels] = useState<Model[]>([]);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [errorDetails, setErrorDetails] = useState<string | null>(null);
+  const [fetchingModelVersion, setFetchingModelVersion] = useState(false);
+  const [userId, setUserId] = useState<string | null>(null);
   const [pageReloaded, setPageReloaded] = useState(true)
-  const [models, setModels] = useState<Model[]>([])
   const [loadingModels, setLoadingModels] = useState(false)
-  const [fetchingModelVersion, setFetchingModelVersion] = useState(false)
   const [isInitialized, setIsInitialized] = useState(false)
   const [placeholderText, setPlaceholderText] = useState("Describe your image...")
   const [isAnimating, setIsAnimating] = useState(true)
@@ -148,10 +154,9 @@ export function PromptForm({
         setIsInitialized(true);
       }
     }
-  }, []);
+  }, [setPendingGenerations]);
 
   // Save pending generations to localStorage whenever they change
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (isInitialized && typeof window !== 'undefined') {
       localStorage.setItem(PENDING_GENERATIONS_KEY, JSON.stringify(pendingGenerations));
@@ -372,6 +377,7 @@ export function PromptForm({
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
+            ...(userId ? { 'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}` } : {})
           },
           body: JSON.stringify({
             prompt: values.prompt,
@@ -379,7 +385,8 @@ export function PromptForm({
             outputFormat: values.outputFormat,
             generationId: generationId,
             modelVersion: modelVersion,
-            modelName: modelName
+            modelName: modelName,
+            userId: userId
           }),
         });
         
@@ -532,6 +539,22 @@ export function PromptForm({
       }
     }
   }, [isAnimating, placeholderExamples])
+
+  // Get the user ID from the session when the component mounts
+  useEffect(() => {
+    const getUserId = async () => {
+      try {
+        const { data: sessionData } = await supabase.auth.getSession();
+        if (sessionData.session) {
+          setUserId(sessionData.session.user.id);
+        }
+      } catch (error) {
+        console.error('Error getting user session:', error);
+      }
+    };
+
+    getUserId();
+  }, [supabase]);
 
   return (
     <div className="w-full">
