@@ -24,18 +24,11 @@ export default function RootLayout({
           attribute="class"
           defaultTheme="system"
           enableSystem
-          disableTransitionOnChange={false}
         >
-          <ActionButtons 
-            position="top-right" 
-            hideSignOutOnHomepage={true}
-          />
-          
-          <div className="flex min-h-screen flex-col relative">
-            <main className="flex-1">
-              {children}
-            </main>
-          </div>
+          <ActionButtons hideSignOutOnHomepage={true} />
+          <main className="min-h-screen pt-16 md:pt-12">
+            {children}
+          </main>
           <Toaster />
         </ThemeProvider>
       </body>

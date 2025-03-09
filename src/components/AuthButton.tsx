@@ -1,95 +1,76 @@
 "use client"
 
-import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
-import { createSupabaseClient } from '@/lib/supabase'
 import { useRouter, usePathname } from 'next/navigation'
-import { User } from '@supabase/supabase-js'
 import Link from 'next/link'
+import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
+import { useAuth } from '@/hooks/useAuth'
 
 interface AuthButtonProps {
   /**
    * Hide sign-out button on homepage when user is signed in
-   * This will leave only the "Go to App" button visible
    * @default false
    */
   hideSignOutOnHomepage?: boolean
+  
+  /**
+   * Whether this button is in a mobile menu context
+   * @default false
+   */
+  isMobileMenu?: boolean
 }
 
-export function AuthButton({ hideSignOutOnHomepage = false }: AuthButtonProps) {
+export function AuthButton({ 
+  hideSignOutOnHomepage = false,
+  isMobileMenu = false
+}: AuthButtonProps) {
   const router = useRouter()
   const pathname = usePathname()
-  const [user, setUser] = useState<User | null>(null)
-  const [mounted, setMounted] = useState(false)
-  const supabase = createSupabaseClient()
+  const { user, mounted, signOut, isAuthReady } = useAuth()
   const isHomePage = pathname === '/'
-  const isAuthPage = pathname === '/auth/login'
 
-  useEffect(() => {
-    const getUser = async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-      setUser(user)
-      setMounted(true)
-      
-      // Redirect to login page if user is not authenticated and not already on the login page
-      if (!user && !isAuthPage && !isHomePage) {
-        router.push('/auth/login')
-      }
-    }
-
-    getUser()
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        setUser(session?.user ?? null)
-        
-        // Redirect to login page if user signs out and not on the homepage
-        if (event === 'SIGNED_OUT' && !isHomePage) {
-          router.push('/auth/login')
-        }
-      }
-    )
-
-    return () => {
-      subscription.unsubscribe()
-    }
-  }, [supabase.auth, router, isAuthPage, isHomePage])
-
-  const handleSignIn = async () => {
-    router.push('/auth/login')
-  }
-
-  const handleSignOut = async () => {
-    await supabase.auth.signOut()
-    router.refresh()
-  }
-
-  // Don't render anything until client-side hydration is complete
-  if (!mounted) {
+  // Wait for auth to be ready and client-side hydration to complete
+  if (!mounted || !isAuthReady) {
     return null
   }
 
+  // User is authenticated
   if (user) {
-    // On homepage with a signed-in user
+    // Special case for homepage
     if (isHomePage) {
+      if (isMobileMenu) {
+        return (
+          <>
+            <DropdownMenuItem onClick={() => router.push('/create?tab=create')}>
+              Go to App
+            </DropdownMenuItem>
+            
+            {!hideSignOutOnHomepage && (
+              <DropdownMenuItem onClick={signOut}>
+                Sign out
+              </DropdownMenuItem>
+            )}
+          </>
+        )
+      }
+      
       return (
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 w-full">
           <Button 
             variant="default" 
-            size="icon" 
+            size="icon"
             className="h-9 w-auto px-3"
             asChild
           >
             <Link href="/create?tab=create">Go to App</Link>
           </Button>
           
-          {/* Only show sign out button on homepage if not hidden */}
           {!hideSignOutOnHomepage && (
             <Button 
               variant="outline" 
-              size="icon" 
+              size="icon"
               className="h-9 w-auto px-3"
-              onClick={handleSignOut}
+              onClick={signOut}
             >
               Sign out
             </Button>
@@ -99,25 +80,33 @@ export function AuthButton({ hideSignOutOnHomepage = false }: AuthButtonProps) {
     }
     
     // On other pages with a signed-in user
-    return (
+    return isMobileMenu ? (
+      <DropdownMenuItem onClick={signOut}>
+        Sign out
+      </DropdownMenuItem>
+    ) : (
       <Button 
         variant="outline" 
-        size="icon" 
+        size="icon"
         className="h-9 w-auto px-3"
-        onClick={handleSignOut}
+        onClick={signOut}
       >
         Sign out
       </Button>
     )
   }
 
-  // User is not signed in
-  return (
+  // User is not authenticated
+  return isMobileMenu ? (
+    <DropdownMenuItem onClick={() => router.push('/auth/login')}>
+      Sign in
+    </DropdownMenuItem>
+  ) : (
     <Button 
       variant="outline" 
-      size="icon" 
+      size="icon"
       className="h-9 w-auto px-3"
-      onClick={handleSignIn}
+      onClick={() => router.push('/auth/login')}
     >
       Sign in
     </Button>
