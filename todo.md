@@ -43,6 +43,7 @@
 - ✅ Improve the navbar, do not display when scrolling
 - Vibe with music
 - A chat that interacts with my api, know the format to use etc
+- Make sure we dont use supabase admin key anymore
 
 # Authentication
 

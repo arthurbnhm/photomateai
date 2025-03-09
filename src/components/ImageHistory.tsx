@@ -786,10 +786,6 @@ export function ImageHistory({
 
   // Mark image as expired and trigger refresh
   const handleImageError = (generationId: string, imageIndex: number) => {
-    // Find the generation to check when it was created
-    const generation = generations.find(gen => gen.id === generationId);
-    
-    // Mark the image as expired
     setGenerations(prev => 
       prev.map(gen => 
         gen.id === generationId
@@ -805,22 +801,8 @@ export function ImageHistory({
       )
     );
     
-    // Only refresh if the generation is not very recent (to avoid refreshing images that are still loading)
-    if (generation) {
-      const generationTime = new Date(generation.timestamp).getTime();
-      const now = Date.now();
-      const isVeryRecent = (now - generationTime) < 10000; // Less than 10 seconds old
-      
-      if (!isVeryRecent) {
-        // Refresh the images for this generation
-        refreshExpiredImages(generationId);
-      } else {
-        console.log('Skipping refresh for very recent generation');
-      }
-    } else {
-      // If we can't determine when it was generated, try refreshing anyway
-      refreshExpiredImages(generationId);
-    }
+    // Refresh the images for this generation
+    refreshExpiredImages(generationId);
   };
 
   // Clear a specific pending generation by ID

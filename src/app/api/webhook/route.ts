@@ -58,7 +58,7 @@ function verifyWebhookSignature(
 }
 
 // Function to download and store an image
-async function downloadAndStoreImage(url: string, userId: string, index: number): Promise<string | null> {
+async function downloadAndStoreImage(url: string, userId: string): Promise<string | null> {
   try {
     const response = await fetch(url);
     if (!response.ok) {
@@ -67,8 +67,7 @@ async function downloadAndStoreImage(url: string, userId: string, index: number)
     }
 
     const blob = await response.blob();
-    // Use sequential numbering for images
-    const fileName = `${index + 1}.png`;
+    const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.png`;
     // Simplify to just userId/fileName
     const filePath = `${userId}/${fileName}`;
 
@@ -78,7 +77,7 @@ async function downloadAndStoreImage(url: string, userId: string, index: number)
       .upload(filePath, blob, {
         contentType: 'image/png',
         cacheControl: '3600',
-        upsert: true // Changed to true to allow overwriting if the file exists
+        upsert: false
       });
 
     if (uploadError) {
@@ -86,10 +85,10 @@ async function downloadAndStoreImage(url: string, userId: string, index: number)
       return null;
     }
 
-    // Generate a signed URL that expires in 1 hour instead of using public URL
+    // Generate a signed URL that expires in 10 years instead of 1 hour
     const { data: signedUrlData, error: signedUrlError } = await supabase.storage
       .from('images')
-      .createSignedUrl(filePath, 60 * 60); // 1 hour in seconds
+      .createSignedUrl(filePath, 10 * 365 * 24 * 60 * 60); // 10 years in seconds
     
     if (signedUrlError || !signedUrlData) {
       console.error('Failed to generate signed URL:', signedUrlError);
@@ -285,7 +284,7 @@ export async function POST(request: Request) {
       // Download and store images
       try {
         const storageUrls = await Promise.all(
-          urls.map((url, index) => downloadAndStoreImage(url, prediction.user_id, index))
+          urls.map(url => downloadAndStoreImage(url, prediction.userId))
         );
 
         // Filter out any null values from failed uploads

@@ -33,8 +33,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Prediction not found' }, { status: 404 });
     }
     
-    // Verify user owns this prediction or skip check for records without user_id
-    if (prediction.user_id && prediction.user_id !== session.user.id) {
+    // Verify user owns this prediction
+    if (prediction.userId !== session.user.id) {
       return NextResponse.json({ error: 'Unauthorized access to prediction' }, { status: 403 });
     }
     
@@ -63,7 +63,7 @@ export async function POST(request: Request) {
         // Create a new signed URL for the current path (already in userId/fileName format)
         const { data: signedUrlData, error: signedUrlError } = await supabaseAdmin.storage
           .from(bucket)
-          .createSignedUrl(path, 60 * 60); // 1 hour in seconds
+          .createSignedUrl(path, 10 * 365 * 24 * 60 * 60); // 10 years in seconds
         
         if (signedUrlError || !signedUrlData) {
           console.error('Failed to generate signed URL:', signedUrlError);
