@@ -155,8 +155,23 @@ export function MediaFocus({
     
     try {
       const imageUrl = currentGeneration.images[currentImageIndex].url
-      const promptText = currentGeneration.prompt.slice(0, 20).replace(/[^a-z0-9]/gi, '_')
-      const filename = `photomate_${promptText}_${currentImageIndex + 1}.png`
+      
+      // Extract the actual file name from the URL
+      // The URL format is like: https://[project].supabase.co/storage/v1/object/sign/images/[userId]/[fileName]?token=...
+      let filename = `${currentImageIndex + 1}.png` // Default fallback
+      
+      try {
+        const url = new URL(imageUrl)
+        const pathParts = url.pathname.split('/')
+        // Get the last part of the path which should be the file name
+        const lastPart = pathParts[pathParts.length - 1]
+        if (lastPart && lastPart.endsWith('.png')) {
+          filename = lastPart
+        }
+      } catch (parseError) {
+        console.error('Error parsing URL:', parseError)
+        // Use the default filename if URL parsing fails
+      }
       
       const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)
       

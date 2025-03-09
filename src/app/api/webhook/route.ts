@@ -58,7 +58,7 @@ function verifyWebhookSignature(
 }
 
 // Function to download and store an image
-async function downloadAndStoreImage(url: string): Promise<string | null> {
+async function downloadAndStoreImage(url: string, userId: string, index: number): Promise<string | null> {
   try {
     const response = await fetch(url);
     if (!response.ok) {
@@ -67,8 +67,10 @@ async function downloadAndStoreImage(url: string): Promise<string | null> {
     }
 
     const blob = await response.blob();
-    const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.png`;
-    const filePath = `generations/${fileName}`;
+    // Use sequential numbering for images
+    const fileName = `${index + 1}.png`;
+    // Simplify to just userId/fileName
+    const filePath = `${userId}/${fileName}`;
 
     const supabase = createSupabaseAdmin();
     const { error: uploadError } = await supabase.storage
@@ -76,7 +78,7 @@ async function downloadAndStoreImage(url: string): Promise<string | null> {
       .upload(filePath, blob, {
         contentType: 'image/png',
         cacheControl: '3600',
-        upsert: false
+        upsert: true // Changed to true to allow overwriting if the file exists
       });
 
     if (uploadError) {
@@ -84,11 +86,17 @@ async function downloadAndStoreImage(url: string): Promise<string | null> {
       return null;
     }
 
-    const { data: { publicUrl } } = supabase.storage
+    // Generate a signed URL that expires in 1 hour instead of using public URL
+    const { data: signedUrlData, error: signedUrlError } = await supabase.storage
       .from('images')
-      .getPublicUrl(filePath);
+      .createSignedUrl(filePath, 60 * 60); // 1 hour in seconds
+    
+    if (signedUrlError || !signedUrlData) {
+      console.error('Failed to generate signed URL:', signedUrlError);
+      return null;
+    }
 
-    return publicUrl;
+    return signedUrlData.signedUrl;
   } catch (error) {
     console.error('Error in downloadAndStoreImage:', error);
     return null;
@@ -277,7 +285,7 @@ export async function POST(request: Request) {
       // Download and store images
       try {
         const storageUrls = await Promise.all(
-          urls.map(url => downloadAndStoreImage(url))
+          urls.map((url, index) => downloadAndStoreImage(url, prediction.user_id, index))
         );
 
         // Filter out any null values from failed uploads

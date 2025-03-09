@@ -210,22 +210,27 @@ export async function DELETE(request: Request) {
       for (const url of storageUrls) {
         try {
           // Extract the path from the URL
-          // URLs are typically in the format: https://[project].supabase.co/storage/v1/object/public/[bucket]/[path]
+          // URLs are in the format: https://[project].supabase.co/storage/v1/object/sign/[bucket]/[userId]/[fileName]?token=...
           const urlObj = new URL(url);
           const pathParts = urlObj.pathname.split('/');
-          // Find the index of 'public' and get everything after it
-          const publicIndex = pathParts.indexOf('public');
-          if (publicIndex !== -1 && publicIndex < pathParts.length - 1) {
-            const bucket = pathParts[publicIndex + 1];
-            const path = pathParts.slice(publicIndex + 2).join('/');
+          
+          // Find the index of 'sign' and get everything after it
+          const signIndex = pathParts.indexOf('sign');
+          
+          if (signIndex !== -1 && signIndex < pathParts.length - 1) {
+            const bucket = pathParts[signIndex + 1];
+            const path = pathParts.slice(signIndex + 2).join('/');
             
             const { error: storageError } = await supabase.storage
               .from(bucket)
               .remove([path]);
             
             if (storageError) {
+              console.error('Error removing file:', storageError);
               // Continue with other files even if one fails
             }
+          } else {
+            console.error('Unrecognized signed URL format:', url);
           }
         } catch (_error) {
           void _error; // Explicitly indicate we're ignoring this variable

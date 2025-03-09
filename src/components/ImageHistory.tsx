@@ -737,38 +737,59 @@ export function ImageHistory({
   const refreshExpiredImages = async (generationId: string) => {
     try {
       const supabase = createSupabaseClient();
+      const { data: { session } } = await supabase.auth.getSession();
       
-      const { data: prediction, error } = await supabase
-        .from('predictions')
-        .select('*')
-        .eq('id', generationId)
-        .single();
-      
-      if (error) {
-        console.error('Error refreshing images:', error);
+      if (!session) {
+        toast.error("You must be logged in to refresh images");
         return;
       }
       
-      if (prediction?.storage_urls) {
-        // Update the generation with storage URLs
+      // Call the refresh API endpoint
+      const response = await fetch('/api/refresh', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({
+          predictionId: generationId
+        })
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to refresh images');
+      }
+      
+      const data = await response.json();
+      
+      if (data.success && data.urls) {
+        // Update the generation with refreshed URLs
         setGenerations(prev => 
           prev.map(gen => 
             gen.id === generationId
               ? {
                   ...gen,
-                  images: processOutput(prediction.storage_urls)
+                  images: processOutput(data.urls)
                 }
               : gen
           )
         );
+        
+        toast.success("Images refreshed successfully");
       }
     } catch (error) {
       console.error('Error refreshing images:', error);
+      toast.error("Failed to refresh images");
     }
   };
 
   // Mark image as expired and trigger refresh
   const handleImageError = (generationId: string, imageIndex: number) => {
+    // Find the generation to check when it was created
+    const generation = generations.find(gen => gen.id === generationId);
+    
+    // Mark the image as expired
     setGenerations(prev => 
       prev.map(gen => 
         gen.id === generationId
@@ -784,8 +805,22 @@ export function ImageHistory({
       )
     );
     
-    // Refresh the images for this generation
-    refreshExpiredImages(generationId);
+    // Only refresh if the generation is not very recent (to avoid refreshing images that are still loading)
+    if (generation) {
+      const generationTime = new Date(generation.timestamp).getTime();
+      const now = Date.now();
+      const isVeryRecent = (now - generationTime) < 10000; // Less than 10 seconds old
+      
+      if (!isVeryRecent) {
+        // Refresh the images for this generation
+        refreshExpiredImages(generationId);
+      } else {
+        console.log('Skipping refresh for very recent generation');
+      }
+    } else {
+      // If we can't determine when it was generated, try refreshing anyway
+      refreshExpiredImages(generationId);
+    }
   };
 
   // Clear a specific pending generation by ID
