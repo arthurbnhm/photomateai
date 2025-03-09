@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
-import { createClient } from '@/utils/supabase/client'
+import { createSupabaseClient } from '@/lib/supabase'
 import { useRouter, usePathname } from 'next/navigation'
 import { User } from '@supabase/supabase-js'
 import Link from 'next/link'
@@ -21,7 +21,7 @@ export function AuthButton({ hideSignOutOnHomepage = false }: AuthButtonProps) {
   const pathname = usePathname()
   const [user, setUser] = useState<User | null>(null)
   const [mounted, setMounted] = useState(false)
-  const supabase = createClient()
+  const supabase = createSupabaseClient()
   const isHomePage = pathname === '/'
   const isAuthPage = pathname === '/auth/login'
 

@@ -1,3 +1,4 @@
+import { createBrowserClient } from '@supabase/ssr';
 import { createClient } from '@supabase/supabase-js';
 
 // Create a Supabase client with the public API key (for client-side use)
@@ -9,6 +10,13 @@ export const createSupabaseClient = () => {
     throw new Error('Missing Supabase environment variables');
   }
 
+  // Use createBrowserClient from @supabase/ssr instead of createClient directly
+  // This prevents multiple GoTrueClient instances in browser context
+  if (typeof window !== 'undefined') {
+    return createBrowserClient(supabaseUrl, supabaseAnonKey);
+  }
+  
+  // Fallback for non-browser environments if needed
   return createClient(supabaseUrl, supabaseAnonKey);
 };
 
