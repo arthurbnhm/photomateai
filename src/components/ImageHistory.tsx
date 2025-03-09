@@ -10,7 +10,6 @@ import { motion } from "framer-motion"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Badge } from "@/components/ui/badge"
 import { createSupabaseClient } from "@/lib/supabase"
-import { useImageViewer } from "@/contexts/ImageViewerContext"
 import { MediaFocus } from "@/components/MediaFocus"
 
 // Define the type for image generation
@@ -107,10 +106,7 @@ export function ImageHistory({
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   
-  // Use the image viewer context
-  const { setImageViewerOpen } = useImageViewer()
-  
-  // Add state for image viewer
+  // Local state for image viewer
   const [imageViewer, setImageViewer] = useState<ImageViewerState>({
     isOpen: false,
     currentGeneration: null,
@@ -860,8 +856,10 @@ export function ImageHistory({
       currentGeneration: generation,
       currentImageIndex: imageIndex
     })
-    // Update the global context
-    setImageViewerOpen(true)
+    
+    // Dispatch a custom event to notify other components
+    const event = new CustomEvent('imageViewerStateChange', { detail: { isOpen: true } });
+    window.dispatchEvent(event);
   }
 
   // Add function to close image viewer
@@ -870,9 +868,11 @@ export function ImageHistory({
       ...imageViewer,
       isOpen: false
     })
-    // Update the global context
-    setImageViewerOpen(false)
-  }, [imageViewer, setImageViewerOpen]);
+    
+    // Dispatch a custom event to notify other components
+    const event = new CustomEvent('imageViewerStateChange', { detail: { isOpen: false } });
+    window.dispatchEvent(event);
+  }, [imageViewer]);
 
   // Add function to navigate to next image
   const handleNavigate = useCallback((newIndex: number) => {

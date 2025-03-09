@@ -4,7 +4,6 @@ import { ReactNode, useState, useEffect } from 'react'
 import { usePathname } from 'next/navigation'
 import { AuthButton } from '@/components/AuthButton'
 import { ModeToggle } from '@/components/ModeToggle'
-import { useImageViewer } from '@/contexts/ImageViewerContext'
 
 export interface ActionButtonsProps {
   /**
@@ -44,6 +43,12 @@ export interface ActionButtonsProps {
   gap?: string
   
   /**
+   * Whether the image viewer is open
+   * @default false
+   */
+  isImageViewerOpen?: boolean
+  
+  /**
    * Additional buttons to render
    */
   children?: ReactNode
@@ -59,18 +64,35 @@ export function ActionButtons({
   position = 'top-right',
   className = '',
   gap = 'gap-3',
+  isImageViewerOpen: propIsImageViewerOpen = false,
   children
 }: ActionButtonsProps) {
   const pathname = usePathname()
   const [mounted, setMounted] = useState(false)
-  
-  // Use the image viewer context
-  const { isImageViewerOpen } = useImageViewer()
+  const [isImageViewerOpen, setIsImageViewerOpen] = useState(propIsImageViewerOpen)
   
   // Set mounted to true after hydration
   useEffect(() => {
     setMounted(true)
-  }, [])
+    
+    // Listen for the custom event
+    const handleImageViewerStateChange = (event: CustomEvent<{ isOpen: boolean }>) => {
+      setIsImageViewerOpen(event.detail.isOpen);
+    };
+    
+    // Add event listener
+    window.addEventListener('imageViewerStateChange', handleImageViewerStateChange as EventListener);
+    
+    // Clean up
+    return () => {
+      window.removeEventListener('imageViewerStateChange', handleImageViewerStateChange as EventListener);
+    };
+  }, []);
+  
+  // Update state when prop changes
+  useEffect(() => {
+    setIsImageViewerOpen(propIsImageViewerOpen);
+  }, [propIsImageViewerOpen]);
   
   // Don't render anything until client-side hydration is complete
   if (!mounted) {

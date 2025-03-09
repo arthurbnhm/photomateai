@@ -7,7 +7,6 @@ import { Button } from "@/components/ui/button"
 import { toast } from "sonner"
 import { motion, AnimatePresence } from "framer-motion"
 import { X, Download, ChevronLeft, ChevronRight } from "lucide-react"
-import { useImageViewer } from "@/contexts/ImageViewerContext"
 import { AspectRatio } from "@/components/ui/aspect-ratio"
 
 // Define the types needed for the component
@@ -40,8 +39,6 @@ export function MediaFocus({
   onClose,
   onNavigate
 }: MediaFocusProps) {
-  // Use the image viewer context
-  const { setImageViewerOpen } = useImageViewer()
   const [mounted, setMounted] = React.useState(false)
   
   // Handle mounting for portal
@@ -52,8 +49,6 @@ export function MediaFocus({
   
   // Lock body scroll when viewer is open
   useEffect(() => {
-    setImageViewerOpen(isOpen)
-    
     if (isOpen) {
       // Save the current scroll position and disable scrolling
       const scrollY = window.scrollY
@@ -81,7 +76,7 @@ export function MediaFocus({
         window.scrollTo(0, scrollY)
       }
     }
-  }, [isOpen, setImageViewerOpen])
+  }, [isOpen])
   
   // Touch swipe handling
   const touchStartXRef = useRef<number | null>(null)
