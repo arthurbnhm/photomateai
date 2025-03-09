@@ -247,8 +247,8 @@ export function MediaFocus({
             onClick={(e) => e.stopPropagation()}
           >
             {/* Top bar with counter and controls */}
-            <div className="w-full flex items-center justify-between z-20">
-              <div className="bg-muted px-[3vw] py-[1vh] rounded-full text-sm font-medium text-foreground">
+            <div className="w-full flex items-center justify-between z-20 px-[3vw]">
+              <div className="bg-muted py-[1vh] px-4 rounded-full text-sm font-medium text-foreground">
                 {currentImageIndex + 1} / {currentGeneration.images.length}
               </div>
               
@@ -329,8 +329,8 @@ export function MediaFocus({
             </div>
             
             {/* Bottom section with thumbnails - no background */}
-            <div className="w-full z-20">
-              <div className="mx-auto py-[2vh] px-[3vw] rounded-lg overflow-x-auto">
+            <div className="w-full z-20 px-[3vw]">
+              <div className="mx-auto py-[2vh] rounded-lg overflow-x-auto">
                 <div className="flex items-center gap-[2vw] justify-center">
                   {currentGeneration.images.map((image, index) => (
                     <button

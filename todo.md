@@ -40,7 +40,7 @@
 - ✅ Seperate train.tsx into components
 - ✅ Have a single page for both training and creation
 - Use a generated profile pic as avatar
-- Improve the navbar, do not display when scrolling
+- ✅ Improve the navbar, do not display when scrolling
 - Vibe with music
 - A chat that interacts with my api, know the format to use etc
 
@@ -48,7 +48,7 @@
 
 - ✅ Login / Sign up
 - Integrate RLS in each table and bucket
-- Update all the routes with user filtering
+- ✅ Update all the routes with user filtering
 - Add user profiles with preferences
 - ✅ Add webhook secrets
 
