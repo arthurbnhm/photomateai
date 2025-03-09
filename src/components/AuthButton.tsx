@@ -55,25 +55,13 @@ export function AuthButton({
       }
       
       return (
-        <div className="flex items-center gap-2 w-full">
-          <Button 
-            variant="outline" 
-            className="h-9 w-auto px-3"
-            asChild
-          >
-            <Link href="/create">Go to App</Link>
-          </Button>
-          
-          {!hideSignOutOnHomepage && (
-            <Button 
-              variant="outline" 
-              className="h-9 w-auto px-3"
-              onClick={signOut}
-            >
-              Sign out
-            </Button>
-          )}
-        </div>
+        <Button 
+          variant="outline" 
+          className="h-9 w-auto px-3"
+          asChild
+        >
+          <Link href="/create">Go to App</Link>
+        </Button>
       )
     }
     

@@ -11,8 +11,28 @@ import {
   DropdownMenuContent,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
+  DropdownMenuItem,
 } from "@/components/ui/dropdown-menu"
 import { useAuth } from '@/hooks/useAuth'
+
+// Simple SignOutButton component
+function SignOutButton({ isMobileMenu = false }) {
+  const { signOut } = useAuth()
+  
+  return isMobileMenu ? (
+    <DropdownMenuItem onClick={signOut}>
+      Sign out
+    </DropdownMenuItem>
+  ) : (
+    <Button 
+      variant="outline" 
+      className="h-9 w-auto px-3"
+      onClick={signOut}
+    >
+      Sign out
+    </Button>
+  )
+}
 
 export interface ActionButtonsProps {
   /**
@@ -65,11 +85,13 @@ export function ActionButtons({
   
   // Hooks
   const pathname = usePathname()
-  const { isAuthReady } = useAuth()
+  const { isAuthReady, user } = useAuth()
   
   // Computed values
   const isAuthPage = pathname?.startsWith('/auth')
   const shouldShowAuthButton = showAuthButton && !isAuthPage
+  const isHomePage = pathname === '/'
+  const showSignOutButton = user && isHomePage && !hideSignOutOnHomepage
   
   // Scroll and visibility handling
   useEffect(() => {
@@ -149,10 +171,15 @@ export function ActionButtons({
       {/* Desktop navigation */}
       <div className="hidden md:flex items-center gap-3">
         {children}
-        {shouldShowAuthButton && (
-          <AuthButton hideSignOutOnHomepage={hideSignOutOnHomepage} isMobileMenu={false} />
-        )}
-        {showThemeToggle && <ModeToggle />}
+        <div className="flex items-center gap-3">
+          {shouldShowAuthButton && (
+            <AuthButton hideSignOutOnHomepage={hideSignOutOnHomepage} isMobileMenu={false} />
+          )}
+          {showSignOutButton && (
+            <SignOutButton isMobileMenu={false} />
+          )}
+          {showThemeToggle && <ModeToggle />}
+        </div>
       </div>
 
       {/* Mobile navigation */}
@@ -183,7 +210,7 @@ export function ActionButtons({
             >
               {children}
               
-              {shouldShowAuthButton && children && (
+              {(shouldShowAuthButton || showSignOutButton) && children && (
                 <DropdownMenuSeparator />
               )}
               
@@ -192,6 +219,10 @@ export function ActionButtons({
                   hideSignOutOnHomepage={hideSignOutOnHomepage} 
                   isMobileMenu={true} 
                 />
+              )}
+              
+              {showSignOutButton && (
+                <SignOutButton isMobileMenu={true} />
               )}
             </DropdownMenuContent>
           )}
