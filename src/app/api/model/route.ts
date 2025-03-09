@@ -27,25 +27,25 @@ export async function POST(request: NextRequest) {
     switch (action) {
       case 'create':
         // Create a new model
-        const { modelName, owner, visibility, hardware, displayName } = body;
-        if (!modelName || !owner || !visibility || !hardware) {
+        const { modelName, owner, visibility, hardware, displayName, userId } = body;
+        if (!modelName || !owner || !visibility || !hardware || !userId) {
           return NextResponse.json(
             { error: 'Missing required parameters', success: false },
             { status: 400 }
           );
         }
-        return await createModel(modelName, owner, visibility, hardware, displayName || modelName);
+        return await createModel(modelName, owner, visibility, hardware, displayName, userId);
 
       case 'train':
         // Start training a model
-        const { modelOwner, modelName: trainModelName, zipUrl } = body;
-        if (!modelOwner || !trainModelName || !zipUrl) {
+        const { modelOwner, modelName: trainModelName, zipUrl, userId: trainUserId } = body;
+        if (!modelOwner || !trainModelName || !zipUrl || !trainUserId) {
           return NextResponse.json(
             { error: 'Missing required parameters', success: false },
             { status: 400 }
           );
         }
-        return await trainModel(modelOwner, trainModelName, zipUrl);
+        return await trainModel(modelOwner, trainModelName, zipUrl, trainUserId);
 
       case 'initBucket':
         // Initialize the storage bucket
@@ -81,7 +81,7 @@ export async function POST(request: NextRequest) {
 }
 
 // Create a model in Replicate
-async function createModel(modelName: string, owner: string, visibility: Visibility, hardware: string, displayName: string) {
+async function createModel(modelName: string, owner: string, visibility: Visibility, hardware: string, displayName: string, userId: string) {
   if (!modelName) {
     return NextResponse.json(
       { error: 'Model name is required', success: false },
@@ -99,6 +99,13 @@ async function createModel(modelName: string, owner: string, visibility: Visibil
   if (!displayName) {
     return NextResponse.json(
       { error: 'Display name is required', success: false },
+      { status: 400 }
+    );
+  }
+
+  if (!userId) {
+    return NextResponse.json(
+      { error: 'User ID is required', success: false },
       { status: 400 }
     );
   }
@@ -138,7 +145,8 @@ async function createModel(modelName: string, owner: string, visibility: Visibil
         visibility: model.visibility,
         hardware: hardware || 'gpu-t4',
         status: 'created',
-        display_name: displayName
+        display_name: displayName,
+        user_id: userId
       })
       .select()
       .single();
@@ -171,11 +179,18 @@ async function createModel(modelName: string, owner: string, visibility: Visibil
 }
 
 // Train a model using Replicate
-async function trainModel(modelOwner: string, modelName: string, zipUrl: string) {
+async function trainModel(modelOwner: string, modelName: string, zipUrl: string, userId: string) {
   if (!modelOwner || !modelName || !zipUrl) {
     console.error('Missing required parameters:', { modelOwner, modelName, zipUrl });
     return NextResponse.json(
       { error: 'Model owner, name, and zip URL are required', success: false },
+      { status: 400 }
+    );
+  }
+
+  if (!userId) {
+    return NextResponse.json(
+      { error: 'User ID is required', success: false },
       { status: 400 }
     );
   }
@@ -263,7 +278,8 @@ async function trainModel(modelOwner: string, modelName: string, zipUrl: string)
           training_id: training.id,
           status: training.status,
           zip_url: zipUrl,
-          input_params: trainingParams
+          input_params: trainingParams,
+          user_id: userId
         };
         
         const { data: trainingData, error: trainingError } = await supabase
@@ -402,6 +418,16 @@ async function handleFileUpload(request: NextRequest) {
     // Initialize Supabase admin client for database operations
     const supabaseAdmin = createSupabaseAdmin();
     
+    // Get user ID from session token
+    const { data: { user }, error: userError } = await supabaseAdmin.auth.getUser(sessionToken);
+    
+    if (userError || !user) {
+      return NextResponse.json(
+        { error: 'Invalid session token', success: false },
+        { status: 401 }
+      );
+    }
+    
     // Find the model in Supabase
     const { data: modelData, error: modelError } = await supabaseAdmin
       .from('models')
@@ -413,6 +439,18 @@ async function handleFileUpload(request: NextRequest) {
     if (modelError) {
       // Continue anyway since we can still upload the files
     } else {
+      // Update the model with the user ID if it's not already set
+      if (modelData && !modelData.user_id) {
+        const { error: updateError } = await supabaseAdmin
+          .from('models')
+          .update({ user_id: user.id })
+          .eq('id', modelData.id);
+          
+        if (updateError) {
+          console.warn(`Failed to update model with user ID: ${updateError.message}`);
+          // Continue anyway
+        }
+      }
     }
     
     // Create a zip file directly
