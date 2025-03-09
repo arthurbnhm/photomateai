@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useEffect, useRef } from "react"
+import React, { useEffect, useRef, useCallback } from "react"
 import { createPortal } from "react-dom"
 import NextImage from "next/image"
 import { Button } from "@/components/ui/button"
@@ -105,17 +105,17 @@ export function MediaFocus({
   }
   
   // Navigation
-  const nextImage = () => {
+  const nextImage = useCallback(() => {
     if (!currentGeneration) return
     const totalImages = currentGeneration.images.length
     onNavigate((currentImageIndex + 1) % totalImages)
-  }
+  }, [currentGeneration, currentImageIndex, onNavigate]);
 
-  const prevImage = () => {
+  const prevImage = useCallback(() => {
     if (!currentGeneration) return
     const totalImages = currentGeneration.images.length
     onNavigate((currentImageIndex - 1 + totalImages) % totalImages)
-  }
+  }, [currentGeneration, currentImageIndex, onNavigate]);
   
   // Preload images
   useEffect(() => {
@@ -150,7 +150,7 @@ export function MediaFocus({
     
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [isOpen, currentGeneration, currentImageIndex, nextImage, prevImage, onClose])
+  }, [isOpen, nextImage, prevImage, onClose])
 
   // Download functionality
   const downloadImage = async (e: React.MouseEvent) => {

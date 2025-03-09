@@ -19,33 +19,49 @@ export async function POST(request: NextRequest) {
       return await handleFileUpload(request);
     }
 
-    const { action, modelName, owner, modelOwner, visibility, hardware, zipUrl, trainingId, displayName } = await request.json();
-
-    // Check if API token is available
-    const apiToken = process.env.REPLICATE_API_TOKEN;
-    
-    if (!apiToken) {
-      console.error('REPLICATE_API_TOKEN is not set');
-      return NextResponse.json(
-        { 
-          error: "Missing Replicate API token. Please add your token to the .env file or environment variables.",
-          details: "You need a Replicate API token to use this feature. Get one at https://replicate.com/account/api-tokens",
-          success: false
-        },
-        { status: 401 }
-      );
-    }
+    // For JSON requests, parse the body
+    const body = await request.json();
+    const action = body.action;
 
     // Handle different actions
     switch (action) {
       case 'create':
-        return await createModel(modelName, owner, visibility as Visibility, hardware, displayName);
+        // Create a new model
+        const { modelName, owner, visibility, hardware, displayName } = body;
+        if (!modelName || !owner || !visibility || !hardware) {
+          return NextResponse.json(
+            { error: 'Missing required parameters', success: false },
+            { status: 400 }
+          );
+        }
+        return await createModel(modelName, owner, visibility, hardware, displayName || modelName);
+
       case 'train':
-        return await trainModel(modelOwner || owner, modelName, zipUrl);
+        // Start training a model
+        const { modelOwner, modelName: trainModelName, zipUrl } = body;
+        if (!modelOwner || !trainModelName || !zipUrl) {
+          return NextResponse.json(
+            { error: 'Missing required parameters', success: false },
+            { status: 400 }
+          );
+        }
+        return await trainModel(modelOwner, trainModelName, zipUrl);
+
       case 'initBucket':
+        // Initialize the storage bucket
         return await initializeBucket();
-      case 'cancel':
+
+      case 'cancelTraining':
+        // Cancel an ongoing training
+        const { trainingId } = body;
+        if (!trainingId) {
+          return NextResponse.json(
+            { error: 'Missing training ID', success: false },
+            { status: 400 }
+          );
+        }
         return await cancelTraining(trainingId);
+
       default:
         return NextResponse.json(
           { error: 'Invalid action', success: false },
@@ -53,11 +69,10 @@ export async function POST(request: NextRequest) {
         );
     }
   } catch (error) {
-    console.error('Error in model API:', error);
-    
+    console.error('Error processing request:', error);
     return NextResponse.json(
       { 
-        error: error instanceof Error ? error.message : 'An error occurred',
+        error: error instanceof Error ? error.message : 'An unexpected error occurred',
         success: false
       },
       { status: 500 }
@@ -336,7 +351,7 @@ async function initializeBucket() {
       try {
         // Try to create the bucket
         const { error: createBucketError } = await supabase.storage.createBucket('training-files', {
-          public: true,
+          public: false, // Set to private as per RLS policies
           fileSizeLimit: 50 * 1024 * 1024, // 50MB limit
         });
         
@@ -350,28 +365,11 @@ async function initializeBucket() {
       }
     }
     
-    // Update the bucket's public access
-    try {
-      const { error: updateError } = await supabase.storage.updateBucket('training-files', {
-        public: true,
-        fileSizeLimit: 50 * 1024 * 1024, // 50MB limit
-      });
-      void updateError; // Explicitly indicate we're ignoring this variable
-    } catch (error) {
-      void error; // Explicitly indicate we're ignoring this variable
-    }
-    
-    return NextResponse.json({
-      success: true,
-      message: 'Bucket initialization completed'
-    });
+    return NextResponse.json({ success: true });
   } catch (error) {
     console.error('Error initializing bucket:', error);
     return NextResponse.json(
-      { 
-        error: error instanceof Error ? error.message : 'Failed to initialize bucket',
-        success: false
-      },
+      { error: 'Failed to initialize storage bucket', success: false },
       { status: 500 }
     );
   }
@@ -384,6 +382,7 @@ async function handleFileUpload(request: NextRequest) {
     const modelOwner = formData.get('modelOwner') as string;
     const modelName = formData.get('modelName') as string;
     const files = formData.getAll('files') as File[];
+    const sessionToken = request.headers.get('authorization')?.split('Bearer ')[1];
 
     if (!modelOwner || !modelName || files.length === 0) {
       console.error('Missing required parameters for upload');
@@ -393,19 +392,18 @@ async function handleFileUpload(request: NextRequest) {
       );
     }
 
-    // Initialize Supabase client with admin privileges
-    const supabase = createSupabaseAdmin();
-
-    // Check available buckets
-    const { data: buckets, error: bucketsError } = await supabase.storage.listBuckets();
-    void buckets; // Explicitly indicate we're ignoring this variable
-    void bucketsError; // Explicitly indicate we're ignoring this variable
-    if (bucketsError) {
-      console.error('Error listing buckets:', bucketsError);
+    if (!sessionToken) {
+      return NextResponse.json(
+        { error: 'Authentication required', success: false },
+        { status: 401 }
+      );
     }
+
+    // Initialize Supabase admin client for database operations
+    const supabaseAdmin = createSupabaseAdmin();
     
     // Find the model in Supabase
-    const { data: modelData, error: modelError } = await supabase
+    const { data: modelData, error: modelError } = await supabaseAdmin
       .from('models')
       .select('*')
       .eq('model_owner', modelOwner)
@@ -442,10 +440,11 @@ async function handleFileUpload(request: NextRequest) {
       // Convert Blob to ArrayBuffer for Supabase upload
       const zipArrayBuffer = await zipContent.arrayBuffer();
       
-      // Upload the zip file directly to Supabase
+      // Upload the zip file directly to Supabase using admin client
+      // We need admin client here because we're uploading to the user's folder
       const zipPath = `${modelOwner}/${modelName}/images.zip`;
       
-      const { error: uploadError } = await supabase.storage
+      const { error: uploadError } = await supabaseAdmin.storage
         .from('training-files')
         .upload(zipPath, zipArrayBuffer, {
           contentType: 'application/zip',
@@ -460,20 +459,21 @@ async function handleFileUpload(request: NextRequest) {
         );
       }
       
-      // Get the public URL for the zip file
-      const { data: publicUrl } = supabase.storage
+      // Generate a signed URL that expires in 1 hour
+      const { data: signedUrlData, error: signedUrlError } = await supabaseAdmin.storage
         .from('training-files')
-        .getPublicUrl(zipPath);
-      
-      // Verify the upload by attempting to fetch the file head
-      try {
-      } catch (verifyError) {
-        console.warn('⚠️ Could not verify upload:', verifyError);
+        .createSignedUrl(zipPath, 60 * 60); // 1 hour in seconds
+
+      if (signedUrlError || !signedUrlData) {
+        return NextResponse.json(
+          { error: `Failed to generate signed URL: ${signedUrlError?.message || 'Unknown error'}`, success: false },
+          { status: 500 }
+        );
       }
       
       // Update the model with the zip URL if we found the model
       if (modelData) {
-        const { error: updateError } = await supabase
+        const { error: updateError } = await supabaseAdmin
           .from('models')
           .update({ 
             status: 'files_uploaded'
@@ -487,7 +487,7 @@ async function handleFileUpload(request: NextRequest) {
 
       return NextResponse.json({
         success: true,
-        zipUrl: publicUrl.publicUrl,
+        zipUrl: signedUrlData.signedUrl,
         message: `Successfully uploaded ${files.length} files as a zip`
       });
     } catch (zipError) {
@@ -591,6 +591,27 @@ async function cancelTraining(trainingId: string) {
         }
       }
       
+      // Delete the training files if they exist
+      try {
+        const modelOwner = internalTrainingData.models.model_owner;
+        const modelName = internalTrainingData.models.model_id;
+        const zipPath = `${modelOwner}/${modelName}/images.zip`;
+        
+        const { error: deleteError } = await supabase.storage
+          .from('training-files')
+          .remove([zipPath]);
+
+        if (deleteError) {
+          console.warn(`Failed to delete training files: ${deleteError.message}`);
+          // Continue anyway since the training was canceled
+        } else {
+          console.log(`Successfully deleted training files: ${zipPath}`);
+        }
+      } catch (deleteError) {
+        console.warn('Error deleting training files:', deleteError);
+        // Continue anyway since the training was canceled
+      }
+      
       return NextResponse.json({
         success: true,
         training: {
@@ -635,6 +656,27 @@ async function cancelTraining(trainingId: string) {
 
       if (updateModelError) {
       }
+    }
+
+    // Delete the training files if they exist
+    try {
+      const modelOwner = trainingData.models.model_owner;
+      const modelName = trainingData.models.model_id;
+      const zipPath = `${modelOwner}/${modelName}/images.zip`;
+      
+      const { error: deleteError } = await supabase.storage
+        .from('training-files')
+        .remove([zipPath]);
+
+      if (deleteError) {
+        console.warn(`Failed to delete training files: ${deleteError.message}`);
+        // Continue anyway since the training was canceled
+      } else {
+        console.log(`Successfully deleted training files: ${zipPath}`);
+      }
+    } catch (deleteError) {
+      console.warn('Error deleting training files:', deleteError);
+      // Continue anyway since the training was canceled
     }
 
     return NextResponse.json({

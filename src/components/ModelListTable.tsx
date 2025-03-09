@@ -32,6 +32,7 @@ interface Training {
   completed_at: string | null;
   training_id: string;
   is_cancelled?: boolean;
+  model_id?: string;
 }
 
 interface Model {
@@ -185,10 +186,11 @@ export function ModelListTable({ newTraining, onClearNewTraining }: ModelListTab
     if (realtimeSubscribed) return;
     
     try {
-      // Subscribe to changes in the trainings table - monitor ALL status changes
+      // Subscribe to changes in the trainings table
       const trainingSubscription = supabase
         .channel('trainings-changes')
         .on(
+          // Type assertion needed for Supabase Realtime - this is the correct channel name
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           'postgres_changes' as any, 
           { 
@@ -196,25 +198,20 @@ export function ModelListTable({ newTraining, onClearNewTraining }: ModelListTab
             schema: 'public', 
             table: 'trainings' 
           }, 
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          (payload: any) => {
+          (payload: { new: Training; old: Training }) => {
             // Process ALL status changes to ensure we catch everything
             if (payload?.new?.status) {
               const status = payload.new.status;
-              const trainingId = payload.new.training_id;
-              const modelId = payload.new.model_id;
+              const trainingId = payload.new.id;
               
-              // Simple approach: directly update the models state for immediate UI refresh
-              if (modelId) {
-                // Use React 18's flushSync to ensure immediate update
-                // This forces React to update the state immediately without batching
-                setModels(prevModels => {
-                  return prevModels.map(model => {
-                    // Check if this is the model that needs updating
-                    if (model.id === modelId) {
-                      // Update the training in the model's trainings array
+              // For completed trainings, fetch immediately
+              if (status === 'succeeded' || status === 'failed' || status === 'cancelled') {
+                // Directly update the training in state for immediate UI refresh
+                if (trainingId) {
+                  setModels(prevModels => {
+                    return prevModels.map(model => {
                       const updatedTrainings = model.trainings.map(training => {
-                        if (training.training_id === trainingId) {
+                        if (training.id === trainingId) {
                           return {
                             ...training,
                             status: status,
@@ -240,13 +237,9 @@ export function ModelListTable({ newTraining, onClearNewTraining }: ModelListTab
                         trainings: updatedTrainings,
                         status: newModelStatus
                       };
-                    }
-                    return model;
+                    });
                   });
-                });
-                
-                // For critical status changes, fetch immediately to ensure we have the latest data
-                if (status === 'succeeded') {
+                  
                   // No timeout - fetch immediately
                   fetchModelsImmediate(page);
                 }
@@ -259,14 +252,16 @@ export function ModelListTable({ newTraining, onClearNewTraining }: ModelListTab
             }
           }
         )
-        .subscribe((_status) => {
-          void _status; // Explicitly indicate we're ignoring this variable
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        .subscribe((status: any) => {
+          void status; // Explicitly indicate we're ignoring this variable
         });
       
       // Also subscribe to changes in the models table
       const modelSubscription = supabase
         .channel('models-changes')
         .on(
+          // Type assertion needed for Supabase Realtime - this is the correct channel name
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           'postgres_changes' as any, 
           { 
@@ -274,8 +269,7 @@ export function ModelListTable({ newTraining, onClearNewTraining }: ModelListTab
             schema: 'public', 
             table: 'models' 
           }, 
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          (payload: any) => {
+          (payload: { new: Model; old: Model }) => {
             // Process model status changes
             if (payload?.new?.status) {
               const status = payload.new.status;
@@ -297,8 +291,9 @@ export function ModelListTable({ newTraining, onClearNewTraining }: ModelListTab
             }
           }
         )
-        .subscribe((_status) => {
-          void _status; // Explicitly indicate we're ignoring this variable
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        .subscribe((status: any) => {
+          void status; // Explicitly indicate we're ignoring this variable
         });
       
       // Set up a periodic refresh to ensure data consistency, but with longer interval
@@ -527,13 +522,22 @@ export function ModelListTable({ newTraining, onClearNewTraining }: ModelListTab
     
     setIsCancelling(true);
     try {
+      // Get the session for authentication
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (!sessionData.session) {
+        toast.error("You must be logged in to cancel a training");
+        setIsCancelling(false);
+        return;
+      }
+
       const response = await fetch('/api/model', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${sessionData.session.access_token}`
         },
         body: JSON.stringify({
-          action: 'cancel',
+          action: 'cancelTraining',
           trainingId: trainingToCancel.id,
         }),
       });
@@ -611,7 +615,7 @@ export function ModelListTable({ newTraining, onClearNewTraining }: ModelListTab
         variant="outline"
         size="icon"
         className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/20"
-        onClick={() => {
+        onClick={async () => {
           // Check if newTraining exists and has an ID
           if (!newTraining) {
             toast.error("Invalid training data");
@@ -619,10 +623,21 @@ export function ModelListTable({ newTraining, onClearNewTraining }: ModelListTab
           }
           
           if (newTraining.id) {
-            setTrainingToCancel({
-              id: newTraining.id,
-              modelId: newTraining.modelId || ''
-            });
+            // Get the session for authentication
+            try {
+              const { data: sessionData } = await supabase.auth.getSession();
+              if (!sessionData.session) {
+                toast.error("You must be logged in to cancel a training");
+                return;
+              }
+              
+              setTrainingToCancel({
+                id: newTraining.id,
+                modelId: newTraining.modelId || ''
+              });
+            } catch (error) {
+              toast.error(`Error: ${error instanceof Error ? error.message : 'Failed to get session'}`);
+            }
           } else {
             toast.error("Could not find a valid training ID");
           }

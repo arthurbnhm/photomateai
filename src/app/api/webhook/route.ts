@@ -163,6 +163,47 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: 'Error updating training' }, { status: 500 });
       }
 
+      // If training has started processing, delete the training files
+      if (webhookData.status === 'processing' || webhookData.status === 'starting') {
+        try {
+          // Get the model details to construct the file path
+          const { data: modelData, error: modelError } = await supabase
+            .from('models')
+            .select('model_owner, model_id')
+            .eq('id', training.model_id)
+            .single();
+
+          if (!modelError && modelData) {
+            const zipPath = `${modelData.model_owner}/${modelData.model_id}/images.zip`;
+            
+            // Check if the file exists before trying to delete it
+            const { data: fileExists } = await supabase.storage
+              .from('training-files')
+              .list(modelData.model_owner, {
+                search: `${modelData.model_id}/images.zip`
+              });
+
+            if (fileExists && fileExists.length > 0) {
+              // Delete the file
+              const { error: deleteError } = await supabase.storage
+                .from('training-files')
+                .remove([zipPath]);
+
+              if (deleteError) {
+                console.warn(`Failed to delete training files: ${deleteError.message}`);
+              } else {
+                console.log(`Successfully deleted training files: ${zipPath}`);
+              }
+            } else {
+              console.log(`Training files not found or already deleted: ${zipPath}`);
+            }
+          }
+        } catch (deleteError) {
+          console.warn('Error deleting training files:', deleteError);
+          // Continue anyway since this is not critical
+        }
+      }
+
       // If training is completed, update the model status
       if (webhookData.status === 'succeeded') {
         // Update the training with completed_at timestamp

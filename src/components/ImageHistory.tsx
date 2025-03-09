@@ -865,22 +865,22 @@ export function ImageHistory({
   }
 
   // Add function to close image viewer
-  const closeImageViewer = () => {
+  const closeImageViewer = useCallback(() => {
     setImageViewer({
       ...imageViewer,
       isOpen: false
     })
     // Update the global context
     setImageViewerOpen(false)
-  }
+  }, [imageViewer, setImageViewerOpen]);
 
   // Add function to navigate to next image
-  const handleNavigate = (newIndex: number) => {
+  const handleNavigate = useCallback((newIndex: number) => {
     setImageViewer({
       ...imageViewer,
       currentImageIndex: newIndex
     })
-  }
+  }, [imageViewer]);
 
   // Reference for touch handling and keyboard navigation are now handled in MediaFocus
   

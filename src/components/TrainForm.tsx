@@ -64,10 +64,18 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
   useEffect(() => {
     const initBucket = async () => {
       try {
+        // Get the session for authentication
+        const { data: sessionData } = await supabase.auth.getSession();
+        if (!sessionData.session) {
+          console.error('No active session found');
+          return;
+        }
+
         await fetch('/api/model', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
+            'Authorization': `Bearer ${sessionData.session.access_token}`
           },
           body: JSON.stringify({
             action: 'initBucket'
@@ -79,7 +87,7 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
     };
 
     initBucket();
-  }, []);
+  }, [supabase]);
 
   // Format model name to meet Replicate's requirements
   const formatModelName = (name: string): string => {
@@ -205,6 +213,14 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
     setUploadProgress(0);
     
     try {
+      // Get the session for authentication
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (!sessionData.session) {
+        toast.error("You must be logged in to train a model");
+        setIsProcessing(false);
+        return;
+      }
+
       // Step 1: Create the model in Replicate
       toast.info("Creating model...");
       setUploadProgress(10);
@@ -213,6 +229,7 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${sessionData.session.access_token}`
         },
         body: JSON.stringify({
           action: 'create',
@@ -245,9 +262,12 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
         formData.append('files', file);
       });
       
-      // Upload files using the server-side API
+      // Upload files using the server-side API with authentication
       const uploadResponse = await fetch('/api/model', {
         method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${sessionData.session.access_token}`
+        },
         body: formData,
       });
       
@@ -265,23 +285,24 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
       toast.success("Images uploaded successfully");
       setUploadProgress(70);
       
-      // Step 3: Start training the model with the zip URL
+      // Step 3: Start model training with the zip URL
       toast.info("Starting model training...");
       
-      const trainingResponse = await fetch('/api/model', {
+      const trainResponse = await fetch('/api/model', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${sessionData.session.access_token}`
         },
         body: JSON.stringify({
           action: 'train',
           modelOwner: modelData.model.owner,
           modelName: modelData.model.name,
-          zipUrl: uploadData.zipUrl,
+          zipUrl: uploadData.zipUrl
         }),
       });
       
-      const trainingData = await trainingResponse.json();
+      const trainingData = await trainResponse.json();
       
       if (!trainingData.success) {
         throw new Error(trainingData.error || 'Failed to start model training');
