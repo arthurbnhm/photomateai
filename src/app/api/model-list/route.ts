@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createSupabaseAdmin } from '@/lib/supabase';
+import { createClient } from '@/utils/supabase/server';
 
 // Define types for the database entities
 interface Training {
@@ -24,6 +25,7 @@ interface Model {
   status: string;
   created_at: string;
   is_deleted: boolean;
+  user_id?: string;
   trainings: Training[];
   training_id?: string;
 }
@@ -36,22 +38,45 @@ export async function GET(request: NextRequest) {
     const status = searchParams.get('status');
     const isCancelled = searchParams.get('is_cancelled');
     const isDeleted = searchParams.get('is_deleted');
+    const userId = searchParams.get('user_id');
     const limit = parseInt(searchParams.get('limit') || '10', 10);
     const page = parseInt(searchParams.get('page') || '1', 10);
     const offset = (page - 1) * limit;
 
     // Initialize Supabase client
     const supabase = createSupabaseAdmin();
+    
+    // Get the authenticated user if no user_id is provided
+    let authenticatedUserId = userId;
+    if (!authenticatedUserId) {
+      try {
+        // Create a client-side Supabase client to get the authenticated user
+        const supabaseClient = createClient();
+        const { data: { user } } = await supabaseClient.auth.getUser();
+        if (user) {
+          authenticatedUserId = user.id;
+        }
+      } catch (error) {
+        console.error('Error getting authenticated user:', error);
+        // Continue without user filtering if there's an error
+      }
+    }
 
     // If modelId is provided, fetch a specific model with its trainings
     if (modelId) {
       // Get the model
-      const { data: model, error: modelError } = await supabase
+      let modelQuery = supabase
         .from('models')
         .select('*, trainings(*)')
         .eq('id', modelId)
-        .eq('is_deleted', false)
-        .single();
+        .eq('is_deleted', false);
+      
+      // Add user_id filter if available
+      if (authenticatedUserId) {
+        modelQuery = modelQuery.eq('user_id', authenticatedUserId);
+      }
+      
+      const { data: model, error: modelError } = await modelQuery.single();
 
       if (modelError) {
         return NextResponse.json(
@@ -112,6 +137,11 @@ export async function GET(request: NextRequest) {
     // Apply status filter if provided
     if (status) {
       query = query.eq('status', status);
+    }
+    
+    // Apply user_id filter if available
+    if (authenticatedUserId) {
+      query = query.eq('user_id', authenticatedUserId);
     }
 
     // Apply pagination
@@ -189,11 +219,18 @@ export async function GET(request: NextRequest) {
       trainings: model.trainings.filter((training: Training) => !training.is_cancelled)
     }));
 
-    // Get total count for pagination
-    const { count: totalCount, error: countError } = await supabase
+    // Get total count for pagination with user_id filter if available
+    let countQuery = supabase
       .from('models')
       .select('*', { count: 'exact', head: true })
       .eq('is_deleted', false);
+      
+    // Apply user_id filter to count query if available
+    if (authenticatedUserId) {
+      countQuery = countQuery.eq('user_id', authenticatedUserId);
+    }
+    
+    const { count: totalCount, error: countError } = await countQuery;
 
     if (countError) {
       console.error('Error counting models:', countError);

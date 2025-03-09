@@ -4,6 +4,7 @@ import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { ActionButtons } from "@/components/ActionButtons";
+import { AuthProvider } from "@/contexts/AuthContext";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -25,11 +26,13 @@ export default function RootLayout({
           defaultTheme="system"
           enableSystem
         >
-          <ActionButtons hideSignOutOnHomepage={true} />
-          <main className="min-h-screen pt-16 md:pt-12">
-            {children}
-          </main>
-          <Toaster />
+          <AuthProvider>
+            <ActionButtons hideSignOutOnHomepage={true} />
+            <main className="min-h-screen pt-16 md:pt-12">
+              {children}
+            </main>
+            <Toaster />
+          </AuthProvider>
         </ThemeProvider>
       </body>
     </html>

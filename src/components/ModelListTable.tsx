@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Trash2, XCircle } from "lucide-react";
 import { createSupabaseClient } from "@/lib/supabase";
+import { useAuth } from "@/contexts/AuthContext";
 
 // Initialize Supabase client
 const supabase = createSupabaseClient();
@@ -86,6 +87,7 @@ export function ModelListTable({ newTraining, onClearNewTraining }: ModelListTab
   const [trainingToCancel, setTrainingToCancel] = useState<{id: string, modelId: string} | null>(null);
   const [realtimeSubscribed, setRealtimeSubscribed] = useState(false);
   const fetchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const { user } = useAuth();
   
   // Check if newTraining is already in models list
   const isNewTrainingInModels = useCallback(() => {
@@ -115,7 +117,14 @@ export function ModelListTable({ newTraining, onClearNewTraining }: ModelListTab
     try {
       const startTime = Date.now();
       void startTime; // Explicitly indicate we're ignoring this variable
-      const response = await fetch(`/api/model-list?page=${pageNum}&limit=5`);
+      
+      // Include user_id in the API request if user is authenticated
+      const userId = user?.id;
+      const url = userId 
+        ? `/api/model-list?page=${pageNum}&limit=5&user_id=${userId}` 
+        : `/api/model-list?page=${pageNum}&limit=5`;
+      
+      const response = await fetch(url);
       
       if (!response.ok) {
         throw new Error(`Failed to fetch models: ${response.status} ${response.statusText}`);
@@ -134,7 +143,7 @@ export function ModelListTable({ newTraining, onClearNewTraining }: ModelListTab
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [user?.id]);
 
   // Immediate fetch function without debouncing for critical updates
   const fetchModelsImmediate = useCallback((pageNum = 1) => {

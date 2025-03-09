@@ -11,6 +11,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Badge } from "@/components/ui/badge"
 import { createSupabaseClient } from "@/lib/supabase"
 import { MediaFocus } from "@/components/MediaFocus"
+import { useAuth } from "@/contexts/AuthContext"
 
 // Define the type for image generation
 type ImageGeneration = {
@@ -101,6 +102,7 @@ export function ImageHistory({
   const [isCancelling, setIsCancelling] = useState<string | null>(null)
   const [elapsedTimes, setElapsedTimes] = useState<Record<string, number>>({})
   const [isMounted, setIsMounted] = useState(false)
+  const { user } = useAuth()
   
   // Refs for polling mechanism
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -183,10 +185,20 @@ export function ImageHistory({
       
       // Fetch from Supabase if cache is invalid or forced refresh
       const supabase = createSupabaseClient();
-      const { data, error } = await supabase
+      
+      // Build the query with user_id filter if user is authenticated
+      let query = supabase
         .from('predictions')
         .select('*')
-        .eq('is_deleted', false)
+        .eq('is_deleted', false);
+      
+      // Add user_id filter if user is authenticated
+      if (user?.id) {
+        query = query.eq('user_id', user.id);
+      }
+      
+      // Complete the query with ordering and limit
+      const { data, error } = await query
         .order('created_at', { ascending: false })
         .limit(50);
       
@@ -234,7 +246,7 @@ export function ImageHistory({
       setError('Failed to load image history. Please try again later.');
       setIsLoading(false);
     }
-  }, [setIsLoading, setGenerations, setError]);
+  }, [setIsLoading, setGenerations, setError, user?.id]);
 
   // Initial load and Supabase Realtime setup
   useEffect(() => {
