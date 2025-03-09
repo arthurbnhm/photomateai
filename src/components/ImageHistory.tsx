@@ -961,24 +961,27 @@ export function ImageHistory({
                       <div className="flex items-center justify-between gap-3">
                         {/* Left side - Tags */}
                         <div className="flex items-center gap-2 flex-wrap">
-                          {/* Aspect ratio badge */}
-                          <Badge variant="outline" className="bg-blue-100 text-blue-800 hover:bg-blue-200 border-blue-200">
-                            {generation.aspectRatio}
-                          </Badge>
-                          
-                          {/* Format badge */}
-                          {generation.format && (
-                            <Badge variant="outline" className="bg-green-100 text-green-800 hover:bg-green-200 border-green-200">
-                              {generation.format.toUpperCase()}
+                          {/* Badges - Only show on desktop for pending generations */}
+                          <div className="hidden sm:flex items-center gap-2">
+                            {/* Aspect ratio badge */}
+                            <Badge variant="outline" className="bg-blue-100 text-blue-800 hover:bg-blue-200 border-blue-200">
+                              {generation.aspectRatio}
                             </Badge>
-                          )}
-                          
-                          {/* Model badge */}
-                          {generation.modelName && (
-                            <Badge variant="outline" className="bg-purple-100 text-purple-800 hover:bg-purple-200 border-purple-200 max-w-[150px] truncate">
-                              {generation.modelName}
-                            </Badge>
-                          )}
+                            
+                            {/* Format badge */}
+                            {generation.format && (
+                              <Badge variant="outline" className="bg-green-100 text-green-800 hover:bg-green-200 border-green-200">
+                                {generation.format.toUpperCase()}
+                              </Badge>
+                            )}
+                            
+                            {/* Model badge */}
+                            {generation.modelName && (
+                              <Badge variant="outline" className="bg-purple-100 text-purple-800 hover:bg-purple-200 border-purple-200 max-w-[150px] truncate">
+                                {generation.modelName}
+                              </Badge>
+                            )}
+                          </div>
                           
                           {/* Status indicators */}
                           {generation.potentiallyStalled ? (
@@ -1155,7 +1158,7 @@ export function ImageHistory({
                   <div className="flex items-center justify-between gap-3">
                     {/* Left side - Tags */}
                     <div className="flex items-center gap-2 flex-wrap">
-                      {/* Aspect ratio badge */}
+                      {/* Aspect ratio badge - visible on all devices for completed generations */}
                       <Badge variant="outline" className="bg-blue-100 text-blue-800 hover:bg-blue-200 border-blue-200">
                         {generation.aspectRatio}
                       </Badge>
