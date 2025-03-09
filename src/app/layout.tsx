@@ -28,7 +28,7 @@ export default function RootLayout({
         >
           <AuthProvider>
             <ActionButtons hideSignOutOnHomepage={true} />
-            <main className="min-h-screen pt-16 md:pt-12">
+            <main className="min-h-screen">
               {children}
             </main>
             <Toaster />

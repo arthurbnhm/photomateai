@@ -48,14 +48,18 @@
 # Authentication
 
 - ✅ Login / Sign up
-- Integrate RLS in each table and bucket
+- ✅ Integrate RLS in each table and bucket
 - ✅ Update all the routes with user filtering
 - Add user profiles with preferences
 - ✅ Add webhook secrets
 
 
-Attention to:
+# Attention to:
 
 - State Management:
 
 You're using local storage for state management in some places (PENDING_GENERATIONS_KEY, CLIENT_HISTORY_KEY). For a more robust solution, consider using a state management library or React Context.
+
+# Others
+
+- Include costs

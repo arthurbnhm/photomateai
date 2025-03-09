@@ -29,17 +29,21 @@ export function ModeToggle() {
   // Only calculate these classes on the client side after hydration
   const isDark = resolvedTheme === 'dark'
   
-  const iconBaseClass = "h-5 w-5 transition-all duration-500 ease-in-out"
-  const sunClass = isDark ? 'rotate-[-90deg] scale-0 opacity-0' : 'rotate-0 scale-100 opacity-100'
-  const moonClass = isDark ? 'rotate-0 scale-100 opacity-100' : 'rotate-90 scale-0 opacity-0'
-
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="outline" size="icon" className="relative">
-          <Sun className={`${iconBaseClass} ${sunClass}`} />
-          <Moon className={`absolute ${iconBaseClass} ${moonClass}`} />
-          <span className="sr-only">Toggle theme</span>
+        <Button 
+          variant="outline" 
+          size="icon"
+          className="h-9 w-9 p-0 relative"
+          aria-label="Toggle theme"
+        >
+          <Sun className={`h-[18px] w-[18px] transition-all duration-300 ${
+            isDark ? 'opacity-0 scale-0' : 'opacity-100 scale-100'
+          }`} />
+          <Moon className={`absolute h-[18px] w-[18px] transition-all duration-300 ${
+            isDark ? 'opacity-100 scale-100' : 'opacity-0 scale-0'
+          }`} />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">

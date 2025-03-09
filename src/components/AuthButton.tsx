@@ -41,7 +41,7 @@ export function AuthButton({
       if (isMobileMenu) {
         return (
           <>
-            <DropdownMenuItem onClick={() => router.push('/create?tab=create')}>
+            <DropdownMenuItem onClick={() => router.push('/create')}>
               Go to App
             </DropdownMenuItem>
             
@@ -57,18 +57,16 @@ export function AuthButton({
       return (
         <div className="flex items-center gap-2 w-full">
           <Button 
-            variant="default" 
-            size="icon"
+            variant="outline" 
             className="h-9 w-auto px-3"
             asChild
           >
-            <Link href="/create?tab=create">Go to App</Link>
+            <Link href="/create">Go to App</Link>
           </Button>
           
           {!hideSignOutOnHomepage && (
             <Button 
               variant="outline" 
-              size="icon"
               className="h-9 w-auto px-3"
               onClick={signOut}
             >
@@ -87,7 +85,6 @@ export function AuthButton({
     ) : (
       <Button 
         variant="outline" 
-        size="icon"
         className="h-9 w-auto px-3"
         onClick={signOut}
       >
@@ -104,7 +101,6 @@ export function AuthButton({
   ) : (
     <Button 
       variant="outline" 
-      size="icon"
       className="h-9 w-auto px-3"
       onClick={() => router.push('/auth/login')}
     >

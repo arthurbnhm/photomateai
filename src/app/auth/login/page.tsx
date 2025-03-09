@@ -30,7 +30,7 @@ export default function LoginPage() {
         return
       }
 
-      router.push("/create?tab=create")
+      router.push("/create")
       router.refresh()
     } catch (error) {
       setError("An unexpected error occurred")
