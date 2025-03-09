@@ -15,12 +15,14 @@ export default function LoginPage() {
   const [password, setPassword] = useState("")
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [success, setSuccess] = useState<string | null>(null)
   const { signIn, signUp, signInWithOAuth } = useAuth()
 
   const handleEmailSignIn = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
     setError(null)
+    setSuccess(null)
 
     try {
       const { error } = await signIn(email, password)
@@ -44,6 +46,7 @@ export default function LoginPage() {
     e.preventDefault()
     setLoading(true)
     setError(null)
+    setSuccess(null)
 
     try {
       const { error } = await signUp(email, password)
@@ -53,7 +56,7 @@ export default function LoginPage() {
         return
       }
 
-      setError("Check your email for the confirmation link")
+      setSuccess("Check your email for the confirmation link")
     } catch (error) {
       setError("An unexpected error occurred")
       console.error("Sign up error:", error)
@@ -65,6 +68,7 @@ export default function LoginPage() {
   const handleGoogleSignIn = async () => {
     setLoading(true)
     setError(null)
+    setSuccess(null)
 
     try {
       const { error } = await signInWithOAuth("google")
@@ -181,6 +185,12 @@ export default function LoginPage() {
           {error && (
             <div className="p-3 text-sm text-red-500 bg-red-50 rounded-md">
               {error}
+            </div>
+          )}
+          
+          {success && (
+            <div className="p-3 text-sm text-green-500 bg-green-50 rounded-md">
+              {success}
             </div>
           )}
         </CardContent>
