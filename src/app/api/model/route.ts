@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Replicate from 'replicate';
-import { createSupabaseAdmin } from '@/lib/supabase';
+import { createSupabaseAdmin } from '@/lib/supabase-server';
 import JSZip from 'jszip';
 
 // Initialize Replicate with API token

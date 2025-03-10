@@ -13,7 +13,7 @@ import {
   DropdownMenuTrigger,
   DropdownMenuItem,
 } from "@/components/ui/dropdown-menu"
-import { useAuth } from '@/hooks/useAuth'
+import { useAuth } from '@/contexts/AuthContext'
 
 // Simple SignOutButton component
 function SignOutButton({ isMobileMenu = false }) {

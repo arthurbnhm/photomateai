@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 import { useRouter, usePathname } from 'next/navigation'
 import Link from 'next/link'
 import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
-import { useAuth } from '@/hooks/useAuth'
+import { useAuth } from '@/contexts/AuthContext'
 
 interface AuthButtonProps {
   /**

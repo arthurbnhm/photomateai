@@ -52,7 +52,7 @@
 - ✅ Update all the routes with user filtering
 - Add user profiles with preferences
 - ✅ Add webhook secrets
-- Remove email / password
+- ✅ Email / password
 
 
 # Attention to:

@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createSupabaseAdmin } from '@/lib/supabase';
-import { createClient } from '@/utils/supabase/server';
+import { createSupabaseAdmin, createClient } from '@/lib/supabase-server';
 
 // Define types for the database entities
 interface Training {

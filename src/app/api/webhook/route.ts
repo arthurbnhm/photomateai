@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { createSupabaseAdmin } from '@/lib/supabase';
+import { createSupabaseAdmin } from '@/lib/supabase-server';
 import * as crypto from 'crypto';
 
 // Function to verify webhook signature
@@ -60,15 +60,21 @@ function verifyWebhookSignature(
 // Function to download and store an image
 async function downloadAndStoreImage(url: string, userId: string): Promise<string | null> {
   try {
+    // Validate userId to prevent 'undefined' in storage paths
+    if (!userId || userId === 'undefined') {
+      console.error('Invalid or missing userId for image storage:', userId);
+      return url; // Return the original URL if userId is invalid
+    }
+
     const response = await fetch(url);
     if (!response.ok) {
       console.error('Failed to download image:', response.statusText);
-      return null;
+      return url; // Return the original URL on download failure
     }
 
     const blob = await response.blob();
     const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.png`;
-    // Simplify to just userId/fileName
+    // Ensure userId is valid before constructing the path
     const filePath = `${userId}/${fileName}`;
 
     const supabase = createSupabaseAdmin();
@@ -82,7 +88,7 @@ async function downloadAndStoreImage(url: string, userId: string): Promise<strin
 
     if (uploadError) {
       console.error('Failed to upload image:', uploadError);
-      return null;
+      return url; // Return the original URL on upload failure
     }
 
     // Generate a signed URL that expires in 10 years instead of 1 hour
@@ -92,13 +98,13 @@ async function downloadAndStoreImage(url: string, userId: string): Promise<strin
     
     if (signedUrlError || !signedUrlData) {
       console.error('Failed to generate signed URL:', signedUrlError);
-      return null;
+      return url; // Return the original URL if we can't generate a signed URL
     }
 
     return signedUrlData.signedUrl;
   } catch (error) {
     console.error('Error in downloadAndStoreImage:', error);
-    return null;
+    return url; // Return the original URL on any error
   }
 }
 
@@ -281,10 +287,16 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: 'Invalid output format' }, { status: 400 });
       }
 
+      // Extract and validate userId
+      const userId = prediction.user_id || 'anonymous';
+      if (!userId || userId === 'undefined') {
+        console.warn('Missing or invalid user_id for prediction:', prediction.id);
+      }
+
       // Download and store images
       try {
         const storageUrls = await Promise.all(
-          urls.map(url => downloadAndStoreImage(url, prediction.userId))
+          urls.map(url => downloadAndStoreImage(url, userId))
         );
 
         // Filter out any null values from failed uploads

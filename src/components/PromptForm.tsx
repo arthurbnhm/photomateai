@@ -1,11 +1,11 @@
 "use client"
 
-import { useState, useEffect, useRef, useMemo } from "react"
+import { useState, useEffect, useRef, useMemo, useCallback } from "react"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import * as z from "zod"
 import { AlertCircle } from "lucide-react"
-import { createSupabaseClient } from "@/lib/supabase"
+import { createBrowserSupabaseClient } from "@/lib/supabase"
 
 import { Button } from "@/components/ui/button"
 import {
@@ -93,8 +93,9 @@ export function PromptForm({
   pendingGenerations: PendingGeneration[];
   setPendingGenerations: React.Dispatch<React.SetStateAction<PendingGeneration[]>>;
 }) {
-  // Initialize Supabase client
-  const supabase = createSupabaseClient();
+  // Initialize Supabase client with useRef for stability
+  const supabaseRef = useRef(createBrowserSupabaseClient());
+  const getSupabase = useCallback(() => supabaseRef.current, []);
   
   // State variables
   const [models, setModels] = useState<Model[]>([]);
@@ -318,13 +319,27 @@ export function PromptForm({
       // Generate a unique ID for this generation
       const generationId = Date.now().toString();
       
+      // Store the current modelId and form values before we do anything else
+      const currentModelId = form.getValues().modelId;
+      const currentPrompt = values.prompt;
+      const currentAspectRatio = values.aspectRatio;
+      const currentOutputFormat = values.outputFormat;
+      
+      // Reset form immediately to improve UX - let user continue typing while generation happens
+      form.reset({
+        prompt: "",
+        aspectRatio: currentAspectRatio,
+        outputFormat: currentOutputFormat,
+        modelId: currentModelId, // Preserve the model selection
+      });
+      
       // Add to pending generations with start time
       addPendingGeneration({
         id: generationId,
-        prompt: values.prompt,
-        aspectRatio: values.aspectRatio,
+        prompt: currentPrompt,
+        aspectRatio: currentAspectRatio,
         startTime: new Date().toISOString(),
-        format: values.outputFormat
+        format: currentOutputFormat
       });
       
       // Small delay to show initial loading state
@@ -372,79 +387,98 @@ export function PromptForm({
           return;
         }
         
-        // Call the API to generate the image
-        const response = await fetch('/api/generate', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(userId ? { 'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}` } : {})
-          },
-          body: JSON.stringify({
-            prompt: values.prompt,
-            aspectRatio: values.aspectRatio,
-            outputFormat: values.outputFormat,
-            generationId: generationId,
-            modelVersion: modelVersion,
-            modelName: modelName,
-            userId: userId
-          }),
-        });
+        // Call the API to generate the image with a timeout
+        const supabase = getSupabase();
+        const abortController = new AbortController();
+        const timeoutId = setTimeout(() => abortController.abort(), 15000); // 15 second timeout
         
-        if (!response.ok) {
-          const errorData = await response.json();
-          console.error('API error:', errorData);
+        try {
+          // Get the session token
+          let authHeader = {};
+          if (userId) {
+            const { data } = await supabase.auth.getSession();
+            if (data.session?.access_token) {
+              authHeader = { 'Authorization': `Bearer ${data.session.access_token}` };
+            }
+          }
           
-          setError(errorData.error || 'Failed to generate image');
-          setErrorDetails(errorData.details || null);
+          const response = await fetch('/api/generate', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              ...authHeader
+            },
+            body: JSON.stringify({
+              prompt: currentPrompt,
+              aspectRatio: currentAspectRatio,
+              outputFormat: currentOutputFormat,
+              generationId: generationId,
+              modelVersion: modelVersion,
+              modelName: modelName,
+              userId: userId
+            }),
+            signal: abortController.signal
+          });
+          
+          clearTimeout(timeoutId);
+          
+          if (!response.ok) {
+            const errorData = await response.json();
+            console.error('API error:', errorData);
+            
+            setError(errorData.error || 'Failed to generate image');
+            setErrorDetails(errorData.details || null);
+            
+            // Remove from pending generations
+            removePendingGeneration(generationId);
+            setSubmitting(false);
+            return;
+          }
+          
+          const result = await response.json();
+          
+          // Update the pending generation with the replicate_id
+          if (result && result.replicate_id) {
+            setPendingGenerations(prev => 
+              prev.map(gen => 
+                gen.id === generationId 
+                  ? { ...gen, replicate_id: result.replicate_id } 
+                  : gen
+              )
+            );
+          }
+          
+          setSubmitting(false);
+          
+          // If the generation has already completed and returned results
+          if (result && result.status === 'succeeded' && result.output) {
+            // Add to client history
+            addToClientHistory({
+              id: generationId,
+              prompt: currentPrompt,
+              timestamp: new Date().toISOString(),
+              images: processOutput(result.output),
+              aspectRatio: currentAspectRatio
+            });
+            
+            // Remove from pending since it's already done
+            removePendingGeneration(generationId);
+          }
+
+          return;
+        } catch (fetchError: unknown) {
+          clearTimeout(timeoutId);
+          
+          if (fetchError instanceof Error && fetchError.name === 'AbortError') {
+            console.warn('Generate request aborted due to timeout');
+            setError('Request timed out. Please try again.');
+          } else {
+            throw fetchError;
+          }
           
           // Remove from pending generations
           removePendingGeneration(generationId);
-          setSubmitting(false);
-          return;
         }
-        
-        const result = await response.json();
-        
-        // Update the pending generation with the replicate_id
-        if (result && result.replicate_id) {
-          setPendingGenerations(prev => 
-            prev.map(gen => 
-              gen.id === generationId 
-                ? { ...gen, replicate_id: result.replicate_id } 
-                : gen
-            )
-          );
-        }
-        
-        // Store the current modelId before resetting the form
-        const currentModelId = form.getValues().modelId;
-        
-        // Reset form and UI state
-        form.reset({
-          prompt: "",
-          aspectRatio: "1:1",
-          outputFormat: "png",
-          modelId: currentModelId, // Preserve the model selection
-        });
-        
-        setSubmitting(false);
-        
-        // If the generation has already completed and returned results
-        if (result && result.status === 'succeeded' && result.output) {
-          // Add to client history
-          addToClientHistory({
-            id: generationId,
-            prompt: values.prompt,
-            timestamp: new Date().toISOString(),
-            images: processOutput(result.output),
-            aspectRatio: values.aspectRatio
-          });
-          
-          // Remove from pending since it's already done
-          removePendingGeneration(generationId);
-        }
-
-        return;
       } catch (err) {
         console.error('Error generating image:', err);
         
@@ -544,7 +578,7 @@ export function PromptForm({
   useEffect(() => {
     const getUserId = async () => {
       try {
-        const { data: sessionData } = await supabase.auth.getSession();
+        const { data: sessionData } = await supabaseRef.current.auth.getSession();
         if (sessionData.session) {
           setUserId(sessionData.session.user.id);
         }
@@ -554,7 +588,16 @@ export function PromptForm({
     };
 
     getUserId();
-  }, [supabase]);
+  }, [supabaseRef]);
+
+  // Clean up Supabase resources when component unmounts
+  useEffect(() => {
+    return () => {
+      // Cleanup supabase realtime connections if needed
+      const supabase = getSupabase();
+      supabase.removeAllChannels();
+    };
+  }, [getSupabase]);
 
   return (
     <div className="w-full">

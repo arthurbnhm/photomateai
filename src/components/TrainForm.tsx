@@ -10,7 +10,7 @@ import Image from "next/image";
 import { v4 as uuidv4 } from 'uuid';
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
-import { createSupabaseClient } from "@/lib/supabase";
+import { createBrowserSupabaseClient } from "@/lib/supabase";
 
 // Type for Supabase Realtime payload
 interface RealtimeTrainingPayload {
@@ -58,7 +58,7 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
   const subscriptionActiveRef = useRef(false);
 
   // Initialize Supabase client
-  const supabase = createSupabaseClient();
+  const supabase = createBrowserSupabaseClient();
 
   // Initialize the bucket when the component mounts
   useEffect(() => {

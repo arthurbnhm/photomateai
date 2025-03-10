@@ -1,14 +1,28 @@
-import { createBrowserClient } from '@supabase/ssr';
-import { createClient } from '@supabase/supabase-js';
+/**
+ * Client-side Supabase Utilities
+ * 
+ * This file provides client-side Supabase client creation.
+ * It should only be imported in client components.
+ */
 
-// Create a Supabase client with the public API key (for client-side use)
-export const createSupabaseClient = () => {
+import { createBrowserClient } from '@supabase/ssr';
+import { createClient as createSupabaseClient } from '@supabase/supabase-js';
+
+// Environment variable validation helper
+const getEnvVariables = () => {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
   if (!supabaseUrl || !supabaseAnonKey) {
     throw new Error('Missing Supabase environment variables');
   }
+
+  return { supabaseUrl, supabaseAnonKey };
+};
+
+// Create a Supabase client with the public API key (for client-side use)
+export const createBrowserSupabaseClient = () => {
+  const { supabaseUrl, supabaseAnonKey } = getEnvVariables();
 
   // Use createBrowserClient from @supabase/ssr instead of createClient directly
   // This prevents multiple GoTrueClient instances in browser context
@@ -17,17 +31,8 @@ export const createSupabaseClient = () => {
   }
   
   // Fallback for non-browser environments if needed
-  return createClient(supabaseUrl, supabaseAnonKey);
+  return createSupabaseClient(supabaseUrl, supabaseAnonKey);
 };
 
-// Create a Supabase client with the service role key (for server-side use)
-export const createSupabaseAdmin = () => {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-  if (!supabaseUrl || !supabaseServiceKey) {
-    throw new Error('Missing Supabase environment variables');
-  }
-
-  return createClient(supabaseUrl, supabaseServiceKey);
-}; 
+// For backward compatibility
+export { createBrowserSupabaseClient as createClient }; 
