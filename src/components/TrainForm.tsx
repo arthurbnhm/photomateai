@@ -459,15 +459,35 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
     const handleGlobalDragEnd = () => {
       setIsDraggingImages(false);
     };
+
+    const handleGlobalDrop = () => {
+      setIsDraggingImages(false);
+    };
+
+    const handleGlobalMouseLeave = () => {
+      setIsDraggingImages(false);
+    };
+
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsDraggingImages(false);
+      }
+    };
     
     document.addEventListener('dragover', handleGlobalDragOver);
     document.addEventListener('dragleave', handleGlobalDragLeave);
     document.addEventListener('dragend', handleGlobalDragEnd);
+    document.addEventListener('drop', handleGlobalDrop);
+    document.addEventListener('mouseleave', handleGlobalMouseLeave);
+    document.addEventListener('keydown', handleGlobalKeyDown);
     
     return () => {
       document.removeEventListener('dragover', handleGlobalDragOver);
       document.removeEventListener('dragleave', handleGlobalDragLeave);
       document.removeEventListener('dragend', handleGlobalDragEnd);
+      document.removeEventListener('drop', handleGlobalDrop);
+      document.removeEventListener('mouseleave', handleGlobalMouseLeave);
+      document.removeEventListener('keydown', handleGlobalKeyDown);
     };
   }, []);
 

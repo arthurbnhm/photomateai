@@ -66,3 +66,7 @@ You're using local storage for state management in some places (PENDING_GENERATI
 
 - Include costs
 - Add media sharing
+
+# Improvements ideas
+
+- Stalled and Generations as a same design 

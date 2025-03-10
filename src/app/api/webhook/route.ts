@@ -273,6 +273,19 @@ export async function POST(request: Request) {
     }
 
     if (!prediction) {
+      // Log more details about the webhook for debugging
+      console.log('Webhook event details:', {
+        status: webhookData.status,
+        event: webhookData.event || 'unknown',
+        id: replicate_id
+      });
+      
+      // If this is not a "completed" event, we can safely ignore it if the record doesn't exist yet
+      if (webhookData.status !== 'succeeded' && webhookData.status !== 'failed') {
+        console.log(`Ignoring ${webhookData.status} webhook for non-existent prediction: ${replicate_id}`);
+        return NextResponse.json({ message: 'Webhook acknowledged but no action taken' }, { status: 200 });
+      }
+      
       console.error('No prediction or training found with replicate_id:', replicate_id);
       return NextResponse.json({ error: 'Webhook data not found in database' }, { status: 404 });
     }

@@ -49,12 +49,12 @@ async function getLatestModelVersion(owner: string, name: string): Promise<strin
 }
 
 export async function POST(request: NextRequest) {
-  let predictionId = null;
-  let dbRecordId = null;
-  let modelId = null;
-  let userId = null;
-  
   try {
+    let modelName = null;
+    let predictionId = null;
+    let dbRecordId = null;
+    let userId = null;
+    
     // Parse the request body
     const { prompt, aspectRatio, outputFormat, modelId: requestModelId, modelName: requestModelName, modelVersion, userId: requestUserId } = await request.json();
     
@@ -99,7 +99,6 @@ export async function POST(request: NextRequest) {
     }
 
     // Initialize model variables
-    let modelName = null;
     let finalModelVersion = null;
     
     // If model name is provided directly in the request, use it
@@ -143,12 +142,10 @@ export async function POST(request: NextRequest) {
           } else {
             // Use the model's model_id
             modelName = trainedModel.model_id;
-            modelId = trainedModel.id;
           }
         } else if (model) {
           // Use the model's model_id
           modelName = model.model_id;
-          modelId = model.id;
         } else {
           console.error('No model found with ID:', requestModelId);
           return NextResponse.json(
@@ -231,7 +228,6 @@ export async function POST(request: NextRequest) {
             aspect_ratio: aspectRatio || "1:1",
             status: prediction.status || "processing",
             input: inputParams,
-            model_id: modelId,
             user_id: userId
           })
           .select()
