@@ -11,6 +11,38 @@ import { v4 as uuidv4 } from 'uuid';
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 import { createBrowserSupabaseClient } from "@/lib/supabase";
+import { useTheme } from "next-themes";
+
+// Reusable upload icon component
+const UploadIcon = ({ 
+  size = 24, 
+  color = "currentColor", 
+  className = "",
+  style = {}
+}: { 
+  size?: number, 
+  color?: string, 
+  className?: string,
+  style?: React.CSSProperties
+}) => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg" 
+    width={size} 
+    height={size} 
+    viewBox="0 0 24 24" 
+    fill="none"
+    stroke={color}
+    strokeWidth="2" 
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={className}
+    style={style}
+  >
+    <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"></path>
+    <polyline points="16 6 12 2 8 6"></polyline>
+    <line x1="12" y1="2" x2="12" y2="15"></line>
+  </svg>
+);
 
 // Type for Supabase Realtime payload
 interface RealtimeTrainingPayload {
@@ -56,9 +88,27 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
   const [realtimeSubscribed, setRealtimeSubscribed] = useState(false);
   // Add a ref to track subscription status without triggering re-renders
   const subscriptionActiveRef = useRef(false);
+  const { resolvedTheme } = useTheme();
 
   // Initialize Supabase client
   const supabase = createBrowserSupabaseClient();
+
+  // Force theme application and check HTML element
+  useEffect(() => {
+    if (typeof window !== 'undefined' && resolvedTheme) {
+      // Log if the HTML element has the dark class
+      const hasDarkClass = document.documentElement.classList.contains('dark');
+      console.log('HTML has dark class:', hasDarkClass);
+      console.log('resolvedTheme:', resolvedTheme);
+      
+      // Force theme application for debugging
+      if (resolvedTheme === 'dark' && !hasDarkClass) {
+        document.documentElement.classList.add('dark');
+      } else if (resolvedTheme === 'light' && hasDarkClass) {
+        document.documentElement.classList.remove('dark');
+      }
+    }
+  }, [resolvedTheme]);
 
   // Initialize the bucket when the component mounts
   useEffect(() => {
@@ -439,6 +489,18 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
     }
   };
 
+  // Update effect for handling isDraggingImages changes
+  useEffect(() => {
+    // Dispatch event to hide/show ActionButtons when drag overlay state changes
+    const event = new CustomEvent('imageDropOverlayStateChange', { 
+      detail: { isOpen: isDraggingImages } 
+    });
+    window.dispatchEvent(event);
+
+    // Log the current theme for debugging
+    console.log('Current theme:', resolvedTheme);
+  }, [isDraggingImages, resolvedTheme]);
+
   // Add global event listeners for drag and drop
   useEffect(() => {
     const handleGlobalDragOver = (e: DragEvent) => {
@@ -496,26 +558,34 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
       {/* Overlay that appears when dragging image files over the page */}
       {isDraggingImages && (
         <div 
-          className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center"
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 50,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: resolvedTheme === 'dark' ? '#1e3a8a' : '#dbeafe' // dark:bg-blue-900 and bg-blue-100
+          }}
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onDragEnd={handleDragEnd}
           onDrop={handleDrop}
         >
-          <div className="bg-card p-8 rounded-xl shadow-2xl max-w-md w-full text-center">
-            <div className="mb-4 w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto">
-              <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-primary">
-                <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7"></path>
-                <line x1="16" x2="22" y1="5" y2="5"></line>
-                <line x1="19" x2="19" y1="2" y2="8"></line>
-                <circle cx="9" cy="9" r="2"></circle>
-                <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"></path>
-              </svg>
+          <div className="text-center max-w-xs">
+            <div className="mb-4 mx-auto">
+              <UploadIcon 
+                size={48} 
+                className="mx-auto" 
+                style={{ color: resolvedTheme === 'dark' ? '#93c5fd' : '#2563eb' }}
+              />
             </div>
-            <h3 className="text-xl font-bold mb-2">Drop Images Here</h3>
-            <p className="text-muted-foreground">
-              Drop your images to add them to your training set
-            </p>
+            <h3 
+              className="text-xl font-semibold mb-1"
+              style={{ color: resolvedTheme === 'dark' ? '#bfdbfe' : '#1e40af' }} // dark:text-blue-200 and text-blue-800
+            >
+              Drop Images Here
+            </h3>
           </div>
         </div>
       )}
@@ -563,22 +633,11 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
                 >
                   <input {...getInputProps()} />
                   <div className="flex flex-col items-center justify-center gap-2">
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg" 
-                      width="24" 
-                      height="24" 
-                      viewBox="0 0 24 24" 
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2" 
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      className="text-muted-foreground"
-                    >
-                      <path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"></path>
-                      <path d="M12 12v9"></path>
-                      <path d="m16 16-4-4-4 4"></path>
-                    </svg>
+                    <UploadIcon 
+                      size={24} 
+                      className="mx-auto" 
+                      style={{ color: resolvedTheme === 'dark' ? '#93c5fd' : '#2563eb' }}
+                    />
                     <p className="text-sm font-medium">
                       Drag and drop images here, or click to select files
                     </p>

@@ -82,6 +82,7 @@ export function ActionButtons({
   const [lastScrollY, setLastScrollY] = useState(0)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [menuPreloaded, setMenuPreloaded] = useState(false)
+  const [isDropOverlayOpen, setIsDropOverlayOpen] = useState(false)
   
   // Hooks
   const pathname = usePathname()
@@ -115,12 +116,19 @@ export function ActionButtons({
       setIsImageViewerOpen(event.detail.isOpen)
     }
     
+    // Listen for drop overlay state changes
+    const handleDropOverlayStateChange = (event: CustomEvent<{ isOpen: boolean }>) => {
+      setIsDropOverlayOpen(event.detail.isOpen)
+    }
+    
     window.addEventListener('scroll', handleScroll, { passive: true })
     window.addEventListener('imageViewerStateChange', handleImageViewerStateChange as EventListener)
+    window.addEventListener('imageDropOverlayStateChange', handleDropOverlayStateChange as EventListener)
     
     return () => {
       window.removeEventListener('scroll', handleScroll)
       window.removeEventListener('imageViewerStateChange', handleImageViewerStateChange as EventListener)
+      window.removeEventListener('imageDropOverlayStateChange', handleDropOverlayStateChange as EventListener)
     }
   }, [lastScrollY])
   
@@ -150,7 +158,7 @@ export function ActionButtons({
   };
   
   // Don't render until hydrated or if image viewer is open
-  if (!mounted || isImageViewerOpen) {
+  if (!mounted || isImageViewerOpen || isDropOverlayOpen) {
     return null
   }
   
