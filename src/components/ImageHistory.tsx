@@ -1273,6 +1273,7 @@ export function ImageHistory({
                                     fill
                                     sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
                                     onError={() => handleImageError(generation.id, index)}
+                                    priority={index === 0}
                                   />
                                 )}
                               </div>
@@ -1419,6 +1420,7 @@ export function ImageHistory({
                               fill
                               sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
                               onError={() => handleImageError(generation.id, index)}
+                              priority={index === 0}
                             />
                           )}
                         </div>
