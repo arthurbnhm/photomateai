@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Replicate from 'replicate';
-import { createSupabaseAdmin } from '@/lib/supabase-server';
+import { createServerClient } from '@/lib/supabase-server';
 
 // Define the expected response type based on the documentation
 interface ModelVersionResponse {
@@ -56,28 +56,23 @@ export async function POST(request: NextRequest) {
     let userId = null;
     
     // Parse the request body
-    const { prompt, aspectRatio, outputFormat, modelId: requestModelId, modelName: requestModelName, modelVersion, userId: requestUserId } = await request.json();
+    const { prompt, aspectRatio, outputFormat, modelId: requestModelId, modelName: requestModelName, modelVersion } = await request.json();
     
-    // Initialize Supabase client
-    const supabase = createSupabaseAdmin();
+    // Initialize Supabase client with user session
+    const supabase = createServerClient();
     
-    // Try to get user ID from the session token if not provided in the request
-    if (!requestUserId) {
-      const sessionToken = request.headers.get('authorization')?.split('Bearer ')[1];
-      if (sessionToken) {
-        try {
-          const { data: { user }, error: userError } = await supabase.auth.getUser(sessionToken);
-          if (!userError && user) {
-            userId = user.id;
-          }
-        } catch (error) {
-          console.warn('Error getting user from session token:', error);
-          // Continue without user ID
-        }
-      }
-    } else {
-      userId = requestUserId;
+    // Get the current user from the session
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    
+    if (userError || !user) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      );
     }
+    
+    // Use the authenticated user's ID
+    userId = user.id;
 
     // Check if API token is available
     const apiToken = process.env.REPLICATE_API_TOKEN;
@@ -120,6 +115,7 @@ export async function POST(request: NextRequest) {
           .select('*')
           .eq('id', requestModelId)
           .eq('status', 'ready')
+          .eq('user_id', userId)
           .single();
         
         if (error) {
@@ -131,6 +127,7 @@ export async function POST(request: NextRequest) {
             .select('*')
             .eq('id', requestModelId)
             .eq('status', 'trained')
+            .eq('user_id', userId)
             .single();
             
           if (trainedError || !trainedModel) {

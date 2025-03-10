@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server';
-import { createSupabaseAdmin } from '@/lib/supabase-server';
 import * as crypto from 'crypto';
 
 // Function to verify webhook signature
@@ -77,7 +76,20 @@ async function downloadAndStoreImage(url: string, userId: string): Promise<strin
     // Ensure userId is valid before constructing the path
     const filePath = `${userId}/${fileName}`;
 
-    const supabase = createSupabaseAdmin();
+    // For storage operations, we need to use the service role key
+    // This is one of the few legitimate cases where we need admin access
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    
+    if (!supabaseUrl || !supabaseServiceKey) {
+      console.error('Missing Supabase environment variables');
+      return url;
+    }
+    
+    // Use the createClient directly for this specific operation
+    const { createClient } = await import('@supabase/supabase-js');
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    
     const { error: uploadError } = await supabase.storage
       .from('images')
       .upload(filePath, blob, {
@@ -139,7 +151,20 @@ export async function POST(request: Request) {
     // Parse the webhook data
     const webhookData = JSON.parse(bodyText);
 
-    const supabase = createSupabaseAdmin();
+    // For webhook handling, we need to use the service role key
+    // This is one of the few legitimate cases where we need admin access
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    
+    if (!supabaseUrl || !supabaseServiceKey) {
+      console.error('Missing Supabase environment variables');
+      return NextResponse.json({ error: 'Server configuration error' }, { status: 500 });
+    }
+    
+    // Use the createClient directly for this specific operation
+    const { createClient } = await import('@supabase/supabase-js');
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    
     const replicate_id = webhookData.id;
 
     if (!replicate_id) {

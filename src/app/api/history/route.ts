@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { createSupabaseAdmin } from '@/lib/supabase-server';
+import { createServerClient } from '@/lib/supabase-server';
 
 // Define the type for image generation
 type ImageGeneration = {
@@ -27,14 +27,26 @@ type PredictionRecord = {
 
 export async function GET() {
   try {
-    // Initialize Supabase client
-    const supabase = createSupabaseAdmin();
+    // Initialize Supabase client with user session
+    const supabase = createServerClient();
     
-    // Fetch successful predictions from Supabase
+    // Get the current user
+    const { data: { user } } = await supabase.auth.getUser();
+    
+    if (!user) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
+    
+    // Fetch successful predictions from Supabase for the current user
     const { data: predictionData, error: supabaseError } = await supabase
       .from('predictions')
       .select('*')
       .eq('status', 'succeeded')
+      .eq('user_id', user.id)
+      .eq('is_deleted', false)
       .order('created_at', { ascending: false })
       .limit(20);
     
@@ -80,8 +92,18 @@ export async function POST(request: Request) {
       );
     }
     
-    // Initialize Supabase client
-    const supabase = createSupabaseAdmin();
+    // Initialize Supabase client with user session
+    const supabase = createServerClient();
+    
+    // Get the current user
+    const { data: { user } } = await supabase.auth.getUser();
+    
+    if (!user) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
     
     // Check if this is from a Replicate prediction
     if (body.replicate_id) {
@@ -94,7 +116,8 @@ export async function POST(request: Request) {
           completed_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
         })
-        .eq('replicate_id', body.replicate_id);
+        .eq('replicate_id', body.replicate_id)
+        .eq('user_id', user.id);
       
       if (updateError) {
         console.error('Error updating prediction in Supabase:', updateError);
@@ -115,7 +138,8 @@ export async function POST(request: Request) {
           input: { prompt: body.prompt },
           output: body.images,
           created_at: body.timestamp || new Date().toISOString(),
-          completed_at: new Date().toISOString()
+          completed_at: new Date().toISOString(),
+          user_id: user.id
         });
       
       if (insertError) {
@@ -176,8 +200,18 @@ export async function DELETE(request: Request) {
       );
     }
     
-    // Initialize Supabase client
-    const supabase = createSupabaseAdmin();
+    // Initialize Supabase client with user session
+    const supabase = createServerClient();
+    
+    // Get the current user
+    const { data: { user } } = await supabase.auth.getUser();
+    
+    if (!user) {
+      return new Response(
+        JSON.stringify({ error: 'Unauthorized' }),
+        { status: 401, headers }
+      );
+    }
     
     // Process storage URLs if provided
     let storageUrls: string[] = [];
@@ -196,6 +230,7 @@ export async function DELETE(request: Request) {
         .from('predictions')
         .select('storage_urls')
         .eq('replicate_id', replicateId)
+        .eq('user_id', user.id)
         .single();
       
       if (fetchError) {
@@ -243,7 +278,8 @@ export async function DELETE(request: Request) {
     const { error: updateError } = await supabase
       .from('predictions')
       .update({ is_deleted: true })
-      .eq('replicate_id', replicateId);
+      .eq('replicate_id', replicateId)
+      .eq('user_id', user.id);
     
     if (updateError) {
       console.error('Error updating prediction in Supabase:', updateError);

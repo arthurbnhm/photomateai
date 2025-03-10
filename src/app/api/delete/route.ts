@@ -1,19 +1,29 @@
-import { createSupabaseAdmin } from '@/lib/supabase-server';
+import { createServerClient } from '@/lib/supabase-server';
 import { NextResponse } from 'next/server';
 
 export async function POST(request: Request) {
   try {
-    const { urls, replicateId } = await request.json();
+    const { urls, replicateId, predictionId } = await request.json();
     
-    if (!replicateId) {
+    if (!replicateId && !predictionId) {
       return NextResponse.json(
-        { error: 'Missing replicate ID' },
+        { error: 'Missing identifier: either replicateId or predictionId is required' },
         { status: 400 }
       );
     }
     
-    // Initialize Supabase client
-    const supabase = createSupabaseAdmin();
+    // Initialize Supabase client with user session
+    const supabase = createServerClient();
+    
+    // Get the current user
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    
+    if (userError || !user) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
     
     // Process storage URLs if provided
     let storageUrls: string[] = [];
@@ -21,24 +31,38 @@ export async function POST(request: Request) {
       storageUrls = urls;
     }
     
-    // If no URLs were provided, try to fetch them from the database
-    if (storageUrls.length === 0) {
-      const { data: predictionData, error: fetchError } = await supabase
-        .from('predictions')
-        .select('storage_urls')
-        .eq('replicate_id', replicateId)
-        .single();
+    // Build the query to find the prediction
+    let query = supabase
+      .from('predictions')
+      .select('*')
+      .eq('user_id', user.id);
       
-      if (fetchError) {
-        console.error('Error fetching storage URLs:', fetchError);
-        // Continue with soft delete even if we can't fetch the storage URLs
-      } else if (predictionData && predictionData.storage_urls && Array.isArray(predictionData.storage_urls)) {
-        storageUrls = predictionData.storage_urls;
-      }
+    if (replicateId) {
+      query = query.eq('replicate_id', replicateId);
+    } else if (predictionId) {
+      query = query.eq('id', predictionId);
+    }
+    
+    // Get the prediction data
+    const { data: predictionData, error: fetchError } = await query.single();
+    
+    if (fetchError) {
+      console.error('Error fetching prediction:', fetchError);
+      return NextResponse.json(
+        { error: 'Prediction not found or access denied' },
+        { status: 404 }
+      );
+    }
+    
+    // If no URLs were provided, try to use the ones from the database
+    if (storageUrls.length === 0 && predictionData.storage_urls && Array.isArray(predictionData.storage_urls)) {
+      storageUrls = predictionData.storage_urls;
     }
     
     // Delete each image from storage
     const deletionResults = [];
+    let storageDeleteSuccess = true;
+    
     if (storageUrls.length > 0) {
       for (const url of storageUrls) {
         try {
@@ -58,15 +82,16 @@ export async function POST(request: Request) {
               .from(bucket)
               .remove([path]);
             
+            const success = !storageError;
             deletionResults.push({
               url,
-              success: !storageError,
+              success,
               error: storageError ? storageError.message : null
             });
             
             if (storageError) {
               console.error('Error removing file:', storageError);
-              // Continue with other files even if one fails
+              storageDeleteSuccess = false;
             }
           } else {
             console.error('Unrecognized signed URL format:', url);
@@ -75,6 +100,7 @@ export async function POST(request: Request) {
               success: false,
               error: 'Unrecognized signed URL format'
             });
+            storageDeleteSuccess = false;
           }
         } catch (error) {
           console.error('Error processing URL:', url, error);
@@ -83,7 +109,7 @@ export async function POST(request: Request) {
             success: false,
             error: error instanceof Error ? error.message : 'Unknown error'
           });
-          // Continue with other files even if one fails
+          storageDeleteSuccess = false;
         }
       }
     }
@@ -92,7 +118,8 @@ export async function POST(request: Request) {
     const { error: updateError } = await supabase
       .from('predictions')
       .update({ is_deleted: true })
-      .eq('replicate_id', replicateId);
+      .eq('id', predictionData.id)
+      .eq('user_id', user.id);
     
     if (updateError) {
       console.error('Error updating deletion status:', updateError);
@@ -100,7 +127,8 @@ export async function POST(request: Request) {
         { 
           error: 'Failed to update deletion status',
           filesDeletionResults: deletionResults,
-          databaseUpdateSuccess: false
+          databaseUpdateSuccess: false,
+          storageDeleteSuccess
         },
         { status: 500 }
       );
@@ -110,12 +138,14 @@ export async function POST(request: Request) {
       success: true,
       message: 'Files deleted and record marked as deleted',
       filesDeletionResults: deletionResults,
-      databaseUpdateSuccess: true
+      databaseUpdateSuccess: true,
+      storageDeleteSuccess,
+      allSuccessful: storageDeleteSuccess || storageUrls.length === 0
     });
   } catch (error) {
     console.error('Error in delete API:', error);
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: 'Internal server error', details: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
     );
   }

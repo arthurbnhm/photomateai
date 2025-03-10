@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createSupabaseAdmin, createClient } from '@/lib/supabase-server';
+import { createServerClient } from '@/lib/supabase-server';
 
 // Define types for the database entities
 interface Training {
@@ -37,43 +37,34 @@ export async function GET(request: NextRequest) {
     const status = searchParams.get('status');
     const isCancelled = searchParams.get('is_cancelled');
     const isDeleted = searchParams.get('is_deleted');
-    const userId = searchParams.get('user_id');
     const limit = parseInt(searchParams.get('limit') || '10', 10);
     const page = parseInt(searchParams.get('page') || '1', 10);
     const offset = (page - 1) * limit;
 
-    // Initialize Supabase client
-    const supabase = createSupabaseAdmin();
+    // Initialize Supabase client with user session
+    const supabase = createServerClient();
     
-    // Get the authenticated user if no user_id is provided
-    let authenticatedUserId = userId;
-    if (!authenticatedUserId) {
-      try {
-        // Create a client-side Supabase client to get the authenticated user
-        const supabaseClient = createClient();
-        const { data: { user } } = await supabaseClient.auth.getUser();
-        if (user) {
-          authenticatedUserId = user.id;
-        }
-      } catch (error) {
-        console.error('Error getting authenticated user:', error);
-        // Continue without user filtering if there's an error
-      }
+    // Get the authenticated user
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    
+    if (userError || !user) {
+      return NextResponse.json(
+        { error: 'Unauthorized', success: false },
+        { status: 401 }
+      );
     }
+    
+    const authenticatedUserId = user.id;
 
     // If modelId is provided, fetch a specific model with its trainings
     if (modelId) {
       // Get the model
-      let modelQuery = supabase
+      const modelQuery = supabase
         .from('models')
         .select('*, trainings(*)')
         .eq('id', modelId)
-        .eq('is_deleted', false);
-      
-      // Add user_id filter if available
-      if (authenticatedUserId) {
-        modelQuery = modelQuery.eq('user_id', authenticatedUserId);
-      }
+        .eq('is_deleted', false)
+        .eq('user_id', authenticatedUserId);
       
       const { data: model, error: modelError } = await modelQuery.single();
 
@@ -131,16 +122,12 @@ export async function GET(request: NextRequest) {
     let query = supabase
       .from('models')
       .select('*, trainings!trainings_model_id_fkey(*)')
-      .eq('is_deleted', isDeleted === 'true' ? true : (isDeleted === 'false' ? false : false)); // Default to false if not specified
+      .eq('is_deleted', isDeleted === 'true' ? true : (isDeleted === 'false' ? false : false))
+      .eq('user_id', authenticatedUserId); // Always filter by authenticated user
 
     // Apply status filter if provided
     if (status) {
       query = query.eq('status', status);
-    }
-    
-    // Apply user_id filter if available
-    if (authenticatedUserId) {
-      query = query.eq('user_id', authenticatedUserId);
     }
 
     // Apply pagination
@@ -259,10 +246,22 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const { action, modelId, trainingId, status } = await request.json();
-
-    // Initialize Supabase client
-    const supabase = createSupabaseAdmin();
+    const body = await request.json();
+    
+    // Initialize Supabase client with user session
+    const supabase = createServerClient();
+    
+    // Get the authenticated user
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    
+    if (userError || !user) {
+      return NextResponse.json(
+        { error: 'Unauthorized', success: false },
+        { status: 401 }
+      );
+    }
+    
+    const { action, modelId, trainingId, status } = body;
 
     switch (action) {
       case 'updateModelStatus':

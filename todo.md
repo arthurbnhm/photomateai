@@ -9,6 +9,7 @@
 - ✅ Implement supabase real-time subscription
 - Add a description? I'm looking to fix the genre issue (male/female)
 - ❌ Add a use model that goes to create page and selects the model
+- Fullscreen dropzone like vercel
 
 # Create
 
@@ -66,6 +67,7 @@ You're using local storage for state management in some places (PENDING_GENERATI
 
 - Include costs
 - Add media sharing
+- Remove pooling, only keep realtime subscription
 
 # Improvements ideas
 

@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Replicate from 'replicate';
-import { createSupabaseAdmin } from '@/lib/supabase-server';
+import { createServerClient } from '@/lib/supabase-server';
 import JSZip from 'jszip';
+import { SupabaseClient } from '@supabase/supabase-js';
 
 // Initialize Replicate with API token
 const replicate = new Replicate({
@@ -13,10 +14,23 @@ type Visibility = 'public' | 'private';
 
 export async function POST(request: NextRequest) {
   try {
+    // Initialize Supabase client with user session
+    const supabase = createServerClient();
+    
+    // Get the current user
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    
+    if (userError || !user) {
+      return NextResponse.json(
+        { error: 'Unauthorized', success: false },
+        { status: 401 }
+      );
+    }
+    
     // Check if this is a file upload request
     const contentType = request.headers.get('content-type') || '';
     if (contentType.includes('multipart/form-data')) {
-      return await handleFileUpload(request);
+      return await handleFileUpload(request, supabase, user.id);
     }
 
     // For JSON requests, parse the body
@@ -27,29 +41,29 @@ export async function POST(request: NextRequest) {
     switch (action) {
       case 'create':
         // Create a new model
-        const { modelName, owner, visibility, hardware, displayName, userId } = body;
-        if (!modelName || !owner || !visibility || !hardware || !userId) {
+        const { modelName, owner, visibility, hardware, displayName } = body;
+        if (!modelName || !owner || !visibility || !hardware) {
           return NextResponse.json(
             { error: 'Missing required parameters', success: false },
             { status: 400 }
           );
         }
-        return await createModel(modelName, owner, visibility, hardware, displayName, userId);
+        return await createModel(modelName, owner, visibility, hardware, displayName, user.id, supabase);
 
       case 'train':
         // Start training a model
-        const { modelOwner, modelName: trainModelName, zipUrl, userId: trainUserId } = body;
-        if (!modelOwner || !trainModelName || !zipUrl || !trainUserId) {
+        const { modelOwner, modelName: trainModelName, zipUrl } = body;
+        if (!modelOwner || !trainModelName || !zipUrl) {
           return NextResponse.json(
             { error: 'Missing required parameters', success: false },
             { status: 400 }
           );
         }
-        return await trainModel(modelOwner, trainModelName, zipUrl, trainUserId);
+        return await trainModel(modelOwner, trainModelName, zipUrl, user.id, supabase);
 
       case 'initBucket':
         // Initialize the storage bucket
-        return await initializeBucket();
+        return await initializeBucket(supabase);
 
       case 'cancelTraining':
         // Cancel an ongoing training
@@ -60,7 +74,7 @@ export async function POST(request: NextRequest) {
             { status: 400 }
           );
         }
-        return await cancelTraining(trainingId);
+        return await cancelTraining(trainingId, supabase, user.id);
 
       default:
         return NextResponse.json(
@@ -81,7 +95,7 @@ export async function POST(request: NextRequest) {
 }
 
 // Create a model in Replicate
-async function createModel(modelName: string, owner: string, visibility: Visibility, hardware: string, displayName: string, userId: string) {
+async function createModel(modelName: string, owner: string, visibility: Visibility, hardware: string, displayName: string, userId: string, supabase: SupabaseClient) {
   if (!modelName) {
     return NextResponse.json(
       { error: 'Model name is required', success: false },
@@ -133,9 +147,6 @@ async function createModel(modelName: string, owner: string, visibility: Visibil
       }
     );
 
-    // Initialize Supabase client
-    const supabase = createSupabaseAdmin();
-
     // Store the model in Supabase
     const { data: modelData, error: modelError } = await supabase
       .from('models')
@@ -179,7 +190,7 @@ async function createModel(modelName: string, owner: string, visibility: Visibil
 }
 
 // Train a model using Replicate
-async function trainModel(modelOwner: string, modelName: string, zipUrl: string, userId: string) {
+async function trainModel(modelOwner: string, modelName: string, zipUrl: string, userId: string, supabase: SupabaseClient) {
   if (!modelOwner || !modelName || !zipUrl) {
     console.error('Missing required parameters:', { modelOwner, modelName, zipUrl });
     return NextResponse.json(
@@ -196,15 +207,13 @@ async function trainModel(modelOwner: string, modelName: string, zipUrl: string,
   }
 
   try {
-    // Initialize Supabase client
-    const supabase = createSupabaseAdmin();
-
     // Find the model in Supabase
     const { data: modelData, error: modelError } = await supabase
       .from('models')
       .select('*')
       .eq('model_owner', modelOwner)
       .eq('model_id', modelName)
+      .eq('user_id', userId)
       .single();
 
     if (modelError) {
@@ -352,11 +361,8 @@ async function trainModel(modelOwner: string, modelName: string, zipUrl: string,
 }
 
 // Initialize the storage bucket
-async function initializeBucket() {
+async function initializeBucket(supabase: SupabaseClient) {
   try {
-    // Initialize Supabase client with admin privileges
-    const supabase = createSupabaseAdmin();
-    
     // Check if the bucket exists
     const { data: buckets, error: bucketsError } = await supabase.storage.listBuckets();
     void buckets; // Explicitly indicate we're ignoring this variable
@@ -391,14 +397,13 @@ async function initializeBucket() {
   }
 }
 
-// Handle file upload using formdata
-async function handleFileUpload(request: NextRequest) {
+// Handle file upload for model training
+async function handleFileUpload(request: NextRequest, supabase: SupabaseClient, userId: string) {
   try {
     const formData = await request.formData();
     const modelOwner = formData.get('modelOwner') as string;
     const modelName = formData.get('modelName') as string;
     const files = formData.getAll('files') as File[];
-    const sessionToken = request.headers.get('authorization')?.split('Bearer ')[1];
 
     if (!modelOwner || !modelName || files.length === 0) {
       console.error('Missing required parameters for upload');
@@ -408,32 +413,13 @@ async function handleFileUpload(request: NextRequest) {
       );
     }
 
-    if (!sessionToken) {
-      return NextResponse.json(
-        { error: 'Authentication required', success: false },
-        { status: 401 }
-      );
-    }
-
-    // Initialize Supabase admin client for database operations
-    const supabaseAdmin = createSupabaseAdmin();
-    
-    // Get user ID from session token
-    const { data: { user }, error: userError } = await supabaseAdmin.auth.getUser(sessionToken);
-    
-    if (userError || !user) {
-      return NextResponse.json(
-        { error: 'Invalid session token', success: false },
-        { status: 401 }
-      );
-    }
-    
     // Find the model in Supabase
-    const { data: modelData, error: modelError } = await supabaseAdmin
+    const { data: modelData, error: modelError } = await supabase
       .from('models')
       .select('*')
       .eq('model_owner', modelOwner)
       .eq('model_id', modelName)
+      .eq('user_id', userId)
       .single();
 
     if (modelError) {
@@ -441,9 +427,9 @@ async function handleFileUpload(request: NextRequest) {
     } else {
       // Update the model with the user ID if it's not already set
       if (modelData && !modelData.user_id) {
-        const { error: updateError } = await supabaseAdmin
+        const { error: updateError } = await supabase
           .from('models')
-          .update({ user_id: user.id })
+          .update({ user_id: userId })
           .eq('id', modelData.id);
           
         if (updateError) {
@@ -482,7 +468,7 @@ async function handleFileUpload(request: NextRequest) {
       // We need admin client here because we're uploading to the user's folder
       const zipPath = `${modelOwner}/${modelName}/images.zip`;
       
-      const { error: uploadError } = await supabaseAdmin.storage
+      const { error: uploadError } = await supabase.storage
         .from('training-files')
         .upload(zipPath, zipArrayBuffer, {
           contentType: 'application/zip',
@@ -498,7 +484,7 @@ async function handleFileUpload(request: NextRequest) {
       }
       
       // Generate a signed URL that expires in 1 hour
-      const { data: signedUrlData, error: signedUrlError } = await supabaseAdmin.storage
+      const { data: signedUrlData, error: signedUrlError } = await supabase.storage
         .from('training-files')
         .createSignedUrl(zipPath, 60 * 60); // 1 hour in seconds
 
@@ -511,7 +497,7 @@ async function handleFileUpload(request: NextRequest) {
       
       // Update the model with the zip URL if we found the model
       if (modelData) {
-        const { error: updateError } = await supabaseAdmin
+        const { error: updateError } = await supabase
           .from('models')
           .update({ 
             status: 'files_uploaded'
@@ -554,8 +540,8 @@ function getFileExtension(filename: string): string {
   return lastDotIndex !== -1 ? filename.substring(lastDotIndex) : '';
 }
 
-// Cancel a training in Replicate
-async function cancelTraining(trainingId: string) {
+// Cancel an ongoing training
+async function cancelTraining(trainingId: string, supabase: SupabaseClient, userId: string) {
   if (!trainingId) {
     return NextResponse.json(
       { error: 'Training ID is required', success: false },
@@ -565,13 +551,11 @@ async function cancelTraining(trainingId: string) {
 
   try {
     // First, try to find the training in Supabase to get the correct Replicate training ID
-    const supabase = createSupabaseAdmin();
-    
-    // Try to find by training_id first (this is the Replicate ID)
     const { data: trainingData, error: trainingError } = await supabase
       .from('trainings')
-      .select('*, models!inner(*)')
+      .select('*')
       .eq('training_id', trainingId)
+      .eq('user_id', userId)
       .single();
     
     // If not found, try to find by internal id

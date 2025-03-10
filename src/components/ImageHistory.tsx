@@ -799,47 +799,40 @@ export function ImageHistory({
   
   const sendDeleteRequest = async (replicateId: string, storageUrls?: string[]): Promise<boolean> => {
     try {
-      const supabase = getSupabaseClient();
-      
       // Add timeout to the operation
       const abortController = new AbortController();
-      const timeoutId = setTimeout(() => abortController.abort(), 10000); // 10 second timeout
+      const timeoutId = setTimeout(() => abortController.abort(), 15000); // 15 second timeout
       
       try {
-        // Mark as deleted in Supabase
-        const { error } = await supabase
-          .from('predictions')
-          .update({ is_deleted: true })
-          .match({ replicate_id: replicateId });
-          
+        // Call the API to handle both database update and file deletion
+        const deleteResponse = await fetch('/api/delete', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            urls: storageUrls,
+            replicateId
+          }),
+          signal: abortController.signal
+        });
+        
         clearTimeout(timeoutId);
-          
-        if (error) {
-          console.error('Error updating deletion status:', error);
+        
+        if (!deleteResponse.ok) {
+          const errorData = await deleteResponse.json().catch(() => ({ error: 'Unknown error' }));
+          console.error('Error deleting generation:', errorData);
           return false;
         }
         
-        // Attempt to delete storage URLs if available
-        if (storageUrls && storageUrls.length > 0) {
-          // Call the API to delete the files (this is usually handled server-side)
-          const deleteResponse = await fetch('/api/delete', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              urls: storageUrls,
-              replicateId
-            }),
-            signal: abortController.signal
-          });
-          
-          if (!deleteResponse.ok) {
-            console.warn('Storage cleanup might have failed, but DB record was updated');
-          }
+        const responseData = await deleteResponse.json();
+        
+        // Log any storage deletion issues but still consider it a success if the database was updated
+        if (!responseData.storageDeleteSuccess && responseData.databaseUpdateSuccess) {
+          console.warn('Some files may not have been deleted from storage, but the record was marked as deleted');
         }
         
-        return true;
+        return responseData.databaseUpdateSuccess;
       } catch (fetchError: unknown) {
         if (fetchError instanceof Error && fetchError.name === 'AbortError') {
           console.warn('Delete operation aborted due to timeout');

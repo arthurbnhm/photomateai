@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Replicate from 'replicate';
-import { createSupabaseAdmin } from '@/lib/supabase-server';
+import { createServerClient } from '@/lib/supabase-server';
 
 // Initialize Replicate with API token
 const replicate = new Replicate({
@@ -10,7 +10,17 @@ const replicate = new Replicate({
 export async function POST(request: NextRequest) {
   try {
     const { predictionId } = await request.json();
-    const supabase = createSupabaseAdmin();
+    const supabase = createServerClient();
+    
+    // Get the current user
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    
+    if (userError || !user) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
 
     if (!predictionId) {
       return NextResponse.json(
@@ -45,6 +55,7 @@ export async function POST(request: NextRequest) {
           .from('predictions')
           .select('replicate_id')
           .eq('id', predictionId)
+          .eq('user_id', user.id)
           .maybeSingle();
           
         if (error) {
@@ -78,7 +89,8 @@ export async function POST(request: NextRequest) {
           is_cancelled: true,
           completed_at: new Date().toISOString()
         })
-        .eq('replicate_id', replicateId);
+        .eq('replicate_id', replicateId)
+        .eq('user_id', user.id);
 
       if (updateError) {
         console.error('Error updating prediction in Supabase:', updateError);
@@ -88,6 +100,7 @@ export async function POST(request: NextRequest) {
           .from('predictions')
           .select('id, replicate_id')
           .eq('replicate_id', replicateId)
+          .eq('user_id', user.id)
           .maybeSingle();
           
         if (lookupError) {
@@ -129,7 +142,8 @@ export async function POST(request: NextRequest) {
             is_cancelled: true,
             completed_at: new Date().toISOString()
           })
-          .eq(field, predictionId);
+          .eq(field, predictionId)
+          .eq('user_id', user.id);
           
         if (!fallbackUpdateError) {
           // console.log('Successfully marked prediction as cancelled in database');
