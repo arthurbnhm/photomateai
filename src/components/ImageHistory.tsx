@@ -1027,10 +1027,6 @@ export function ImageHistory({
       currentGeneration: generation,
       currentImageIndex: imageIndex
     })
-    
-    // Dispatch a custom event to notify other components
-    const event = new CustomEvent('imageViewerStateChange', { detail: { isOpen: true } });
-    window.dispatchEvent(event);
   }
 
   // Add function to close image viewer
@@ -1039,10 +1035,6 @@ export function ImageHistory({
       ...imageViewer,
       isOpen: false
     })
-    
-    // Dispatch a custom event to notify other components
-    const event = new CustomEvent('imageViewerStateChange', { detail: { isOpen: false } });
-    window.dispatchEvent(event);
   }, [imageViewer]);
 
   // Add function to navigate to next image
@@ -1052,38 +1044,6 @@ export function ImageHistory({
       currentImageIndex: newIndex
     })
   }, [imageViewer]);
-
-  // Reference for touch handling and keyboard navigation are now handled in MediaFocus
-  
-  // Add keyboard navigation
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (!imageViewer.isOpen) return;
-      
-      switch (e.key) {
-        case 'ArrowRight':
-          if (imageViewer.currentGeneration) {
-            const totalImages = imageViewer.currentGeneration.images.length;
-            handleNavigate((imageViewer.currentImageIndex + 1) % totalImages);
-          }
-          break;
-        case 'ArrowLeft':
-          if (imageViewer.currentGeneration) {
-            const totalImages = imageViewer.currentGeneration.images.length;
-            handleNavigate((imageViewer.currentImageIndex - 1 + totalImages) % totalImages);
-          }
-          break;
-        case 'Escape':
-          closeImageViewer();
-          break;
-        default:
-          break;
-      }
-    };
-    
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [imageViewer.isOpen, imageViewer.currentGeneration, imageViewer.currentImageIndex, closeImageViewer, handleNavigate]);
 
   return (
     <div className="w-full space-y-6">

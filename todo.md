@@ -64,3 +64,4 @@ You're using local storage for state management in some places (PENDING_GENERATI
 # Others
 
 - Include costs
+- Add media sharing
