@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button"
 import { toast } from "sonner"
 import { Toaster } from "@/components/ui/sonner"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
-import { motion } from "framer-motion"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Badge } from "@/components/ui/badge"
 import { createBrowserSupabaseClient } from "@/lib/supabase"
@@ -182,118 +181,95 @@ export function ImageHistory({
               if (Array.isArray(parsed)) {
                 setGenerations(parsed);
                 setIsLoading(false);
+                // Even if we use cache, fetch in background to update
+                fetchFromSupabase(true);
                 return;
               }
             } catch (e) {
               console.error('Error parsing cached data:', e);
-              // Continue to fetch from API if cache parsing fails
             }
           }
         }
       }
       
-      // Fetch from Supabase if cache is invalid or forced refresh
-      const supabase = getSupabaseClient();
-      
-      // Add timeout to the fetch operation
-      const abortController = new AbortController();
-      const timeoutId = setTimeout(() => abortController.abort(), 10000); // 10 second timeout
-      
-      try {
-        // Build the query with user_id filter if user is authenticated
-        let query = supabase
-          .from('predictions')
-          .select('*')
-          .eq('is_deleted', false);
-        
-        // Add user_id filter if user is authenticated
-        if (user?.id) {
-          query = query.eq('user_id', user.id);
-        }
-        
-        // Complete the query with ordering and limit
-        const { data, error } = await query
-          .order('created_at', { ascending: false })
-          .limit(50);
-        
-        clearTimeout(timeoutId);
-        
-        if (error) {
-          throw error;
-        }
-        
-        if (data) {
-          // Process the data
-          const processedData: ImageGeneration[] = data
-            .filter((item: PredictionData) => item.status === 'succeeded' && item.storage_urls)
-            .map((item: PredictionData) => ({
-              id: item.id,
-              replicate_id: item.replicate_id,
-              prompt: item.prompt,
-              timestamp: item.created_at,
-              images: processOutput(item.storage_urls),
-              aspectRatio: item.aspect_ratio,
-              format: item.input?.output_format || 'png',
-              modelName: item.model_name || 'Default Model'
-            }));
-          
-          // Update state with functional update to avoid dependency on current state
-          setGenerations(prevGenerations => {
-            // Only update if data has actually changed
-            const currentIds = new Set(prevGenerations.map(gen => gen.id));
-            const newIds = new Set(processedData.map(gen => gen.id));
-            
-            // Quick check for different item count
-            if (currentIds.size !== newIds.size) {
-              // Update cache
-              localStorage.setItem(CACHE_KEY, JSON.stringify(processedData));
-              localStorage.setItem(CACHE_TIMESTAMP_KEY, Date.now().toString());
-              return processedData;
-            }
-            
-            // Check if items are different
-            for (const id of currentIds) {
-              if (!newIds.has(id)) {
-                // Found a difference, update with new data
-                localStorage.setItem(CACHE_KEY, JSON.stringify(processedData));
-                localStorage.setItem(CACHE_TIMESTAMP_KEY, Date.now().toString());
-                return processedData;
-              }
-            }
-            
-            // Check for new items
-            for (const id of newIds) {
-              if (!currentIds.has(id)) {
-                // Found a difference, update with new data
-                localStorage.setItem(CACHE_KEY, JSON.stringify(processedData));
-                localStorage.setItem(CACHE_TIMESTAMP_KEY, Date.now().toString());
-                return processedData;
-              }
-            }
-            
-            // No change needed
-            return prevGenerations;
-          });
-        }
-      } catch (fetchError: unknown) {
-        if (fetchError instanceof Error && fetchError.name === 'AbortError') {
-          console.warn('Fetch aborted due to timeout');
-          // Don't throw error for timeout - use cached data if available
-        } else {
-          throw fetchError;
-        }
-      } finally {
-        clearTimeout(timeoutId);
-      }
-      
-      // Always ensure loading state is reset
-      setIsLoading(false);
+      await fetchFromSupabase(silentUpdate);
     } catch (err) {
       console.error('Error loading generations:', err);
       setError('Failed to load image history. Please try again later.');
       setIsLoading(false);
     }
   }, [user?.id, getSupabaseClient]);
+
+  // Separate Supabase fetch logic
+  const fetchFromSupabase = async (silentUpdate: boolean = false) => {
+    const supabase = getSupabaseClient();
+    
+    // Add timeout to the fetch operation
+    const abortController = new AbortController();
+    const timeoutId = setTimeout(() => abortController.abort(), 10000); // 10 second timeout
+    
+    try {
+      // Build the query with user_id filter if user is authenticated
+      let query = supabase
+        .from('predictions')
+        .select('*')
+        .eq('is_deleted', false);
+      
+      // Add user_id filter if user is authenticated
+      if (user?.id) {
+        query = query.eq('user_id', user.id);
+      }
+      
+      // Complete the query with ordering and limit
+      const { data, error } = await query
+        .order('created_at', { ascending: false })
+        .limit(50);
+      
+      clearTimeout(timeoutId);
+      
+      if (error) {
+        throw error;
+      }
+      
+      if (data) {
+        // Process the data
+        const processedData: ImageGeneration[] = data
+          .filter((item: PredictionData) => item.status === 'succeeded' && item.storage_urls)
+          .map((item: PredictionData) => ({
+            id: item.id,
+            replicate_id: item.replicate_id,
+            prompt: item.prompt,
+            timestamp: item.created_at,
+            images: processOutput(item.storage_urls),
+            aspectRatio: item.aspect_ratio,
+            format: item.input?.output_format || 'png',
+            modelName: item.model_name || 'Default Model'
+          }));
+        
+        // Update state immediately without checking for changes
+        setGenerations(processedData);
+        
+        // Update cache
+        localStorage.setItem(CACHE_KEY, JSON.stringify(processedData));
+        localStorage.setItem(CACHE_TIMESTAMP_KEY, Date.now().toString());
+      }
+      
+      if (!silentUpdate) {
+        setIsLoading(false);
+      }
+    } catch (fetchError: unknown) {
+      if (fetchError instanceof Error && fetchError.name === 'AbortError') {
+        console.warn('Fetch aborted due to timeout');
+      } else {
+        throw fetchError;
+      }
+    } finally {
+      clearTimeout(timeoutId);
+      if (!silentUpdate) {
+        setIsLoading(false);
+      }
+    }
+  };
 
   // Function to clean up the image cache by removing generations with invalid URLs
   const cleanupImageCache = useCallback(() => {
@@ -414,10 +390,13 @@ export function ImageHistory({
                   return updatedGenerations;
                 });
                 
-                // Remove from pending
-                setPendingGenerations(prev => 
-                  prev.filter(g => g.id !== matchingPending.id)
-                );
+                // Instead of immediately removing from pending, delay it slightly
+                // to allow for a smooth transition
+                setTimeout(() => {
+                  setPendingGenerations(prev => 
+                    prev.filter(g => g.id !== matchingPending.id)
+                  );
+                }, 800); // Increased to 800ms for an even smoother transition
               } else {
                 // Use silent update to avoid UI loading flicker
                 loadGenerations(true, true);
@@ -1045,6 +1024,41 @@ export function ImageHistory({
     })
   }, [imageViewer]);
 
+  // Create a combined and sorted list of all generations
+  const getAllGenerations = useCallback(() => {
+    // Start with completed generations
+    const allGenerations = [...generations];
+    
+    // Add pending generations that aren't already in the completed list
+    pendingGenerations.forEach(pending => {
+      const existingIndex = allGenerations.findIndex(gen => gen.id === pending.id);
+      
+      // If this pending generation isn't in the completed list or doesn't have all images
+      if (existingIndex === -1 || 
+          (existingIndex >= 0 && allGenerations[existingIndex].images.length < 4)) {
+        // Create a virtual generation for the pending item
+        const virtualGeneration = {
+          id: pending.id,
+          replicate_id: pending.replicate_id || '',
+          prompt: pending.prompt,
+          timestamp: pending.startTime || new Date().toISOString(),
+          images: [],
+          aspectRatio: pending.aspectRatio,
+          format: pending.format,
+          modelName: pending.modelName,
+          isPending: true,
+          potentiallyStalled: pending.potentiallyStalled
+        };
+        allGenerations.push(virtualGeneration);
+      }
+    });
+    
+    // Sort by timestamp (newest first)
+    return allGenerations.sort((a, b) => 
+      new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+    );
+  }, [generations, pendingGenerations]);
+
   return (
     <div className="w-full space-y-6">
       <Toaster />
@@ -1058,42 +1072,34 @@ export function ImageHistory({
         onNavigate={handleNavigate}
       />
       
-      {/* Pending generations section */}
-      {pendingGenerations.length > 0 && (
-        <div className="space-y-4">
-          <div className="space-y-4">
-            {pendingGenerations.map((generation) => {
-              const completedGeneration = generations.find(item => item.id === generation.id);
-              
-              // If we already have complete results for this generation, don't show the pending card
-              if (completedGeneration && completedGeneration.images && completedGeneration.images.length === 4) {
-                return null;
-              }
-              
-              // Check if we have partial results for this generation
-              const hasPartialResults = generations.some(gen => 
-                gen.id === generation.id && gen.images && gen.images.length > 0
-              );
-              
-              // If we have partial results, find them
-              const partialGeneration = hasPartialResults 
-                ? generations.find(gen => gen.id === generation.id)
-                : null;
+      {!isLoading && error ? (
+        <div className="bg-destructive/10 border border-destructive/30 rounded-lg p-4">
+          <p className="text-destructive">{error}</p>
+        </div>
+      ) : !isLoading && generations.length === 0 && pendingGenerations.length === 0 ? (
+        <div className="bg-muted/50 border border-border rounded-lg p-6 text-center">
+          <p className="text-muted-foreground">No images generated yet.</p>
+          <p className="text-sm text-muted-foreground/80 mt-2">
+            Use the form above to create your first image!
+          </p>
+        </div>
+      ) : !isLoading && (
+        <div className="space-y-6">
+          {getAllGenerations().map((generation) => {
+              const isPending = pendingGenerations.some(p => p.id === generation.id);
+              const pending = isPending ? pendingGenerations.find(p => p.id === generation.id) : null;
               
               return (
-                <motion.div
-                  key={generation.id}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.3 }}
+                <div
+                  key={`generation-${generation.id}`}
                 >
-                  <Card className="overflow-hidden border-primary/20 shadow-md hover:shadow-lg transition-shadow duration-300">
+                  <Card className={`overflow-hidden ${isPending ? 'border-primary/20' : 'border-border'} shadow-md hover:shadow-lg transition-shadow duration-300`}>
                     <CardHeader className="p-4 pb-0 space-y-0">
                       <div className="flex items-center justify-between gap-3">
                         {/* Left side - Tags */}
                         <div className="flex items-center gap-2 flex-wrap">
-                          {/* Badges - Only show on desktop for pending generations */}
-                          <div className="hidden sm:flex items-center gap-2">
+                          {/* Badges */}
+                          <div className={isPending ? 'hidden sm:flex items-center gap-2' : 'flex items-center gap-2'}>
                             {/* Aspect ratio badge */}
                             <Badge variant="outline" className="bg-blue-100 text-blue-800 hover:bg-blue-200 border-blue-200">
                               {generation.aspectRatio}
@@ -1114,37 +1120,32 @@ export function ImageHistory({
                             )}
                           </div>
                           
-                          {/* Status indicators */}
-                          {generation.potentiallyStalled ? (
+                          {/* Status indicators for pending generations */}
+                          {isPending && pending && (
                             <div className="flex items-center gap-1 ml-2">
-                              <span className="inline-block w-2.5 h-2.5 bg-amber-500 rounded-full animate-pulse"></span>
-                              <span className="text-sm font-medium text-amber-500">Stalled</span>
-                            </div>
-                          ) : (
-                            <div className="flex items-center gap-1 ml-2">
-                              {hasPartialResults ? (
+                              {pending.potentiallyStalled ? (
                                 <>
-                                  <span className="inline-block w-2.5 h-2.5 bg-primary rounded-full animate-pulse"></span>
-                                  <span className="text-sm font-medium text-primary">
-                                    Partially Complete
-                                  </span>
+                                  <span className="inline-block w-2.5 h-2.5 bg-amber-500 rounded-full animate-pulse"></span>
+                                  <span className="text-sm font-medium text-amber-500">Stalled</span>
                                 </>
                               ) : (
-                                <Badge variant="secondary" className="flex items-center gap-1">
-                                  <span className="h-2 w-2 rounded-full bg-blue-400 animate-pulse"></span>
-                                  Generating
-                                </Badge>
-                              )}
-                              {elapsedTimes[generation.id] !== undefined && (
-                                <span className="text-xs text-muted-foreground ml-1">
-                                  ({elapsedTimes[generation.id]}s)
-                                </span>
+                                <>
+                                  <Badge variant="secondary" className="flex items-center gap-1">
+                                    <span className="h-2 w-2 rounded-full bg-blue-400 animate-pulse"></span>
+                                    Generating
+                                  </Badge>
+                                  {elapsedTimes[generation.id] !== undefined && (
+                                    <span className="text-xs text-muted-foreground ml-1">
+                                      ({elapsedTimes[generation.id]}s)
+                                    </span>
+                                  )}
+                                </>
                               )}
                             </div>
                           )}
                         </div>
                         
-                        {/* Right side - Action buttons */}
+                        {/* Right side - Actions */}
                         <div className="flex items-center gap-2">
                           <Button 
                             variant="outline" 
@@ -1160,63 +1161,71 @@ export function ImageHistory({
                             </svg>
                           </Button>
                           
-                          {generation.potentiallyStalled ? (
-                            <button 
-                              onClick={(e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                clearPendingGeneration(generation.id);
-                              }}
-                              className="h-8 w-8 flex items-center justify-center bg-destructive/10 text-destructive hover:bg-destructive/20 hover:text-destructive rounded-md transition-colors duration-200 cursor-pointer"
-                              aria-label="Clear"
-                              title="Clear"
-                            >
-                              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-x">
-                                <path d="M18 6 6 18"></path>
-                                <path d="m6 6 12 12"></path>
-                              </svg>
-                            </button>
-                          ) : (
-                            <button 
-                              onClick={(e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                handleDelete(generation.id);
-                              }}
+                          {isPending ? (
+                            <Button 
+                              variant="outline" 
+                              size="icon"
+                              onClick={() => cancelGeneration(generation.id, generation.replicate_id)}
                               disabled={isCancelling === generation.id}
-                              className="h-8 w-8 flex items-center justify-center bg-destructive/10 text-destructive hover:bg-destructive/20 hover:text-destructive rounded-md transition-colors duration-200 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                              className="h-8 w-8"
                               aria-label="Cancel"
-                              title="Cancel"
+                              title="Cancel Generation"
                             >
                               {isCancelling === generation.id ? (
-                                <svg className="animate-spin h-4 w-4 text-destructive" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                                 </svg>
                               ) : (
                                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-x">
-                                  <path d="M18 6 6 18"></path>
-                                  <path d="m6 6 12 12"></path>
+                                  <path d="M18 6 6 18"/>
+                                  <path d="m6 6 12 12"/>
                                 </svg>
                               )}
-                            </button>
+                            </Button>
+                          ) : (
+                            <Button 
+                              variant="outline" 
+                              size="icon"
+                              onClick={() => handleDelete(generation.id)}
+                              disabled={isDeleting === generation.id}
+                              className="h-8 w-8"
+                              aria-label="Delete"
+                              title="Delete"
+                            >
+                              {isDeleting === generation.id ? (
+                                <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                              ) : (
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-trash-2">
+                                  <path d="M3 6h18"/>
+                                  <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/>
+                                  <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>
+                                  <line x1="10" x2="10" y1="11" y2="17"/>
+                                  <line x1="14" x2="14" y1="11" y2="17"/>
+                                </svg>
+                              )}
+                            </Button>
                           )}
                         </div>
                       </div>
                     </CardHeader>
                     
                     <CardContent className="p-4 pt-4">
+                      {/* Image grid */}
                       <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-3">
-                        {hasPartialResults && partialGeneration && partialGeneration.images ? (
-                          // Show partial results with skeletons for missing images
+                        {!isPending && generation.images && generation.images.length > 0 ? (
+                          // Show available images for completed generations
                           <>
-                            {partialGeneration.images.map((image, index) => (
+                            {generation.images.map((image, index) => (
                               <div 
                                 key={index} 
                                 className="aspect-square relative overflow-hidden rounded-lg shadow-sm hover:shadow-md transition-all duration-300 group cursor-pointer"
                                 onClick={() => {
-                                  if (!image.isExpired && partialGeneration) {
-                                    openImageViewer(partialGeneration, index);
+                                  if (!image.isExpired) {
+                                    openImageViewer(generation, index);
                                   }
                                 }}
                               >
@@ -1238,16 +1247,17 @@ export function ImageHistory({
                                 )}
                               </div>
                             ))}
-                            {/* Only show skeletons for remaining slots if not a completed generation */}
-                            {!completedGeneration && Array.from({ length: 4 - (partialGeneration.images?.length || 0) }).map((_, index) => (
+                            
+                            {/* Show skeletons for remaining slots if not all images are loaded */}
+                            {generation.images.length < 4 && Array.from({ length: 4 - generation.images.length }).map((_, index) => (
                               <Skeleton 
                                 key={`skeleton-${index}`} 
-                                className="aspect-square rounded-lg"
+                                className="aspect-square rounded-lg animate-pulse"
                               />
                             ))}
                           </>
                         ) : (
-                          // Show all skeletons if no results yet
+                          // Show all skeletons for pending generations
                           Array.from({ length: 4 }).map((_, index) => (
                             <Skeleton 
                               key={index} 
@@ -1258,143 +1268,9 @@ export function ImageHistory({
                       </div>
                     </CardContent>
                   </Card>
-                </motion.div>
-              )
+                </div>
+              );
             })}
-          </div>
-        </div>
-      )}
-      
-      {!isLoading && error ? (
-        <div className="bg-destructive/10 border border-destructive/30 rounded-lg p-4">
-          <p className="text-destructive">{error}</p>
-        </div>
-      ) : !isLoading && generations.length === 0 && pendingGenerations.length === 0 ? (
-        <div className="bg-muted/50 border border-border rounded-lg p-6 text-center">
-          <p className="text-muted-foreground">No images generated yet.</p>
-          <p className="text-sm text-muted-foreground/80 mt-2">
-            Use the form above to create your first image!
-          </p>
-        </div>
-      ) : !isLoading && (
-        <div className="space-y-6">
-          {generations.map((generation) => (
-            <motion.div
-              key={generation.id}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.3 }}
-            >
-              <Card className="overflow-hidden border-border shadow-md hover:shadow-lg transition-shadow duration-300">
-                <CardHeader className="p-4 pb-0 space-y-0">
-                  <div className="flex items-center justify-between gap-3">
-                    {/* Left side - Tags */}
-                    <div className="flex items-center gap-2 flex-wrap">
-                      {/* Aspect ratio badge - visible on all devices for completed generations */}
-                      <Badge variant="outline" className="bg-blue-100 text-blue-800 hover:bg-blue-200 border-blue-200">
-                        {generation.aspectRatio}
-                      </Badge>
-                      
-                      {/* Format badge */}
-                      {generation.format && (
-                        <Badge variant="outline" className="bg-green-100 text-green-800 hover:bg-green-200 border-green-200">
-                          {generation.format.toUpperCase()}
-                        </Badge>
-                      )}
-                      
-                      {/* Model badge */}
-                      {generation.modelName && (
-                        <Badge variant="outline" className="bg-purple-100 text-purple-800 hover:bg-purple-200 border-purple-200 max-w-[150px] truncate">
-                          {generation.modelName}
-                        </Badge>
-                      )}
-                    </div>
-                    
-                    {/* Right side - Actions */}
-                    <div className="flex items-center gap-2">
-                      <Button 
-                        variant="outline" 
-                        size="icon"
-                        onClick={() => copyPromptToClipboard(generation.prompt)}
-                        className="h-8 w-8"
-                        aria-label="Copy Prompt"
-                        title="Copy Prompt"
-                      >
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-clipboard">
-                          <rect width="8" height="4" x="8" y="2" rx="1" ry="1"/>
-                          <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>
-                        </svg>
-                      </Button>
-                      
-                      <Button 
-                        variant="outline" 
-                        size="icon"
-                        onClick={() => handleDelete(generation.id)}
-                        disabled={isDeleting === generation.id}
-                        className="h-8 w-8"
-                        aria-label="Delete"
-                        title="Delete"
-                      >
-                        {isDeleting === generation.id ? (
-                          <svg className="animate-spin h-4 w-4 text-primary" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                          </svg>
-                        ) : (
-                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-trash-2">
-                            <path d="M3 6h18"/>
-                            <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/>
-                            <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>
-                            <line x1="10" x2="10" y1="11" y2="17"/>
-                            <line x1="14" x2="14" y1="11" y2="17"/>
-                          </svg>
-                        )}
-                      </Button>
-                    </div>
-                  </div>
-                </CardHeader>
-                
-                <CardContent className="p-4 pt-4">
-                  <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-3">
-                    {generation.images.length > 0 ? (
-                      generation.images.map((image, index) => (
-                        <div 
-                          key={index} 
-                          className="aspect-square relative overflow-hidden rounded-lg shadow-sm hover:shadow-md transition-all duration-300 group cursor-pointer"
-                          onClick={() => {
-                            if (!image.isExpired) {
-                              openImageViewer(generation, index);
-                            }
-                          }}
-                        >
-                          <div className="absolute inset-0 bg-gradient-to-br from-primary/10 to-primary/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-10"></div>
-                          {image.isExpired ? (
-                            <div className="w-full h-full flex items-center justify-center bg-muted/30">
-                              <p className="text-sm text-muted-foreground">Image expired</p>
-                            </div>
-                          ) : (
-                            <Image 
-                              src={image.url} 
-                              alt={`Generated image ${index + 1} for "${generation.prompt}"`}
-                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300 animate-fade-in"
-                              fill
-                              sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
-                              onError={() => handleImageError(generation.id, index)}
-                              priority={index === 0}
-                            />
-                          )}
-                        </div>
-                      ))
-                    ) : (
-                      <div className="col-span-2 md:col-span-4 p-4 bg-muted/30 rounded-lg text-center">
-                        <p className="text-muted-foreground">No images available</p>
-                      </div>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            </motion.div>
-          ))}
         </div>
       )}
     </div>

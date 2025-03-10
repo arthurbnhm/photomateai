@@ -29,6 +29,7 @@
 - ✅ Use same badges as in trainings models lists
 - Image focus
 - ✅ Add the badges
+- Change naming of download and storage (merger)
 
 # App
 
