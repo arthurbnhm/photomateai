@@ -627,8 +627,8 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
                 <Label>Upload Images (10 max)</Label>
                 <div 
                   {...getRootProps()} 
-                  className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors ${
-                    isDragActive || isDraggingImages ? 'border-primary bg-primary/5' : 'border-muted-foreground/20 hover:border-primary/50'
+                  className={`bg-muted/50 border border-border rounded-lg p-6 text-center cursor-pointer transition-colors ${
+                    isDragActive || isDraggingImages ? 'bg-primary/5 border-primary' : 'hover:border-primary/50'
                   }`}
                 >
                   <input {...getInputProps()} />
@@ -638,10 +638,10 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
                       className="mx-auto" 
                       style={{ color: resolvedTheme === 'dark' ? '#93c5fd' : '#2563eb' }}
                     />
-                    <p className="text-sm font-medium">
+                    <p className="text-muted-foreground">
                       Drag and drop images here, or click to select files
                     </p>
-                    <p className="text-xs text-muted-foreground">
+                    <p className="text-xs text-muted-foreground/80 mt-1">
                       JPG, PNG, WebP up to 10 images
                     </p>
                   </div>
@@ -718,7 +718,7 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   Processing...
                 </span>
-              ) : 'Create & Train Model'}
+              ) : 'Train My Model'}
             </Button>
           </form>
         </div>
