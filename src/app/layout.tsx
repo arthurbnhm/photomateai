@@ -10,7 +10,19 @@ const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
   title: "Photomate AI",
-  description: "Generate stunning images with AI using simple text prompts",
+  description: "Transform your selfies into professional portraits",
+  openGraph: {
+    title: "Photomate AI",
+    description: "Transform your selfies into professional portraits",
+    images: [
+      {
+        url: "https://tt2qu1wvxjiuahsf.public.blob.vercel-storage.com/social.webp",
+        width: 1200,
+        height: 630,
+        alt: "Photomate AI",
+      },
+    ],
+  },
 };
 
 export default function RootLayout({
