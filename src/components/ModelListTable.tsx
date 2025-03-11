@@ -121,8 +121,8 @@ export function ModelListTable({ newTraining, onClearNewTraining }: ModelListTab
       // Include user_id in the API request if user is authenticated
       const userId = user?.id;
       const url = userId 
-        ? `/api/model-list?page=${pageNum}&limit=5&user_id=${userId}` 
-        : `/api/model-list?page=${pageNum}&limit=5`;
+        ? `/api/model/list?page=${pageNum}&limit=5&user_id=${userId}` 
+        : `/api/model/list?page=${pageNum}&limit=5`;
       
       const response = await fetch(url);
       
@@ -589,7 +589,7 @@ export function ModelListTable({ newTraining, onClearNewTraining }: ModelListTab
     
     setIsDeleting(true);
     try {
-      const response = await fetch('/api/model-list', {
+      const response = await fetch('/api/model/list', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

@@ -210,7 +210,7 @@ export function PromptForm({
       try {
         // Fetch models that are trained or ready (not cancelled, not deleted)
         // Note: In the database, models have status 'trained' not 'ready'
-        const response = await fetch('/api/model-list?is_cancelled=false&is_deleted=false');
+        const response = await fetch('/api/model/list?is_cancelled=false&is_deleted=false');
         if (!response.ok) {
           throw new Error('Failed to fetch models');
         }
@@ -258,7 +258,7 @@ export function PromptForm({
   const fetchLatestModelVersion = async (owner: string, name: string): Promise<string | null> => {
     setFetchingModelVersion(true);
     try {
-      const response = await fetch(`/api/model-version?owner=${encodeURIComponent(owner)}&name=${encodeURIComponent(name)}`);
+      const response = await fetch(`/api/model/version?owner=${encodeURIComponent(owner)}&name=${encodeURIComponent(name)}`);
       
       if (!response.ok) {
         const errorText = await response.text();

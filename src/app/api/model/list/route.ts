@@ -233,7 +233,7 @@ export async function GET(request: NextRequest) {
       }
     });
   } catch (error) {
-    console.error('Error in model-list API:', error);
+    console.error('Error in model/list API:', error);
     return NextResponse.json(
       { 
         error: error instanceof Error ? error.message : 'An error occurred',
@@ -349,7 +349,7 @@ export async function POST(request: NextRequest) {
         );
     }
   } catch (error) {
-    console.error('Error in model-list API:', error);
+    console.error('Error in model/list API:', error);
     return NextResponse.json(
       { 
         error: error instanceof Error ? error.message : 'An error occurred',
