@@ -14,8 +14,21 @@ export async function GET(request: Request) {
     const { data: { user } } = await supabase.auth.getUser()
     
     if (user) {
-      // Redirect to the create page if authenticated
-      return NextResponse.redirect(new URL('/create', requestUrl.origin))
+      // Check if user has an active subscription
+      const { data: subscription } = await supabase
+        .from('subscriptions')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('is_active', true)
+        .single()
+
+      // If they have an active subscription, redirect to create page
+      if (subscription) {
+        return NextResponse.redirect(new URL('/create', requestUrl.origin))
+      }
+      
+      // Otherwise redirect to plans page to choose a plan
+      return NextResponse.redirect(new URL('/plans', requestUrl.origin))
     }
   }
 

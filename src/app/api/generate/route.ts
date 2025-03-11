@@ -50,6 +50,52 @@ async function getLatestModelVersion(owner: string, name: string): Promise<strin
 
 export async function POST(request: NextRequest) {
   try {
+    // Create Supabase client
+    const supabase = createServerClient();
+    
+    // Get user session
+    const { data: { session } } = await supabase.auth.getSession();
+    
+    // Check if user is authenticated
+    if (!session) {
+      return NextResponse.json(
+        { error: 'Unauthorized: You must be logged in to use this API' },
+        { status: 401 }
+      );
+    }
+    
+    // Check if user has an active subscription
+    const { data: subscription, error: subscriptionError } = await supabase
+      .from('subscriptions')
+      .select('*')
+      .eq('user_id', session.user.id)
+      .eq('is_active', true)
+      .single();
+    
+    if (subscriptionError || !subscription) {
+      return NextResponse.json(
+        { error: 'Unauthorized: You need an active subscription to use this API' },
+        { status: 403 }
+      );
+    }
+    
+    // Check if user has enough credits
+    if (subscription.credits_remaining <= 0) {
+      return NextResponse.json(
+        { error: 'Insufficient credits: You have used all your available credits' },
+        { status: 403 }
+      );
+    }
+    
+    // Decrement credits
+    await supabase
+      .from('subscriptions')
+      .update({ 
+        credits_remaining: subscription.credits_remaining - 1,
+        updated_at: new Date().toISOString()
+      })
+      .eq('user_id', session.user.id);
+    
     let modelName = null;
     let predictionId = null;
     let dbRecordId = null;
@@ -57,9 +103,6 @@ export async function POST(request: NextRequest) {
     
     // Parse the request body
     const { prompt, aspectRatio, outputFormat, modelId: requestModelId, modelName: requestModelName, modelVersion } = await request.json();
-    
-    // Initialize Supabase client with user session
-    const supabase = createServerClient();
     
     // Get the current user from the session
     const { data: { user }, error: userError } = await supabase.auth.getUser();
