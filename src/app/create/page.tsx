@@ -77,7 +77,6 @@ function CreatePageContent() {
             trainingStatus={trainingStatus}
           />
           <div className="mt-8 pt-8">
-            <h2 className="text-xl font-semibold mb-4">Your Models</h2>
             <ModelListTable 
               newTraining={trainingStatus} 
               onClearNewTraining={() => setTrainingStatus(null)}

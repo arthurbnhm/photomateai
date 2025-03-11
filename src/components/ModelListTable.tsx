@@ -539,7 +539,7 @@ export function ModelListTable({ newTraining, onClearNewTraining }: ModelListTab
         return;
       }
 
-      const response = await fetch('/api/model', {
+      const response = await fetch('/api/cancel', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

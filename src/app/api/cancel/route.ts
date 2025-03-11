@@ -1,174 +1,395 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Replicate from 'replicate';
 import { createServerClient } from '@/lib/supabase-server';
+import { SupabaseClient } from '@supabase/supabase-js';
 
 // Initialize Replicate with API token
 const replicate = new Replicate({
   auth: process.env.REPLICATE_API_TOKEN,
 });
 
+// Common response types
+type ErrorResponse = { error: string, details?: string, success: false };
+type SuccessResponse<T> = { success: true, message?: string, details?: unknown } & T;
+
+// Helper function to create error responses
+function createErrorResponse(error: string, details?: string, status: number = 400): Response {
+  const response: ErrorResponse = { error, success: false };
+  if (details) response.details = details;
+  return NextResponse.json(response, { status });
+}
+
+// Helper function to create success responses
+function createSuccessResponse<T>(data: T, message?: string): Response {
+  const response: SuccessResponse<T> = { ...data, success: true };
+  if (message) response.message = message;
+  return NextResponse.json(response);
+}
+
 export async function POST(request: NextRequest) {
   try {
-    const { predictionId } = await request.json();
     const supabase = createServerClient();
     
     // Get the current user
     const { data: { user }, error: userError } = await supabase.auth.getUser();
     
     if (userError || !user) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      );
-    }
-
-    if (!predictionId) {
-      return NextResponse.json(
-        { error: 'Prediction ID is required' },
-        { status: 400 }
-      );
+      return createErrorResponse('Unauthorized', undefined, 401);
     }
 
     // Check if API token is available
     const apiToken = process.env.REPLICATE_API_TOKEN;
     if (!apiToken) {
       console.error('REPLICATE_API_TOKEN is not set');
-      return NextResponse.json(
-        { 
-          error: "Missing Replicate API token. Please add your token to the .env file or environment variables.",
-          details: "You need a Replicate API token to use this feature. Get one at https://replicate.com/account/api-tokens"
-        },
-        { status: 401 }
+      return createErrorResponse(
+        "Missing Replicate API token. Please add your token to the .env file or environment variables.",
+        "You need a Replicate API token to use this feature. Get one at https://replicate.com/account/api-tokens",
+        401
       );
     }
 
-    // Cancelling prediction
-    // console.log('Cancelling prediction:', predictionId);
+    // Parse the request body
+    const body = await request.json();
+    const action = body.action || 'cancelPrediction'; // Default to prediction cancellation for backward compatibility
 
-    try {
-      // First, check if this is a prediction ID or a replicate ID
-      let replicateId = predictionId;
-      
-      // If it's a UUID format (prediction ID), look up the replicate_id
-      if (predictionId.includes('-')) {
-        const { data: prediction, error } = await supabase
-          .from('predictions')
-          .select('replicate_id')
-          .eq('id', predictionId)
-          .eq('user_id', user.id)
-          .maybeSingle();
-          
-        if (error) {
-          console.error('Error looking up prediction:', error);
-          return NextResponse.json(
-            { error: 'Failed to find prediction', details: error.message },
-            { status: 500 }
-          );
+    switch (action) {
+      case 'cancelPrediction':
+        const { predictionId } = body;
+        if (!predictionId) {
+          return createErrorResponse('Prediction ID is required');
         }
-        
-        if (!prediction || !prediction.replicate_id) {
-          console.error('No replicate_id found for prediction:', predictionId);
-          return NextResponse.json(
-            { error: 'No replicate_id found for this prediction' },
-            { status: 404 }
-          );
+        return await cancelPrediction(predictionId, supabase, user.id);
+
+      case 'cancelTraining':
+        const { trainingId } = body;
+        if (!trainingId) {
+          return createErrorResponse('Training ID is required');
         }
+        return await cancelTraining(trainingId, supabase, user.id);
+
+      default:
+        return createErrorResponse('Invalid action');
+    }
+  } catch (error) {
+    console.error('Error processing request:', error);
+    return createErrorResponse('Internal server error', undefined, 500);
+  }
+}
+
+/**
+ * Cancel a Replicate operation (prediction or training) and update its status in the database
+ */
+async function cancelReplicateOperation<T extends { id: string, status: string }>(
+  operationId: string,
+  cancelFunction: (id: string) => Promise<unknown>,
+  updateTable: string,
+  updateConditions: Record<string, unknown>,
+  supabase: SupabaseClient
+): Promise<T | null> {
+  try {
+    // Cancel the operation in Replicate
+    await cancelFunction(operationId);
+    
+    // Update the status in Supabase
+    const { data, error } = await supabase
+      .from(updateTable)
+      .update({ 
+        status: 'canceled',
+        is_cancelled: true,
+        completed_at: new Date().toISOString()
+      })
+      .match(updateConditions)
+      .select()
+      .single();
+    
+    if (error) {
+      console.error(`Error updating ${updateTable} in Supabase:`, error);
+      return null;
+    }
+    
+    return data as T;
+  } catch (error) {
+    console.error(`Error cancelling ${updateTable}:`, error);
+    throw error;
+  }
+}
+
+// Cancel a prediction
+async function cancelPrediction(predictionId: string, supabase: SupabaseClient, userId: string) {
+  try {
+    // First, check if this is a prediction ID or a replicate ID
+    let replicateId = predictionId;
+    
+    // If it's a UUID format (prediction ID), look up the replicate_id
+    if (predictionId.includes('-')) {
+      const { data: prediction, error } = await supabase
+        .from('predictions')
+        .select('replicate_id')
+        .eq('id', predictionId)
+        .eq('user_id', userId)
+        .maybeSingle();
         
-        replicateId = prediction.replicate_id;
+      if (error) {
+        console.error('Error looking up prediction:', error);
+        return createErrorResponse('Failed to find prediction', error.message, 500);
       }
+      
+      if (!prediction || !prediction.replicate_id) {
+        console.error('No replicate_id found for prediction:', predictionId);
+        return createErrorResponse('No replicate_id found for this prediction', undefined, 404);
+      }
+      
+      replicateId = prediction.replicate_id;
+    }
 
-      // Cancel the prediction using Replicate API
-      await replicate.predictions.cancel(replicateId);
-      // console.log('Prediction cancelled successfully:', response);
+    // Cancel the prediction using the common function
+    const updatedPrediction = await cancelReplicateOperation(
+      replicateId,
+      replicate.predictions.cancel.bind(replicate.predictions),
+      'predictions',
+      { replicate_id: replicateId, user_id: userId },
+      supabase
+    );
 
-      // Update the prediction in Supabase
-      const { error: updateError } = await supabase
+    if (updatedPrediction) {
+      return createSuccessResponse({ prediction: updatedPrediction }, 'Prediction cancelled successfully');
+    }
+
+    // If the update failed, double check if the prediction exists in Supabase
+    const { data: existingPrediction, error: lookupError } = await supabase
+      .from('predictions')
+      .select('id, replicate_id')
+      .eq('replicate_id', replicateId)
+      .eq('user_id', userId)
+      .maybeSingle();
+      
+    if (lookupError) {
+      console.error('Error looking up prediction:', lookupError);
+    }
+    
+    // Return success anyway since we successfully cancelled the prediction in Replicate
+    return createSuccessResponse(
+      { prediction: existingPrediction || { id: null, replicate_id: replicateId } },
+      'Prediction cancelled successfully, but failed to update database'
+    );
+  } catch (error) {
+    console.error('Error cancelling prediction:', error);
+    
+    // Even if the Replicate API call fails, try to mark it as cancelled in Supabase anyway
+    try {
+      // Determine which field to use for the query
+      const field = predictionId.includes('-') ? 'id' : 'replicate_id';
+      
+      const { error: fallbackUpdateError } = await supabase
         .from('predictions')
         .update({ 
           status: 'canceled',
           is_cancelled: true,
           completed_at: new Date().toISOString()
         })
-        .eq('replicate_id', replicateId)
-        .eq('user_id', user.id);
-
-      if (updateError) {
-        console.error('Error updating prediction in Supabase:', updateError);
+        .eq(field, predictionId)
+        .eq('user_id', userId);
         
-        // If the update failed, double check if the prediction exists in Supabase
-        const { data: existingPrediction, error: lookupError } = await supabase
-          .from('predictions')
-          .select('id, replicate_id')
-          .eq('replicate_id', replicateId)
-          .eq('user_id', user.id)
-          .maybeSingle();
-          
-        if (lookupError) {
-          console.error('Error looking up prediction:', lookupError);
-        } else if (!existingPrediction) {
-          // console.log(`No prediction found with replicate_id: ${replicateId}. It might not be in the database yet.`);
-        } else {
-          // console.log(`Found prediction with replicate_id: ${replicateId}, but failed to update it.`);
-        }
-        
-        // Return success anyway since we successfully cancelled the prediction in Replicate
-        return NextResponse.json({ 
-          success: true, 
-          message: 'Prediction cancelled successfully, but failed to update database',
-          details: updateError
-        });
+      if (!fallbackUpdateError) {
+        return createSuccessResponse(
+          { prediction: { id: predictionId } },
+          'Prediction marked as cancelled in database (Replicate API error ignored)'
+        );
       }
+    } catch (fallbackError) {
+      console.error('Error in fallback cancellation:', fallbackError);
+    }
+    
+    return createErrorResponse(
+      'Failed to cancel prediction',
+      error instanceof Error ? error.message : 'Unknown error',
+      500
+    );
+  }
+}
 
-      return NextResponse.json({ 
-        success: true, 
-        message: 'Prediction cancelled successfully'
-      });
+// Helper function to handle training file deletion
+async function deleteTrainingFiles(
+  modelOwner: string, 
+  modelName: string, 
+  supabase: SupabaseClient
+): Promise<boolean> {
+  try {
+    const zipPath = `${modelOwner}/${modelName}/images.zip`;
+    
+    const { error: deleteError } = await supabase.storage
+      .from('training-files')
+      .remove([zipPath]);
 
-    } catch (error) {
-      console.error('Error cancelling prediction:', error);
+    if (deleteError) {
+      console.warn(`Failed to delete training files: ${deleteError.message}`);
+      return false;
+    } else {
+      console.log(`Successfully deleted training files: ${zipPath}`);
+      return true;
+    }
+  } catch (deleteError) {
+    console.warn('Error deleting training files:', deleteError);
+    return false;
+  }
+}
+
+// Helper function to update model status if no active trainings
+async function updateModelStatusIfNoActiveTrainings(
+  modelId: string,
+  trainingId: string,
+  supabase: SupabaseClient
+): Promise<boolean> {
+  // Check if this is the only active training for the model
+  const { data: activeTrainings, error: activeTrainingsError } = await supabase
+    .from('trainings')
+    .select('id')
+    .eq('model_id', modelId)
+    .in('status', ['training', 'starting', 'created', 'queued'])
+    .neq('training_id', trainingId);
+
+  if (!activeTrainingsError && (!activeTrainings || activeTrainings.length === 0)) {
+    // Update the model status if this was the only active training
+    const { error: updateModelError } = await supabase
+      .from('models')
+      .update({ status: 'training_failed' })
+      .eq('id', modelId);
+    
+    return !updateModelError;
+  }
+  
+  return true;
+}
+
+// Cancel an ongoing training
+async function cancelTraining(trainingId: string, supabase: SupabaseClient, userId: string) {
+  if (!trainingId) {
+    return createErrorResponse('Training ID is required');
+  }
+
+  try {
+    // First, try to find the training in Supabase to get the correct Replicate training ID
+    const { data: trainingData, error: trainingError } = await supabase
+      .from('trainings')
+      .select('*, models(*)')
+      .eq('training_id', trainingId)
+      .eq('user_id', userId)
+      .single();
+    
+    // If not found, try to find by internal id
+    if (trainingError) {
+      const { data: internalTrainingData, error: internalTrainingError } = await supabase
+        .from('trainings')
+        .select('*, models!inner(*)')
+        .eq('id', trainingId)
+        .single();
       
-      // Even if the Replicate API call fails, try to mark it as cancelled in Supabase anyway
-      // This handles cases where the prediction might be done or not found in Replicate
+      if (internalTrainingError) {
+        return createErrorResponse('Training not found in database', undefined, 404);
+      }
+      
+      // Use the Replicate training_id for cancellation
+      const replicateTrainingId = internalTrainingData.training_id;
+      
       try {
-        // console.log('Attempting to mark prediction as cancelled in database despite Replicate API error');
+        // Cancel the training in Replicate
+        await replicate.trainings.cancel(replicateTrainingId);
         
-        // Determine which field to use for the query
-        const field = predictionId.includes('-') ? 'id' : 'replicate_id';
-        
-        const { error: fallbackUpdateError } = await supabase
-          .from('predictions')
+        // Update the training status in Supabase
+        await supabase
+          .from('trainings')
           .update({ 
             status: 'canceled',
             is_cancelled: true,
             completed_at: new Date().toISOString()
           })
-          .eq(field, predictionId)
-          .eq('user_id', user.id);
-          
-        if (!fallbackUpdateError) {
-          // console.log('Successfully marked prediction as cancelled in database');
-          return NextResponse.json({ 
-            success: true, 
-            message: 'Prediction marked as cancelled in database (Replicate API error ignored)'
-          });
+          .eq('training_id', replicateTrainingId);
+        
+        // Update model status if needed
+        await updateModelStatusIfNoActiveTrainings(
+          internalTrainingData.model_id,
+          replicateTrainingId,
+          supabase
+        );
+        
+        // Delete training files
+        if (internalTrainingData.models) {
+          await deleteTrainingFiles(
+            internalTrainingData.models.model_owner,
+            internalTrainingData.models.model_id,
+            supabase
+          );
         }
-      } catch (fallbackError) {
-        console.error('Error in fallback cancellation:', fallbackError);
+        
+        return createSuccessResponse({
+          training: {
+            id: replicateTrainingId,
+            status: 'canceled',
+            modelId: internalTrainingData.model_id
+          }
+        });
+      } catch (error) {
+        console.error('Error in training cancellation:', error);
+        return createErrorResponse(
+          'Failed to cancel training',
+          error instanceof Error ? error.message : 'Unknown error',
+          500
+        );
       }
-      
-      return NextResponse.json(
-        { 
-          error: 'Failed to cancel prediction', 
-          details: error instanceof Error ? error.message : 'Unknown error' 
-        },
-        { status: 500 }
+    }
+    
+    // If we found the training by training_id, proceed with cancellation
+    try {
+      // Cancel the training in Replicate
+      await replicate.trainings.cancel(trainingId);
+
+      // Update the training status in Supabase
+      await supabase
+        .from('trainings')
+        .update({ 
+          status: 'canceled',
+          is_cancelled: true,
+          completed_at: new Date().toISOString()
+        })
+        .eq('training_id', trainingId);
+
+      // Update model status if needed
+      await updateModelStatusIfNoActiveTrainings(
+        trainingData.model_id,
+        trainingId,
+        supabase
+      );
+
+      // Delete training files
+      if (trainingData.models) {
+        await deleteTrainingFiles(
+          trainingData.models.model_owner,
+          trainingData.models.model_id,
+          supabase
+        );
+      }
+
+      return createSuccessResponse({
+        training: {
+          id: trainingId,
+          status: 'canceled',
+          modelId: trainingData.model_id
+        }
+      });
+    } catch (error) {
+      console.error('Error cancelling training:', error);
+      return createErrorResponse(
+        'Failed to cancel training',
+        error instanceof Error ? error.message : 'Unknown error',
+        500
       );
     }
   } catch (error) {
-    console.error('Error processing request:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
+    console.error('Error in training cancellation process:', error);
+    return createErrorResponse(
+      'Failed to process training cancellation',
+      error instanceof Error ? error.message : 'Unknown error',
+      500
     );
   }
 } 

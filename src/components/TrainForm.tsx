@@ -611,11 +611,7 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
                 />
                 {nameError ? (
                   <p className="text-xs text-red-500 mt-1">{nameError}</p>
-                ) : (
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Your model will be created as a private model with owner &quot;arthurbnhm&quot; using T4 GPU.
-                  </p>
-                )}
+                ) : null}
                 {actualModelName && !nameError && (
                   <p className="text-xs text-green-600 mt-1">
                     Model will be created as: <span className="font-mono">{actualModelName}</span>
