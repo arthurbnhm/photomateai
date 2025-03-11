@@ -238,7 +238,7 @@ async function trainModel(modelOwner: string, modelName: string, zipUrl: string,
 
     // Define training parameters
     const trainingParams = {
-      steps: 1000,
+      steps: 3,
       lora_rank: 16,
       optimizer: "adamw8bit",
       batch_size: 1,

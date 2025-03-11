@@ -2,19 +2,19 @@
 
 - ✅ Delete button - Implemented with subtle styling and confirmation dialog
 - ✅ Cancell button - Add ability to cancel ongoing trainings
-- Once training done, it generate a first set of portrait
+- 🟡 Once training done, it generate a first set of portrait
 - ✅ Model listing - Added table to display models with status and actions
 - ✅ Add progress indicator for ongoing trainings
 - ✅ Fix the training progress (seems hardcoded) and merge with the list
 - ✅ Implement supabase real-time subscription
-- Add a description? I'm looking to fix the genre issue (male/female)
+- 🟡 Add a description? I'm looking to fix the genre issue (male/female)
 - ❌ Add a use model that goes to create page and selects the model
-- Fullscreen dropzone like vercel
+- ✅ Fullscreen dropzone like vercel
 
 # Create
 
-- Animate image to videos
-- Add more customization options for model training
+- 🟡 Animate image to videos
+- 🟡 Add more customization options for model training
 - ✅ List available models for use
 - ✅ Integrate webhooks with real-time image updates
 - ✅ Generate multiple images at a time
@@ -26,11 +26,11 @@
 - Default to a model for image geneneration and other options
 - ✅ Add back the webp format
 - ✅ Download button with option to rename or download all of them
-- Buttons with predined options (blonde, linkedin profile)
+- 🟡 Buttons with predined options (blonde, linkedin profile)
 - ✅ Use same badges as in trainings models lists
-- Image focus
+- ✅ Image focus
 - ✅ Add the badges
-- Change naming of download and storage (merger)
+- ✅ Change naming of download and storage (merger)
 
 # App
 
@@ -41,11 +41,11 @@
 - Implement better error handling and user feedback
 - ✅ Seperate train.tsx into components
 - ✅ Have a single page for both training and creation
-- Use a generated profile pic as avatar
+- 🟡 Use a generated profile pic as avatar
 - ✅ Improve the navbar, do not display when scrolling
-- Vibe with music
-- A chat that interacts with my api, know the format to use etc
-- Make sure we dont use supabase admin key anymore
+- 🟡 Vibe with music
+- 🟡 A chat that interacts with my api, know the format to use etc
+- ✅ Make sure we dont use supabase admin key anymore
 - Add payment
 
 # Authentication
