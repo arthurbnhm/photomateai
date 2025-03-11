@@ -38,22 +38,20 @@ export const createSupabaseAdmin = () => {
 // Create a server-side client for use in server components
 export const createServerClient = () => {
   const { supabaseUrl, supabaseAnonKey } = getEnvVariables();
-  const cookieStore = cookies();
   
   return createSupabaseServerClient(supabaseUrl, supabaseAnonKey, {
     cookies: {
-      async getAll() {
-        return (await cookieStore).getAll();
+      async get(name: string) {
+        const cookiesObj = await cookies();
+        return cookiesObj.get(name)?.value;
       },
-      async setAll(cookiesToSet) {
-        try {
-          const resolvedCookiesStore = await cookieStore;
-          cookiesToSet.forEach(({ name, value, options }) =>
-            resolvedCookiesStore.set({ name, value, ...options })
-          );
-        } catch (error) {
-          console.error('Cookie set error in server component:', error);
-        }
+      async set(name: string, value: string, options: CookieOptions) {
+        const cookiesObj = await cookies();
+        cookiesObj.set(name, value, options);
+      },
+      async remove(name: string, options: CookieOptions) {
+        const cookiesObj = await cookies();
+        cookiesObj.set(name, '', { ...options, maxAge: 0 });
       },
     },
   });
