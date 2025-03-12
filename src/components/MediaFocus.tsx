@@ -296,179 +296,145 @@ export function MediaFocus({
 
   // Render modal content inside a portal
   return createPortal(
-    <AnimatePresence mode="wait">
+    <AnimatePresence>
       {isOpen && (
-        <>
-          {/* Backdrop - separate from content for smoother animation */}
-          <motion.div
-            key="backdrop"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            className="fixed inset-0 bg-background/95 backdrop-blur-sm z-[99998]"
-            onClick={onClose}
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 flex flex-col items-center justify-center z-[99999]"
+          onClick={onClose}
+          onTouchStart={handleTouchStart}
+          onTouchEnd={handleTouchEnd}
+        >
+          {/* Theme-aware backdrop overlay */}
+          <div 
+            className="absolute inset-0 bg-background" 
             aria-hidden="true"
           />
           
           {/* Main content container */}
-          <motion.div
-            key="modal"
-            initial={{ opacity: 0, scale: 0.98 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.98 }}
-            transition={{ 
-              type: "spring", 
-              stiffness: 300, 
-              damping: 30,
-              duration: 0.3
-            }}
-            className="fixed inset-0 flex flex-col items-center justify-center z-[99999]"
-            onClick={onClose}
-            onTouchStart={handleTouchStart}
-            onTouchEnd={handleTouchEnd}
+          <div 
+            className="relative flex flex-col items-center justify-between w-full h-full z-10 px-[5vw] py-[3vh]"
+            onClick={(e) => e.stopPropagation()}
           >
-            {/* Main content container */}
-            <div 
-              className="relative flex flex-col items-center justify-between w-full h-full z-10 px-[5vw] py-[3vh]"
-              onClick={(e) => e.stopPropagation()}
-            >
-              {/* Top bar with counter and controls */}
-              <div className="w-full flex items-center justify-between z-20 px-[3vw]">
-                <div className="bg-muted py-[1vh] px-4 rounded-full text-sm font-medium text-foreground">
-                  {currentImageIndex + 1} / {currentGeneration.images.length}
-                </div>
-                
-                <div className="flex gap-[2vw]">
-                  <Button 
-                    onClick={downloadImage}
-                    variant="outline"
-                    size="icon"
-                    className="h-[5vh] w-[5vh] min-h-[2.5rem] min-w-[2.5rem]"
-                  >
-                    <Download className="h-[40%] w-[40%]" />
-                  </Button>
-                  
-                  <Button 
-                    onClick={(e) => { e.stopPropagation(); onClose(); }}
-                    variant="outline"
-                    size="icon"
-                    className="h-[5vh] w-[5vh] min-h-[2.5rem] min-w-[2.5rem]"
-                  >
-                    <X className="h-[40%] w-[40%]" />
-                  </Button>
-                </div>
+            {/* Top bar with counter and controls */}
+            <div className="w-full flex items-center justify-between z-20 px-[3vw]">
+              <div className="bg-muted py-[1vh] px-4 rounded-full text-sm font-medium text-foreground">
+                {currentImageIndex + 1} / {currentGeneration.images.length}
               </div>
               
-              {/* Middle section with image and navigation */}
-              <div className="flex-1 w-full flex items-center justify-center relative my-[3vh]">
-                {/* Main image */}
-                <AnimatePresence mode="wait">
-                  <motion.div
-                    key={`image-${currentImageIndex}`}
-                    className="relative rounded-md overflow-hidden"
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -10 }}
-                    transition={{ 
-                      type: "spring",
-                      stiffness: 300,
-                      damping: 30,
-                      duration: 0.2
-                    }}
-                    style={{
-                      maxWidth: '90vw',
-                      maxHeight: '50vh',
-                    }}
-                  >
-                    <NextImage
-                      src={currentGeneration.images[currentImageIndex].url}
-                      alt={`Generated image for "${currentGeneration.prompt}"`}
-                      className="object-contain rounded-md"
-                      width={1024}
-                      height={1024}
-                      style={{ 
-                        maxWidth: '90vw',
-                        maxHeight: '50vh',
-                        width: 'auto', 
-                        height: 'auto' 
-                      }}
-                      onError={() => toast.error("Failed to load image")}
-                      unoptimized={true}
-                      priority={true}
-                    />
-                  </motion.div>
-                </AnimatePresence>
+              <div className="flex gap-[2vw]">
+                <Button 
+                  onClick={downloadImage}
+                  variant="outline"
+                  size="icon"
+                  className="h-[5vh] w-[5vh] min-h-[2.5rem] min-w-[2.5rem]"
+                >
+                  <Download className="h-[40%] w-[40%]" />
+                </Button>
                 
-                {/* Left/Right arrows */}
-                <div className="absolute inset-x-0 w-full flex items-center justify-between px-[3vw]">
-                  <Button 
-                    onClick={(e) => { e.stopPropagation(); prevImage(); }}
-                    variant="outline"
-                    size="icon"
-                    className="h-[5vh] w-[5vh] min-h-[2.5rem] min-w-[2.5rem] z-30 bg-background/80 backdrop-blur-sm"
-                    aria-label="Previous image"
-                  >
-                    <ChevronLeft className="h-[40%] w-[40%]" />
-                  </Button>
-                  
-                  <Button 
-                    onClick={(e) => { e.stopPropagation(); nextImage(); }}
-                    variant="outline"
-                    size="icon"
-                    className="h-[5vh] w-[5vh] min-h-[2.5rem] min-w-[2.5rem] z-30 bg-background/80 backdrop-blur-sm"
-                    aria-label="Next image"
-                  >
-                    <ChevronRight className="h-[40%] w-[40%]" />
-                  </Button>
-                </div>
+                <Button 
+                  onClick={(e) => { e.stopPropagation(); onClose(); }}
+                  variant="outline"
+                  size="icon"
+                  className="h-[5vh] w-[5vh] min-h-[2.5rem] min-w-[2.5rem]"
+                >
+                  <X className="h-[40%] w-[40%]" />
+                </Button>
               </div>
+            </div>
+            
+            {/* Middle section with image and navigation */}
+            <div className="flex-1 w-full flex items-center justify-center relative my-[3vh]">
+              {/* Main image */}
+              <motion.div
+                key={currentImageIndex}
+                className="relative rounded-md overflow-hidden"
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.2 }}
+                style={{
+                  maxWidth: '90vw',
+                  maxHeight: '50vh',
+                }}
+              >
+                <NextImage
+                  src={currentGeneration.images[currentImageIndex].url}
+                  alt={`Generated image for "${currentGeneration.prompt}"`}
+                  className="object-contain rounded-md"
+                  width={1024}
+                  height={1024}
+                  style={{ 
+                    maxWidth: '90vw',
+                    maxHeight: '50vh',
+                    width: 'auto', 
+                    height: 'auto' 
+                  }}
+                  onError={() => toast.error("Failed to load image")}
+                  unoptimized={true}
+                  priority={true}
+                />
+              </motion.div>
               
-              {/* Bottom section with thumbnails - no background */}
-              <div className="w-full z-20 px-[3vw]">
-                <div className="mx-auto py-[2vh] rounded-lg overflow-x-auto">
-                  <div className="flex items-center gap-[2vw] justify-center">
-                    {currentGeneration.images.map((image, index) => (
-                      <motion.button
-                        key={index}
-                        onClick={() => onNavigate(index)}
-                        className={`w-[15vw] h-[15vw] max-w-[5rem] max-h-[5rem] min-w-[3rem] min-h-[3rem] 
-                                    rounded-md overflow-hidden border-2 flex-shrink-0 transition relative ${
-                          index === currentImageIndex ? 'border-primary' : 'border-transparent opacity-70 hover:opacity-100'
-                        }`}
-                        aria-label={`View image ${index + 1}`}
-                        aria-current={index === currentImageIndex ? 'true' : 'false'}
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ 
-                          opacity: 1, 
-                          y: 0,
-                          scale: index === currentImageIndex ? 1.1 : 1
-                        }}
-                        transition={{ 
-                          delay: 0.1 + index * 0.05,
-                          duration: 0.2
-                        }}
-                      >
-                        <AspectRatio ratio={1} className="h-full w-full">
-                          <NextImage 
-                            src={image.url} 
-                            alt={`Thumbnail ${index + 1}`}
-                            className="object-cover"
-                            fill
-                            sizes="15vw"
-                            priority={index === currentImageIndex}
-                            loading={index === currentImageIndex ? "eager" : "lazy"}
-                            unoptimized={true}
-                          />
-                        </AspectRatio>
-                      </motion.button>
-                    ))}
-                  </div>
+              {/* Left/Right arrows */}
+              <div className="absolute inset-x-0 w-full flex items-center justify-between px-[3vw]">
+                <Button 
+                  onClick={(e) => { e.stopPropagation(); prevImage(); }}
+                  variant="outline"
+                  size="icon"
+                  className="h-[5vh] w-[5vh] min-h-[2.5rem] min-w-[2.5rem] z-30"
+                  aria-label="Previous image"
+                >
+                  <ChevronLeft className="h-[40%] w-[40%]" />
+                </Button>
+                
+                <Button 
+                  onClick={(e) => { e.stopPropagation(); nextImage(); }}
+                  variant="outline"
+                  size="icon"
+                  className="h-[5vh] w-[5vh] min-h-[2.5rem] min-w-[2.5rem] z-30"
+                  aria-label="Next image"
+                >
+                  <ChevronRight className="h-[40%] w-[40%]" />
+                </Button>
+              </div>
+            </div>
+            
+            {/* Bottom section with thumbnails - no background */}
+            <div className="w-full z-20 px-[3vw]">
+              <div className="mx-auto py-[2vh] rounded-lg overflow-x-auto">
+                <div className="flex items-center gap-[2vw] justify-center">
+                  {currentGeneration.images.map((image, index) => (
+                    <button
+                      key={index}
+                      onClick={() => onNavigate(index)}
+                      className={`w-[15vw] h-[15vw] max-w-[5rem] max-h-[5rem] min-w-[3rem] min-h-[3rem] 
+                                  rounded-md overflow-hidden border-2 flex-shrink-0 transition relative ${
+                        index === currentImageIndex ? 'border-primary scale-110' : 'border-transparent opacity-70 hover:opacity-100'
+                      }`}
+                      aria-label={`View image ${index + 1}`}
+                      aria-current={index === currentImageIndex ? 'true' : 'false'}
+                    >
+                      <AspectRatio ratio={1} className="h-full w-full">
+                        <NextImage 
+                          src={image.url} 
+                          alt={`Thumbnail ${index + 1}`}
+                          className="object-cover"
+                          fill
+                          sizes="15vw"
+                          priority={index === currentImageIndex}
+                          loading={index === currentImageIndex ? "eager" : "lazy"}
+                          unoptimized={true}
+                        />
+                      </AspectRatio>
+                    </button>
+                  ))}
                 </div>
               </div>
             </div>
-          </motion.div>
-        </>
+          </div>
+        </motion.div>
       )}
     </AnimatePresence>,
     document.body
