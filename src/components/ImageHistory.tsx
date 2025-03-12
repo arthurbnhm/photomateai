@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge"
 import { createBrowserSupabaseClient } from "@/lib/supabase"
 import { MediaFocus } from "@/components/MediaFocus"
 import { useAuth } from "@/contexts/AuthContext"
+import { deleteImageFromCache } from "@/lib/imageCache"
 
 // Define the type for image generation
 type ImageGeneration = {
@@ -293,10 +294,17 @@ export function ImageHistory({
           // Mark all images in this generation as expired rather than removing entirely
           return {
             ...gen,
-            images: gen.images.map(img => ({
-              ...img,
-              isExpired: hasUndefinedPath(img.url) ? true : img.isExpired
-            }))
+            images: gen.images.map(img => {
+              // If the image URL has an undefined path, mark it as expired and remove from service worker cache
+              if (hasUndefinedPath(img.url)) {
+                // Delete from service worker cache as well
+                deleteImageFromCache(img.url).catch(err => 
+                  console.error('Error removing invalid image from cache:', err)
+                );
+                return { ...img, isExpired: true };
+              }
+              return img;
+            })
           };
         }
         return gen;
@@ -775,6 +783,19 @@ export function ImageHistory({
       const success = await sendDeleteRequest(generation.replicate_id, generation.images.map(img => img.url));
       
       if (success) {
+        // Also remove each image from the service worker cache
+        const imageUrls = generation.images.map(img => img.url);
+        
+        // Remove each image from the service worker cache
+        for (const url of imageUrls) {
+          try {
+            await deleteImageFromCache(url);
+          } catch (error) {
+            console.error('Error removing image from cache:', error);
+            // Continue with other images even if one fails
+          }
+        }
+        
         // Update state to remove deleted generation
         setGenerations(prev => prev.filter(g => g.id !== id));
         
@@ -1235,7 +1256,9 @@ export function ImageHistory({
                                     fill
                                     sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
                                     onError={() => handleImageError(generation.id, index)}
-                                    priority={index === 0}
+                                    priority={index === 0 && generation === getAllGenerations()[0]}
+                                    loading={index === 0 && generation === getAllGenerations()[0] ? "eager" : "lazy"}
+                                    unoptimized={true}
                                   />
                                 )}
                               </div>

@@ -82,7 +82,7 @@ const formSchema = z.object({
     message: "Prompt must be at least 2 characters.",
   }),
   aspectRatio: z.string().default("1:1"),
-  outputFormat: z.string().default("png"),
+  outputFormat: z.string().default("webp"),
   modelId: z.string().min(1, {
     message: "Please select a model.",
   }),
@@ -199,7 +199,7 @@ export function PromptForm({
     defaultValues: {
       prompt: "",
       aspectRatio: "1:1",
-      outputFormat: "png",
+      outputFormat: "webp",
       modelId: "",
     },
   })

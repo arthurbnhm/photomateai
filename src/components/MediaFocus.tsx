@@ -8,6 +8,7 @@ import { toast } from "sonner"
 import { motion, AnimatePresence } from "framer-motion"
 import { X, Download, ChevronLeft, ChevronRight } from "lucide-react"
 import { AspectRatio } from "@/components/ui/aspect-ratio"
+import { preloadImages } from "@/lib/imageCache"
 
 // Define the types needed for the component
 export type ImageWithStatus = {
@@ -115,21 +116,35 @@ export function MediaFocus({
   // Preload images
   useEffect(() => {
     if (isOpen && currentGeneration) {
-      const totalImages = currentGeneration.images.length
-      const nextIndex = (currentImageIndex + 1) % totalImages
-      const prevIndex = (currentImageIndex - 1 + totalImages) % totalImages
+      const totalImages = currentGeneration.images.length;
       
-      if (nextIndex !== currentImageIndex) {
-        const nextImg = new window.Image()
-        nextImg.src = currentGeneration.images[nextIndex].url
-      }
-      
-      if (prevIndex !== currentImageIndex) {
-        const prevImg = new window.Image()
-        prevImg.src = currentGeneration.images[prevIndex].url
+      // Only preload if there are multiple images
+      if (totalImages > 1) {
+        const nextIndex = (currentImageIndex + 1) % totalImages;
+        
+        // Only preload the next image if it's different from the current one
+        if (nextIndex !== currentImageIndex) {
+          // Increased delay to avoid race conditions with the current image load
+          const timer = setTimeout(() => {
+            console.log('🔍 Preloading next image in carousel:', nextIndex + 1);
+            // Use the preloadImages utility for service worker caching
+            preloadImages([currentGeneration.images[nextIndex].url]);
+          }, 1200);
+          
+          return () => clearTimeout(timer);
+        }
       }
     }
-  }, [isOpen, currentGeneration, currentImageIndex])
+  }, [isOpen, currentGeneration, currentImageIndex]);
+  
+  // Preload the current image immediately when it changes
+  useEffect(() => {
+    if (isOpen && currentGeneration && currentGeneration.images[currentImageIndex]) {
+      // Force immediate load of the current image
+      const img = new Image();
+      img.src = currentGeneration.images[currentImageIndex].url;
+    }
+  }, [isOpen, currentGeneration, currentImageIndex]);
   
   // Keyboard navigation
   useEffect(() => {
@@ -156,7 +171,6 @@ export function MediaFocus({
     try {
       const imageUrl = currentGeneration.images[currentImageIndex].url
       const promptText = currentGeneration.prompt.slice(0, 20).replace(/[^a-z0-9]/gi, '_')
-      const filename = `photomate_${promptText}_${currentImageIndex + 1}.png`
       
       const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)
       
@@ -164,7 +178,32 @@ export function MediaFocus({
         try {
           const response = await fetch(imageUrl)
           const blob = await response.blob()
-          const file = new File([blob], filename, { type: 'image/png' })
+          
+          // Determine the file extension from the content type or URL
+          let fileExtension = 'png' // Default extension
+          
+          // Try to get extension from content type
+          const contentType = response.headers.get('content-type')
+          if (contentType) {
+            if (contentType.includes('jpeg') || contentType.includes('jpg')) {
+              fileExtension = 'jpg'
+            } else if (contentType.includes('png')) {
+              fileExtension = 'png'
+            } else if (contentType.includes('webp')) {
+              fileExtension = 'webp'
+            } else if (contentType.includes('gif')) {
+              fileExtension = 'gif'
+            }
+          } else {
+            // Fallback: try to extract extension from URL
+            const urlExtension = imageUrl.split('.').pop()?.toLowerCase()
+            if (urlExtension && ['jpg', 'jpeg', 'png', 'webp', 'gif'].includes(urlExtension)) {
+              fileExtension = urlExtension === 'jpeg' ? 'jpg' : urlExtension
+            }
+          }
+          
+          const filename = `photomate_${promptText}_${currentImageIndex + 1}.${fileExtension}`
+          const file = new File([blob], filename, { type: contentType || 'image/png' })
           const shareData = { files: [file] }
           
           if (navigator.canShare(shareData)) {
@@ -176,7 +215,7 @@ export function MediaFocus({
                 console.log('Share cancelled by user')
               } else {
                 console.error('Error sharing image:', shareError)
-                await performRegularDownload(imageUrl, filename)
+                await performRegularDownload(imageUrl, filename, blob)
               }
             }
             return
@@ -186,17 +225,50 @@ export function MediaFocus({
         }
       }
       
-      await performRegularDownload(imageUrl, filename)
+      // Regular download flow
+      const response = await fetch(imageUrl)
+      const blob = await response.blob()
+      
+      // Determine the file extension from the content type or URL
+      let fileExtension = 'png' // Default extension
+      
+      // Try to get extension from content type
+      const contentType = response.headers.get('content-type')
+      if (contentType) {
+        if (contentType.includes('jpeg') || contentType.includes('jpg')) {
+          fileExtension = 'jpg'
+        } else if (contentType.includes('png')) {
+          fileExtension = 'png'
+        } else if (contentType.includes('webp')) {
+          fileExtension = 'webp'
+        } else if (contentType.includes('gif')) {
+          fileExtension = 'gif'
+        }
+      } else {
+        // Fallback: try to extract extension from URL
+        const urlExtension = imageUrl.split('.').pop()?.toLowerCase()
+        if (urlExtension && ['jpg', 'jpeg', 'png', 'webp', 'gif'].includes(urlExtension)) {
+          fileExtension = urlExtension === 'jpeg' ? 'jpg' : urlExtension
+        }
+      }
+      
+      const filename = `photomate_${promptText}_${currentImageIndex + 1}.${fileExtension}`
+      await performRegularDownload(imageUrl, filename, blob)
     } catch (error) {
       console.error('Error downloading image:', error)
       toast.error('Failed to download image')
     }
   }
   
-  const performRegularDownload = async (imageUrl: string, filename: string) => {
+  const performRegularDownload = async (imageUrl: string, filename: string, existingBlob?: Blob) => {
     try {
-      const response = await fetch(imageUrl)
-      const blob = await response.blob()
+      let blob = existingBlob
+      
+      if (!blob) {
+        const response = await fetch(imageUrl)
+        blob = await response.blob()
+      }
+      
       const blobUrl = URL.createObjectURL(blob)
       
       const link = document.createElement('a')
@@ -300,7 +372,8 @@ export function MediaFocus({
                     height: 'auto' 
                   }}
                   onError={() => toast.error("Failed to load image")}
-                  unoptimized
+                  unoptimized={true}
+                  priority={true}
                 />
               </motion.div>
               
@@ -351,6 +424,8 @@ export function MediaFocus({
                           fill
                           sizes="15vw"
                           priority={index === currentImageIndex}
+                          loading={index === currentImageIndex ? "eager" : "lazy"}
+                          unoptimized={true}
                         />
                       </AspectRatio>
                     </button>

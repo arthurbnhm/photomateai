@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { ActionButtons } from "@/components/ActionButtons";
 import { AuthProvider } from "@/contexts/AuthContext";
+import { ServiceWorkerRegistration } from "@/components/ServiceWorkerRegistration";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -39,6 +40,7 @@ export default function RootLayout({
           enableSystem
         >
           <AuthProvider>
+            <ServiceWorkerRegistration />
             <ActionButtons hideSignOutOnHomepage={true} />
             <main className="min-h-screen">
               {children}
