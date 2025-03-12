@@ -1239,7 +1239,10 @@ export function ImageHistory({
                                 className="aspect-square relative overflow-hidden rounded-lg shadow-sm hover:shadow-md transition-all duration-300 group cursor-pointer"
                                 onClick={() => {
                                   if (!image.isExpired) {
-                                    openImageViewer(generation, index);
+                                    // Add a small delay before opening the modal to allow for a smoother transition
+                                    requestAnimationFrame(() => {
+                                      openImageViewer(generation, index);
+                                    });
                                   }
                                 }}
                               >

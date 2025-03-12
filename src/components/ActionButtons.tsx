@@ -93,6 +93,7 @@ export function ActionButtons({
   const isAuthPage = pathname?.startsWith('/auth')
   const shouldShowAuthButton = showAuthButton && !isAuthPage
   const isHomePage = pathname === '/'
+  const isPlansPage = pathname === '/plans'
   const showSignOutButton = user && isHomePage && !hideSignOutOnHomepage
   
   // Scroll and visibility handling
@@ -181,7 +182,7 @@ export function ActionButtons({
       <div className="hidden md:flex items-center gap-3">
         {children}
         <div className="flex items-center gap-3">
-          {user && !isHomePage && <CreditCounter />}
+          {user && !isHomePage && !isPlansPage && <CreditCounter />}
           {shouldShowAuthButton && (
             <AuthButton hideSignOutOnHomepage={hideSignOutOnHomepage} isMobileMenu={false} />
           )}
@@ -218,7 +219,7 @@ export function ActionButtons({
               forceMount
               sideOffset={6}
             >
-              {user && !isHomePage && (
+              {user && !isHomePage && !isPlansPage && (
                 <div className="px-2 py-1.5">
                   <CreditCounter />
                 </div>

@@ -6,6 +6,7 @@ import { AnimatedCounter } from 'react-animated-counter'
 import { Coins } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
+import { usePathname } from 'next/navigation'
 
 // Local storage key for credits
 const CREDITS_STORAGE_KEY = 'photomate_user_credits'
@@ -26,9 +27,19 @@ export function CreditCounter() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [isDecrementing, setIsDecrementing] = useState(false)
+  const pathname = usePathname()
+
+  // Skip subscription fetching on the plans page
+  const isPlansPage = pathname === '/plans'
 
   // Fetch user credits on component mount and set up subscription for updates
   useEffect(() => {
+    // Don't fetch subscription on the plans page
+    if (isPlansPage) {
+      setLoading(false)
+      return
+    }
+
     const supabase = createBrowserSupabaseClient()
     let mounted = true
     let previousCredits: number | null = null
@@ -194,7 +205,12 @@ export function CreditCounter() {
         }
       })
     }
-  }, [])
+  }, [isPlansPage])
+
+  // If on plans page, don't show the credit counter
+  if (isPlansPage) {
+    return null
+  }
 
   // Common container styles for consistent appearance
   const containerClasses = "flex items-center gap-1.5 h-9 px-3 rounded-md border border-input bg-background transition-all duration-300"
@@ -237,7 +253,7 @@ export function CreditCounter() {
             />
             <span className={cn(
               "text-sm font-medium flex items-center",
-              isDecrementing ? "text-foreground" : "text-muted-foreground"
+              isDecrementing ? "text-foreground" : "text-foreground"
             )}>
               <AnimatedCounter 
                 value={credits} 
@@ -248,12 +264,13 @@ export function CreditCounter() {
                 decrementColor="inherit"
                 containerStyles={{ color: 'inherit' }}
                 digitStyles={{ fontWeight: 500 }}
+                decimalPrecision={0}
               />
             </span>
           </div>
         </TooltipTrigger>
-        <TooltipContent side="bottom" className="text-xs font-normal">
-          <p>Your remaining credits</p>
+        <TooltipContent side="bottom" align="end">
+          <p>Available credits</p>
         </TooltipContent>
       </Tooltip>
     </TooltipProvider>
