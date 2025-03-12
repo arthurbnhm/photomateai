@@ -36,6 +36,13 @@ export async function POST(request: NextRequest) {
     if (userError || !user) {
       return createErrorResponse('Unauthorized', undefined, 401);
     }
+    
+    // Get session for additional checks if needed
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    
+    if (sessionError || !session) {
+      return createErrorResponse('Unauthorized: Invalid session', undefined, 401);
+    }
 
     // Check if API token is available
     const apiToken = process.env.REPLICATE_API_TOKEN;

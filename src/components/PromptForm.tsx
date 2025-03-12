@@ -6,6 +6,8 @@ import { useForm } from "react-hook-form"
 import * as z from "zod"
 import { AlertCircle } from "lucide-react"
 import { createBrowserSupabaseClient } from "@/lib/supabase"
+import { creditEvents } from "./CreditCounter"
+import { cn } from "@/lib/utils"
 
 import { Button } from "@/components/ui/button"
 import {
@@ -99,16 +101,15 @@ export function PromptForm({
   
   // State variables
   const [models, setModels] = useState<Model[]>([]);
-  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [errorDetails, setErrorDetails] = useState<string | null>(null);
-  const [fetchingModelVersion, setFetchingModelVersion] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
   const [pageReloaded, setPageReloaded] = useState(true)
   const [loadingModels, setLoadingModels] = useState(false)
   const [isInitialized, setIsInitialized] = useState(false)
   const [placeholderText, setPlaceholderText] = useState("Describe your image...")
   const [isAnimating, setIsAnimating] = useState(true)
+  const [creditDeducting, setCreditDeducting] = useState(false)
   const placeholderExamples = useMemo(() => [
     "A serene landscape with mountains at sunset",
     "A cyberpunk cityscape with neon lights",
@@ -256,7 +257,6 @@ export function PromptForm({
   
   // Function to fetch the latest model version
   const fetchLatestModelVersion = async (owner: string, name: string): Promise<string | null> => {
-    setFetchingModelVersion(true);
     try {
       const response = await fetch(`/api/model/version?owner=${encodeURIComponent(owner)}&name=${encodeURIComponent(name)}`);
       
@@ -281,8 +281,6 @@ export function PromptForm({
       console.error('Error fetching model version:', error);
       setError(`Error fetching model version: ${error instanceof Error ? error.message : 'Unknown error'}`);
       return null;
-    } finally {
-      setFetchingModelVersion(false);
     }
   };
 
@@ -305,14 +303,12 @@ export function PromptForm({
 
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
     try {
-      setSubmitting(true);
       setError(null);
       setErrorDetails(null);
       
       // Validate that a model is selected
       if (!values.modelId) {
         setError("Please select a model");
-        setSubmitting(false);
         return;
       }
       
@@ -342,6 +338,40 @@ export function PromptForm({
         format: currentOutputFormat
       });
       
+      // Get current credits before generation for UI feedback
+      let currentCredits = 0;
+      try {
+        const supabase = getSupabase();
+        const { data: { user }, error: userError } = await supabase.auth.getUser();
+        if (!userError && user) {
+          const { data: subscription } = await supabase
+            .from('subscriptions')
+            .select('credits_remaining')
+            .eq('user_id', user.id)
+            .eq('is_active', true)
+            .single();
+            
+          if (subscription) {
+            currentCredits = subscription.credits_remaining;
+            
+            // Show credit deduction animation immediately for visual feedback
+            if (currentCredits > 0) {
+              setCreditDeducting(true);
+              
+              // Update the UI to show one less credit
+              creditEvents.update(currentCredits - 1);
+              
+              // Reset the animation state after a delay
+              setTimeout(() => {
+                setCreditDeducting(false);
+              }, 2000);
+            }
+          }
+        }
+      } catch (err) {
+        console.error('Error fetching current credits for UI update:', err);
+      }
+      
       // Small delay to show initial loading state
       await new Promise(resolve => setTimeout(resolve, 300));
       
@@ -370,10 +400,8 @@ export function PromptForm({
             
             // Fetch the latest version for this model at generation time
             if (modelName) {
-              setFetchingModelVersion(true);
               modelVersion = await fetchLatestModelVersion(selectedModel.model_owner, modelName);
-              if (modelVersion) {
-              } else {
+              if (!modelVersion) {
                 console.warn('Could not fetch latest version, will use default');
               }
             }
@@ -382,7 +410,6 @@ export function PromptForm({
         
         if (!modelName) {
           setError("Please select a valid model");
-          setSubmitting(false);
           removePendingGeneration(generationId);
           return;
         }
@@ -390,122 +417,105 @@ export function PromptForm({
         // Call the API to generate the image with a timeout
         const supabase = getSupabase();
         const abortController = new AbortController();
-        const timeoutId = setTimeout(() => abortController.abort(), 15000); // 15 second timeout
+        const timeoutId = setTimeout(() => abortController.abort(), 15000);
         
-        try {
-          // Get the session token
-          let authHeader = {};
-          if (userId) {
-            const { data } = await supabase.auth.getSession();
-            if (data.session?.access_token) {
-              authHeader = { 'Authorization': `Bearer ${data.session.access_token}` };
+        // Get the session token
+        let authHeader = {};
+        if (userId) {
+          const { data: { user }, error: userError } = await supabase.auth.getUser();
+          if (userError) {
+            console.error('Error getting user for auth header:', userError);
+          } else if (user) {
+            // Get the access token securely from the user's session
+            const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+            if (sessionError) {
+              console.error('Error getting session:', sessionError);
+            } else if (session?.access_token) {
+              authHeader = { 'Authorization': `Bearer ${session.access_token}` };
             }
           }
+        }
+        
+        const response = await fetch('/api/generate', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...authHeader
+          },
+          body: JSON.stringify({
+            prompt: currentPrompt,
+            aspectRatio: currentAspectRatio,
+            outputFormat: currentOutputFormat,
+            generationId: generationId,
+            modelVersion: modelVersion,
+            modelName: modelName,
+            userId: userId
+          }),
+          signal: abortController.signal
+        });
+        
+        clearTimeout(timeoutId);
+        
+        if (!response.ok) {
+          const errorData = await response.json();
+          console.error('API error:', errorData);
           
-          const response = await fetch('/api/generate', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              ...authHeader
-            },
-            body: JSON.stringify({
-              prompt: currentPrompt,
-              aspectRatio: currentAspectRatio,
-              outputFormat: currentOutputFormat,
-              generationId: generationId,
-              modelVersion: modelVersion,
-              modelName: modelName,
-              userId: userId
-            }),
-            signal: abortController.signal
-          });
-          
-          clearTimeout(timeoutId);
-          
-          if (!response.ok) {
-            const errorData = await response.json();
-            console.error('API error:', errorData);
-            
-            setError(errorData.error || 'Failed to generate image');
-            setErrorDetails(errorData.details || null);
-            
-            // Remove from pending generations
-            removePendingGeneration(generationId);
-            setSubmitting(false);
-            return;
-          }
-          
-          const result = await response.json();
-          
-          // Update the pending generation with the replicate_id
-          if (result && result.replicate_id) {
-            setPendingGenerations(prev => 
-              prev.map(gen => 
-                gen.id === generationId 
-                  ? { ...gen, replicate_id: result.replicate_id } 
-                  : gen
-              )
-            );
-          }
-          
-          setSubmitting(false);
-          
-          // If the generation has already completed and returned results
-          if (result && result.status === 'succeeded' && result.output) {
-            // Add to client history
-            addToClientHistory({
-              id: generationId,
-              prompt: currentPrompt,
-              timestamp: new Date().toISOString(),
-              images: processOutput(result.output),
-              aspectRatio: currentAspectRatio
-            });
-            
-            // Remove from pending since it's already done
-            removePendingGeneration(generationId);
-          }
-
-          return;
-        } catch (fetchError: unknown) {
-          clearTimeout(timeoutId);
-          
-          if (fetchError instanceof Error && fetchError.name === 'AbortError') {
-            console.warn('Generate request aborted due to timeout');
-            setError('Request timed out. Please try again.');
-          } else {
-            throw fetchError;
-          }
+          setError(errorData.error || 'Failed to generate image');
+          setErrorDetails(errorData.details || null);
           
           // Remove from pending generations
           removePendingGeneration(generationId);
-        }
-      } catch (err) {
-        console.error('Error generating image:', err);
-        
-        // Create a detailed error message
-        let errorMessage = 'An error occurred while generating the image.';
-        let errorDetailsMessage = null;
-        
-        if (err instanceof Error) {
-          errorMessage = err.message;
-          errorDetailsMessage = err.stack || null;
+          return;
         }
         
-        setError(errorMessage);
-        setErrorDetails(errorDetailsMessage);
+        const result = await response.json();
+        
+        // Update the pending generation with the replicate_id
+        if (result && result.replicate_id) {
+          setPendingGenerations(prev => 
+            prev.map(gen => 
+              gen.id === generationId 
+                ? { ...gen, replicate_id: result.replicate_id } 
+                : gen
+            )
+          );
+          
+          // We already updated the UI credit counter above,
+          // the actual database update happens via the API call
+        }
+        
+        // If the generation has already completed and returned results
+        if (result && result.status === 'succeeded' && result.output) {
+          // Add to client history
+          addToClientHistory({
+            id: generationId,
+            prompt: currentPrompt,
+            timestamp: new Date().toISOString(),
+            images: processOutput(result.output),
+            aspectRatio: currentAspectRatio
+          });
+          
+          // Remove from pending since it's already done
+          removePendingGeneration(generationId);
+        }
+
+        return;
+      } catch (fetchError) {
+        // We can't access timeoutId here, so we don't need to clear it
+        // If we got an AbortError, the timeout already fired and aborted the request
+        
+        if (fetchError instanceof Error && fetchError.name === 'AbortError') {
+          console.warn('Generate request aborted due to timeout');
+          setError('Request timed out. Please try again.');
+        } else {
+          throw fetchError;
+        }
         
         // Remove from pending generations
         removePendingGeneration(generationId);
-        
-        // Don't reset the form on error to preserve user input
-        // Just set submitting to false
       }
-      
-      setSubmitting(false);
-      
     } catch (err) {
       console.error('Error in onSubmit:', err);
-      setSubmitting(false);
     }
   };
 
@@ -578,9 +588,11 @@ export function PromptForm({
   useEffect(() => {
     const getUserId = async () => {
       try {
-        const { data: sessionData } = await supabaseRef.current.auth.getSession();
-        if (sessionData.session) {
-          setUserId(sessionData.session.user.id);
+        const { data: { user }, error: userError } = await supabaseRef.current.auth.getUser();
+        if (userError) {
+          console.error('Error getting user:', userError);
+        } else if (user) {
+          setUserId(user.id);
         }
       } catch (error) {
         console.error('Error getting user session:', error);
@@ -739,15 +751,16 @@ export function PromptForm({
                 <div className="md:col-span-2 flex justify-end">
                   <Button 
                     type="submit" 
-                    className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-medium transition-all duration-200"
-                    disabled={submitting || loadingModels || fetchingModelVersion}
+                    className={cn(
+                      "w-full font-medium transition-all duration-300",
+                      creditDeducting 
+                        ? "bg-primary border-amber-500/30 shadow-[0_0_0_1px_rgba(245,158,11,0.1)]" 
+                        : "bg-primary hover:bg-primary/90 text-primary-foreground"
+                    )}
+                    disabled={loadingModels}
                     aria-label="Generate image"
                   >
-                    {submitting ? (
-                      "Generate"
-                    ) : (
-                      "Generate"
-                    )}
+                    Generate
                   </Button>
                 </div>
               </div>

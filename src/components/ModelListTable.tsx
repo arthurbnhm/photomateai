@@ -531,23 +531,32 @@ export function ModelListTable({ newTraining, onClearNewTraining }: ModelListTab
     
     setIsCancelling(true);
     try {
-      // Get the session for authentication
-      const { data: sessionData } = await supabase.auth.getSession();
-      if (!sessionData.session) {
+      // Get the authenticated user
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
         toast.error("You must be logged in to cancel a training");
         setIsCancelling(false);
         return;
       }
-
-      const response = await fetch('/api/cancel', {
+      
+      // Get the session for the access token
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        toast.error("Unable to get authentication token");
+        setIsCancelling(false);
+        return;
+      }
+      
+      // Make API request to cancel training
+      const response = await fetch(`/api/cancel`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${sessionData.session.access_token}`
+          'Authorization': `Bearer ${session.access_token}`
         },
         body: JSON.stringify({
           action: 'cancelTraining',
-          trainingId: trainingToCancel.id,
+          trainingId: typeof trainingToCancel === 'string' ? trainingToCancel : trainingToCancel.id,
         }),
       });
       
@@ -632,20 +641,58 @@ export function ModelListTable({ newTraining, onClearNewTraining }: ModelListTab
           }
           
           if (newTraining.id) {
-            // Get the session for authentication
+            // Get the authenticated user
             try {
-              const { data: sessionData } = await supabase.auth.getSession();
-              if (!sessionData.session) {
+              const { data: { user } } = await supabase.auth.getUser();
+              if (!user) {
                 toast.error("You must be logged in to cancel a training");
                 return;
               }
               
-              setTrainingToCancel({
-                id: newTraining.id,
-                modelId: newTraining.modelId || ''
+              // Get the session for the access token
+              const { data: { session } } = await supabase.auth.getSession();
+              if (!session) {
+                toast.error("Unable to get authentication token");
+                return;
+              }
+              
+              // Make API request to cancel training
+              const response = await fetch(`/api/cancel`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${session.access_token}`
+                },
+                body: JSON.stringify({
+                  action: 'cancelTraining',
+                  trainingId: newTraining.id,
+                }),
               });
+              
+              // Try to parse as JSON
+              let data;
+              try {
+                data = await response.json();
+              } catch (_parseError) {
+                void _parseError; // Explicitly indicate we're ignoring this variable
+                throw new Error(`Invalid response from server: ${await response.text()}`);
+              }
+              
+              if (!data.success) {
+                throw new Error(data.error || 'Failed to cancel training');
+              }
+              
+              // Instead of updating the model status, just remove the model from the list
+              setModels(models.filter(model => model.id !== newTraining.modelId));
+              
+              toast.success("Training cancelled successfully");
+              
+              // Force a refresh of the models after a short delay
+              setTimeout(() => {
+                fetchModels(page);
+              }, 1000);
             } catch (error) {
-              toast.error(`Error: ${error instanceof Error ? error.message : 'Failed to get session'}`);
+              toast.error(`Error: ${error instanceof Error ? error.message : 'Failed to cancel training'}`);
             }
           } else {
             toast.error("Could not find a valid training ID");

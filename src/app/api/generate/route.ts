@@ -53,13 +53,23 @@ export async function POST(request: NextRequest) {
     // Create Supabase client
     const supabase = createServerClient();
     
-    // Get user session
-    const { data: { session } } = await supabase.auth.getSession();
+    // Get authenticated user
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
     
     // Check if user is authenticated
-    if (!session) {
+    if (!user || userError) {
       return NextResponse.json(
         { error: 'Unauthorized: You must be logged in to use this API' },
+        { status: 401 }
+      );
+    }
+    
+    // Get session for additional checks if needed
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    
+    if (sessionError || !session) {
+      return NextResponse.json(
+        { error: 'Unauthorized: Invalid session' },
         { status: 401 }
       );
     }
@@ -68,7 +78,7 @@ export async function POST(request: NextRequest) {
     const { data: subscription, error: subscriptionError } = await supabase
       .from('subscriptions')
       .select('*')
-      .eq('user_id', session.user.id)
+      .eq('user_id', user.id)
       .eq('is_active', true)
       .single();
     
@@ -94,7 +104,7 @@ export async function POST(request: NextRequest) {
         credits_remaining: subscription.credits_remaining - 1,
         updated_at: new Date().toISOString()
       })
-      .eq('user_id', session.user.id);
+      .eq('user_id', user.id);
     
     let modelName = null;
     let predictionId = null;
@@ -103,16 +113,6 @@ export async function POST(request: NextRequest) {
     
     // Parse the request body
     const { prompt, aspectRatio, outputFormat, modelId: requestModelId, modelName: requestModelName, modelVersion } = await request.json();
-    
-    // Get the current user from the session
-    const { data: { user }, error: userError } = await supabase.auth.getUser();
-    
-    if (userError || !user) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      );
-    }
     
     // Use the authenticated user's ID
     userId = user.id;

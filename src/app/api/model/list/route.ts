@@ -54,6 +54,16 @@ export async function GET(request: NextRequest) {
       );
     }
     
+    // Get session for additional checks if needed
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    
+    if (sessionError || !session) {
+      return NextResponse.json(
+        { error: 'Unauthorized: Invalid session', success: false },
+        { status: 401 }
+      );
+    }
+    
     const authenticatedUserId = user.id;
 
     // If modelId is provided, fetch a specific model with its trainings
@@ -257,6 +267,16 @@ export async function POST(request: NextRequest) {
     if (userError || !user) {
       return NextResponse.json(
         { error: 'Unauthorized', success: false },
+        { status: 401 }
+      );
+    }
+    
+    // Get session for additional checks if needed
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    
+    if (sessionError || !session) {
+      return NextResponse.json(
+        { error: 'Unauthorized: Invalid session', success: false },
         { status: 401 }
       );
     }

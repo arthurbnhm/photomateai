@@ -4,6 +4,7 @@ import { ReactNode, useState, useEffect } from 'react'
 import { usePathname } from 'next/navigation'
 import { AuthButton } from '@/components/AuthButton'
 import { ModeToggle } from '@/components/ModeToggle'
+import { CreditCounter } from '@/components/CreditCounter'
 import { Menu } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -180,6 +181,7 @@ export function ActionButtons({
       <div className="hidden md:flex items-center gap-3">
         {children}
         <div className="flex items-center gap-3">
+          {user && !isHomePage && <CreditCounter />}
           {shouldShowAuthButton && (
             <AuthButton hideSignOutOnHomepage={hideSignOutOnHomepage} isMobileMenu={false} />
           )}
@@ -216,9 +218,15 @@ export function ActionButtons({
               forceMount
               sideOffset={6}
             >
+              {user && !isHomePage && (
+                <div className="px-2 py-1.5">
+                  <CreditCounter />
+                </div>
+              )}
+              
               {children}
               
-              {(shouldShowAuthButton || showSignOutButton) && children && (
+              {(shouldShowAuthButton || showSignOutButton) && (children || (user && !isHomePage)) && (
                 <DropdownMenuSeparator />
               )}
               

@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, ReactNode, useState, useEffect, useCallback, useRef } from 'react'
 import { User } from '@supabase/supabase-js'
-import { AuthResponse, OAuthResponse, Session } from '@supabase/supabase-js'
+import { AuthResponse, OAuthResponse } from '@supabase/supabase-js'
 import { useRouter, usePathname } from 'next/navigation'
 import { createBrowserSupabaseClient } from '@/lib/supabase'
 
@@ -17,7 +17,7 @@ type AuthContextType = {
   signIn: (email: string, password: string) => Promise<AuthResponse>
   signUp: (email: string, password: string) => Promise<AuthResponse>
   signInWithOAuth: (provider: 'google') => Promise<OAuthResponse>
-  getSession: () => Promise<{ data: { session: Session | null } }>
+  getUser: () => Promise<{ data: { user: User | null } }>
 }
 
 // Global auth state that persists between renders/components
@@ -161,8 +161,8 @@ function useAuthImplementation() {
     })
   }, [supabase.auth])
 
-  const getSession = useCallback(async () => {
-    return supabase.auth.getSession()
+  const getUser = useCallback(async () => {
+    return supabase.auth.getUser()
   }, [supabase.auth])
 
   // Return the auth context
@@ -174,7 +174,7 @@ function useAuthImplementation() {
     signIn,
     signUp,
     signInWithOAuth,
-    getSession,
+    getUser,
     isAuthenticated: !!user,
     isAuthReady: globalAuthState.initialized
   }

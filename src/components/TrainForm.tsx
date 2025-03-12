@@ -114,9 +114,16 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
   useEffect(() => {
     const initBucket = async () => {
       try {
-        // Get the session for authentication
-        const { data: sessionData } = await supabase.auth.getSession();
-        if (!sessionData.session) {
+        // Get the authenticated user
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) {
+          console.error('No authenticated user found');
+          return;
+        }
+        
+        // Get the session for the access token
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) {
           console.error('No active session found');
           return;
         }
@@ -125,7 +132,7 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${sessionData.session.access_token}`
+            'Authorization': `Bearer ${session.access_token}`
           },
           body: JSON.stringify({
             action: 'initBucket'
@@ -263,10 +270,18 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
     setUploadProgress(0);
     
     try {
-      // Get the session for authentication
-      const { data: sessionData } = await supabase.auth.getSession();
-      if (!sessionData.session) {
+      // Get the authenticated user
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
         toast.error("You must be logged in to train a model");
+        setIsProcessing(false);
+        return;
+      }
+      
+      // Get the session for the access token
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        toast.error("Unable to get authentication token");
         setIsProcessing(false);
         return;
       }
@@ -279,7 +294,7 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${sessionData.session.access_token}`
+          'Authorization': `Bearer ${session.access_token}`
         },
         body: JSON.stringify({
           action: 'create',
@@ -288,7 +303,7 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
           visibility: 'private',
           hardware: 'gpu-t4',
           displayName: displayModelName,
-          userId: sessionData.session.user.id
+          userId: session.user.id
         }),
       });
 
@@ -317,7 +332,7 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
       const uploadResponse = await fetch('/api/model', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${sessionData.session.access_token}`
+          'Authorization': `Bearer ${session.access_token}`
         },
         body: formData,
       });
@@ -343,14 +358,14 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${sessionData.session.access_token}`
+          'Authorization': `Bearer ${session.access_token}`
         },
         body: JSON.stringify({
           action: 'train',
           modelOwner: modelData.model.owner,
           modelName: modelData.model.name,
           zipUrl: uploadData.zipUrl,
-          userId: sessionData.session.user.id
+          userId: session.user.id
         }),
       });
       

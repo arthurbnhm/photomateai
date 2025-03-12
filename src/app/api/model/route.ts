@@ -27,6 +27,16 @@ export async function POST(request: NextRequest) {
       );
     }
     
+    // Get session for additional checks if needed
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    
+    if (sessionError || !session) {
+      return NextResponse.json(
+        { error: 'Unauthorized: Invalid session', success: false },
+        { status: 401 }
+      );
+    }
+    
     // Check if this is a file upload request
     const contentType = request.headers.get('content-type') || '';
     if (contentType.includes('multipart/form-data')) {

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Replicate from 'replicate';
+import { createServerClient } from '@/lib/supabase-server';
 
 // Define the expected response type based on the documentation
 interface ModelVersionResponse {
@@ -46,6 +47,29 @@ async function getLatestModelVersion(owner: string, name: string): Promise<strin
 
 export async function GET(request: NextRequest) {
   try {
+    // Initialize Supabase client with user session
+    const supabase = createServerClient();
+    
+    // Get the authenticated user
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    
+    if (userError || !user) {
+      return NextResponse.json(
+        { error: 'Unauthorized', success: false },
+        { status: 401 }
+      );
+    }
+    
+    // Get session for additional checks if needed
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    
+    if (sessionError || !session) {
+      return NextResponse.json(
+        { error: 'Unauthorized: Invalid session', success: false },
+        { status: 401 }
+      );
+    }
+    
     // Get the model owner and name from the URL parameters
     const { searchParams } = new URL(request.url);
     const owner = searchParams.get('owner');

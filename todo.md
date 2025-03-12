@@ -46,7 +46,7 @@
 - 🟡 Vibe with music
 - 🟡 A chat that interacts with my api, know the format to use etc
 - ✅ Make sure we dont use supabase admin key anymore
-- Add payment
+- ✅ Add payment
 
 # Authentication
 
@@ -73,3 +73,15 @@ You're using local storage for state management in some places (PENDING_GENERATI
 # Improvements ideas
 
 - Stalled and Generations as a same design 
+- Beautiful landing page
+
+# Bugs
+
+- Training files not found or already deleted: arthurbnhm/gfddfg-9636a012/images.zip POST /api/webhook 200 in 219ms. When a training is sent, it should not look at deleting files with the webhook. The process should not be handheld by the webhook
+
+- Error: Error fetching subscription: {}
+    at createUnhandledError (http://localhost:3000/_next/static/chunks/node_modules_next_dist_client_ce20a02f._.js:879:71)
+    at handleClientError (http://localhost:3000/_next/static/chunks/node_modules_next_dist_client_ce20a02f._.js:1052:56)
+    at error (http://localhost:3000/_next/static/chunks/node_modules_next_dist_client_ce20a02f._.js:1191:56)
+    at console.overrideMethod [as error] (chrome-extension://fmkadmapgofadopljbjfkapdkoienihi/build/installHook.js:1:147557)
+    at CreditCounter.useEffect.fetchCredits (http://localhost:3000/_next/static/chunks/src_30da3bf7._.js:1181:37). Credits are being show in /plans. They also appear here after signing out of the app /auth/login
