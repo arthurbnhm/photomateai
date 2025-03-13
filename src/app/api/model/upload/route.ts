@@ -2,7 +2,16 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase-server';
 import JSZip from 'jszip';
 
+// Remove the config export as it's not needed in App Router
 export async function POST(request: NextRequest) {
+  // Check if the request has been processed by middleware
+  if (!request.headers.get('x-middleware-next')) {
+    return NextResponse.json(
+      { error: 'Request not processed by middleware', success: false },
+      { status: 400 }
+    );
+  }
+
   try {
     // Initialize Supabase client with user session
     const supabase = createServerClient();

@@ -95,6 +95,22 @@ export async function middleware(request: NextRequest) {
     }
   }
   
+  // Only apply to /api/model routes
+  if (pathname.startsWith('/api/model')) {
+    // Clone the request headers
+    const requestHeaders = new Headers(request.headers)
+    
+    // Set custom header to handle large files
+    requestHeaders.set('x-middleware-next', '1')
+
+    // Return response with modified headers
+    return NextResponse.next({
+      request: {
+        headers: requestHeaders,
+      },
+    })
+  }
+  
   return NextResponse.next()
 }
 
