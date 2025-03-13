@@ -8,9 +8,6 @@ const replicate = new Replicate({
   auth: process.env.REPLICATE_API_TOKEN,
 });
 
-// Define the Visibility type
-type Visibility = 'public' | 'private';
-
 export async function POST(request: NextRequest) {
   try {
     // Initialize Supabase client with user session
@@ -47,16 +44,16 @@ export async function POST(request: NextRequest) {
     
     // Parse the body
     const body = await request.json();
-    const { modelName, owner, visibility, hardware, displayName } = body;
+    const { modelName, owner, displayName } = body;
     
-    if (!modelName || !owner || !visibility || !hardware) {
+    if (!modelName || !owner || !displayName) {
       return NextResponse.json(
-        { error: 'Missing required parameters', success: false },
+        { error: 'Missing required parameters: modelName, owner, and displayName are required', success: false },
         { status: 400 }
       );
     }
     
-    return await createModel(modelName, owner, visibility, hardware, displayName, user.id, supabase);
+    return await createModel(modelName, owner, displayName, user.id, supabase);
   } catch (error) {
     console.error('Error processing request:', error);
     return NextResponse.json(
@@ -70,35 +67,7 @@ export async function POST(request: NextRequest) {
 }
 
 // Create a model in Replicate
-async function createModel(modelName: string, owner: string, visibility: Visibility, hardware: string, displayName: string, userId: string, supabase: SupabaseClient) {
-  if (!modelName) {
-    return NextResponse.json(
-      { error: 'Model name is required', success: false },
-      { status: 400 }
-    );
-  }
-
-  if (!owner) {
-    return NextResponse.json(
-      { error: 'Model owner is required', success: false },
-      { status: 400 }
-    );
-  }
-
-  if (!displayName) {
-    return NextResponse.json(
-      { error: 'Display name is required', success: false },
-      { status: 400 }
-    );
-  }
-
-  if (!userId) {
-    return NextResponse.json(
-      { error: 'User ID is required', success: false },
-      { status: 400 }
-    );
-  }
-
+async function createModel(modelName: string, owner: string, displayName: string, userId: string, supabase: SupabaseClient) {
   // Validate model name format
   const validPattern = /^[a-z0-9][a-z0-9_.-]*[a-z0-9]$|^[a-z0-9]$/;
   if (!validPattern.test(modelName)) {
@@ -117,8 +86,8 @@ async function createModel(modelName: string, owner: string, visibility: Visibil
       owner, 
       modelName,
       {
-        visibility: visibility || 'private',
-        hardware: hardware || 'gpu-t4'
+        visibility: 'private',
+        hardware: 'gpu-t4'
       }
     );
 
@@ -128,8 +97,8 @@ async function createModel(modelName: string, owner: string, visibility: Visibil
       .insert({
         model_id: modelName,
         model_owner: model.owner,
-        visibility: model.visibility,
-        hardware: hardware || 'gpu-t4',
+        visibility: 'private',
+        hardware: 'gpu-t4',
         status: 'created',
         display_name: displayName,
         user_id: userId

@@ -4,7 +4,6 @@ import { useState, useEffect, useRef, useMemo, useCallback } from "react"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import * as z from "zod"
-import { AlertCircle } from "lucide-react"
 import { createBrowserSupabaseClient } from "@/lib/supabase"
 import { creditEvents } from "./CreditCounter"
 import { cn } from "@/lib/utils"
@@ -40,14 +39,13 @@ interface Model {
   status: string;
 }
 
-// Define the type for pending generations with potential stall status
+// Define the type for pending generations
 type PendingGeneration = {
   id: string
   replicate_id?: string // Store the actual Replicate ID when available
   prompt: string
   aspectRatio: string
   startTime?: string // When the generation started
-  potentiallyStalled?: boolean // Flag for generations that might be stalled
   format?: string
   modelName?: string
 }
@@ -104,12 +102,12 @@ export function PromptForm({
   const [error, setError] = useState<string | null>(null);
   const [errorDetails, setErrorDetails] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
-  const [pageReloaded, setPageReloaded] = useState(true)
-  const [loadingModels, setLoadingModels] = useState(false)
-  const [isInitialized, setIsInitialized] = useState(false)
-  const [placeholderText, setPlaceholderText] = useState("Describe your image...")
-  const [isAnimating, setIsAnimating] = useState(true)
-  const [creditDeducting, setCreditDeducting] = useState(false)
+  const [loadingModels, setLoadingModels] = useState(false);
+  const [placeholderText, setPlaceholderText] = useState("Describe your image...");
+  const [isAnimating, setIsAnimating] = useState(true);
+  const [creditDeducting, setCreditDeducting] = useState(false);
+  const isInitializedRef = useRef(false);
+
   const placeholderExamples = useMemo(() => [
     "A serene landscape with mountains at sunset",
     "A cyberpunk cityscape with neon lights",
@@ -120,28 +118,23 @@ export function PromptForm({
     "A magical forest with glowing mushrooms",
     "A steampunk-inspired mechanical creature"
   ], []);
-  const currentExampleIndex = useRef(0)
-  const currentCharIndex = useRef(0)
-  const isDeleting = useRef(false)
-  const typingSpeed = useRef(80) // milliseconds per character
-  const deletingSpeed = useRef(40) // faster deletion
-  const pauseBeforeDelete = useRef(2000) // pause before deleting
-  const pauseBeforeNewExample = useRef(500) // pause before new example
-  const animationTimeoutRef = useRef<NodeJS.Timeout | null>(null)
-  
-  useEffect(() => {
-    // Set pageReloaded to false after component mounts
-    // This flag helps us identify the first render after a page reload
-    if (pageReloaded) {
-      setPageReloaded(false);
-    }
-  }, [pageReloaded]);
+
+  // Animation state
+  const animationState = useRef({
+    currentExampleIndex: 0,
+    currentCharIndex: 0,
+    isDeleting: false,
+    typingSpeed: 80,
+    deletingSpeed: 40,
+    pauseBeforeDelete: 2000,
+    pauseBeforeNewExample: 500,
+    timeoutRef: null as NodeJS.Timeout | null
+  });
   
   // Load saved state from localStorage on initial mount
   useEffect(() => {
-    if (typeof window !== 'undefined') {
+    if (typeof window !== 'undefined' && !isInitializedRef.current) {
       try {
-        // Load pending generations
         const savedPendingGenerations = localStorage.getItem(PENDING_GENERATIONS_KEY);
         if (savedPendingGenerations) {
           const parsed = JSON.parse(savedPendingGenerations);
@@ -149,27 +142,20 @@ export function PromptForm({
             setPendingGenerations(parsed);
           }
         }
-
-        setIsInitialized(true);
       } catch (error) {
         console.error('Error loading state from localStorage:', error);
-        setIsInitialized(true);
       }
+      isInitializedRef.current = true;
     }
   }, [setPendingGenerations]);
 
   // Save pending generations to localStorage whenever they change
   useEffect(() => {
-    if (isInitialized && typeof window !== 'undefined') {
+    if (isInitializedRef.current && typeof window !== 'undefined') {
       localStorage.setItem(PENDING_GENERATIONS_KEY, JSON.stringify(pendingGenerations));
     }
-  }, [pendingGenerations, isInitialized]);
+  }, [pendingGenerations]);
   
-  // Clear stale pending generations
-  const clearStalePendingGenerations = () => {
-    setPendingGenerations([]);
-  };
-
   // Add to client history
   const addToClientHistory = (generation: ImageGeneration) => {
     // Get current history
@@ -289,8 +275,7 @@ export function PromptForm({
     // Add start time if not provided
     const genWithStartTime = {
       ...generation,
-      startTime: generation.startTime || new Date().toISOString(),
-      potentiallyStalled: false
+      startTime: generation.startTime || new Date().toISOString()
     }
     
     setPendingGenerations(prev => [...prev, genWithStartTime])
@@ -519,70 +504,67 @@ export function PromptForm({
     }
   };
 
-  // Display a warning message if there are pending generations on page load
-  const hasPendingGenerationsOnReload = pageReloaded && pendingGenerations.length > 0;
-
   // Function to stop the animation
   const stopAnimation = () => {
-    setIsAnimating(false)
-    if (animationTimeoutRef.current) {
-      clearTimeout(animationTimeoutRef.current)
-      animationTimeoutRef.current = null
+    setIsAnimating(false);
+    if (animationState.current.timeoutRef) {
+      clearTimeout(animationState.current.timeoutRef);
+      animationState.current.timeoutRef = null;
     }
-    // Reset to default placeholder when animation stops
-    setPlaceholderText("Describe your image...")
-  }
+    setPlaceholderText("Describe your image...");
+  };
   
   // Typing animation effect
   useEffect(() => {
-    if (!isAnimating) return
+    if (!isAnimating) return;
     
     const animatePlaceholder = () => {
-      if (!isAnimating) return
+      if (!isAnimating) return;
       
-      const currentExample = placeholderExamples[currentExampleIndex.current]
+      const state = animationState.current;
+      const currentExample = placeholderExamples[state.currentExampleIndex];
       
-      if (isDeleting.current) {
+      if (state.isDeleting) {
         // Deleting text
-        if (currentCharIndex.current > 0) {
-          setPlaceholderText(currentExample.substring(0, currentCharIndex.current - 1))
-          currentCharIndex.current -= 1
-          animationTimeoutRef.current = setTimeout(animatePlaceholder, deletingSpeed.current)
+        if (state.currentCharIndex > 0) {
+          setPlaceholderText(currentExample.substring(0, state.currentCharIndex - 1));
+          state.currentCharIndex -= 1;
+          state.timeoutRef = setTimeout(animatePlaceholder, state.deletingSpeed);
         } else {
           // Finished deleting
-          isDeleting.current = false
-          currentExampleIndex.current = (currentExampleIndex.current + 1) % placeholderExamples.length
+          state.isDeleting = false;
+          state.currentExampleIndex = (state.currentExampleIndex + 1) % placeholderExamples.length;
           
           // If we've gone through all examples, stop the animation
-          if (currentExampleIndex.current === 0) {
-            stopAnimation()
-            return
+          if (state.currentExampleIndex === 0) {
+            stopAnimation();
+            return;
           }
           
-          animationTimeoutRef.current = setTimeout(animatePlaceholder, pauseBeforeNewExample.current)
+          state.timeoutRef = setTimeout(animatePlaceholder, state.pauseBeforeNewExample);
         }
       } else {
         // Typing text
-        if (currentCharIndex.current < currentExample.length) {
-          setPlaceholderText(currentExample.substring(0, currentCharIndex.current + 1))
-          currentCharIndex.current += 1
-          animationTimeoutRef.current = setTimeout(animatePlaceholder, typingSpeed.current)
+        if (state.currentCharIndex < currentExample.length) {
+          setPlaceholderText(currentExample.substring(0, state.currentCharIndex + 1));
+          state.currentCharIndex += 1;
+          state.timeoutRef = setTimeout(animatePlaceholder, state.typingSpeed);
         } else {
           // Finished typing
-          isDeleting.current = true
-          animationTimeoutRef.current = setTimeout(animatePlaceholder, pauseBeforeDelete.current)
+          state.isDeleting = true;
+          state.timeoutRef = setTimeout(animatePlaceholder, state.pauseBeforeDelete);
         }
       }
-    }
+    };
     
-    animationTimeoutRef.current = setTimeout(animatePlaceholder, 1000) // Initial delay
+    animationState.current.timeoutRef = setTimeout(animatePlaceholder, 1000); // Initial delay
     
     return () => {
-      if (animationTimeoutRef.current) {
-        clearTimeout(animationTimeoutRef.current)
+      if (animationState.current.timeoutRef) {
+        clearTimeout(animationState.current.timeoutRef);
       }
-    }
-  }, [isAnimating, placeholderExamples])
+    };
+  }, [isAnimating, placeholderExamples]);
 
   // Get the user ID from the session when the component mounts
   useEffect(() => {
@@ -614,33 +596,6 @@ export function PromptForm({
   return (
     <div className="w-full">
       <div className="w-full bg-card border border-border rounded-xl overflow-hidden shadow-lg">
-        {hasPendingGenerationsOnReload && (
-          <div className="m-5 p-3 bg-yellow-50 dark:bg-yellow-950 border border-yellow-200 dark:border-yellow-800 rounded-lg">
-            <div className="flex items-start">
-              <AlertCircle className="h-5 w-5 text-yellow-500 mt-0.5 mr-2" />
-              <div>
-                <p className="text-sm text-yellow-800 dark:text-yellow-300">
-                  Some image generations were in progress when the page was reloaded.
-                </p>
-                <p className="text-xs text-yellow-600 dark:text-yellow-400 mt-1">
-                  These generations might not complete. You can continue to create new images.
-                </p>
-                <div className="mt-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={clearStalePendingGenerations}
-                    className="text-xs py-1 h-auto"
-                  >
-                    Clear Pending Generations
-                  </Button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-        
         <div className="p-5">
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
