@@ -59,23 +59,24 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// Handle file upload for model training
+// Handle file upload for model training - ultra-simple implementation
 async function handleFileUpload(request: NextRequest, supabase: SupabaseClient, userId: string) {
   try {
+    // Parse form data
     const formData = await request.formData();
     const modelOwner = formData.get('modelOwner') as string;
     const modelName = formData.get('modelName') as string;
     const files = formData.getAll('files') as File[];
 
+    // Basic validation
     if (!modelOwner || !modelName || files.length === 0) {
-      console.error('Missing required parameters for upload');
       return NextResponse.json(
         { error: 'Model owner, name, and files are required', success: false },
         { status: 400 }
       );
     }
 
-    // Find the model in Supabase
+    // Find or update the model (keep this part as is)
     const { data: modelData, error: modelError } = await supabase
       .from('models')
       .select('*')
@@ -84,115 +85,94 @@ async function handleFileUpload(request: NextRequest, supabase: SupabaseClient, 
       .eq('user_id', userId)
       .single();
 
-    if (modelError) {
-      // Continue anyway since we can still upload the files
-    } else {
-      // Update the model with the user ID if it's not already set
-      if (modelData && !modelData.user_id) {
-        const { error: updateError } = await supabase
-          .from('models')
-          .update({ user_id: userId })
-          .eq('id', modelData.id);
-          
-        if (updateError) {
-          console.warn(`Failed to update model with user ID: ${updateError.message}`);
-          // Continue anyway
-        }
-      }
+    if (!modelError && modelData && !modelData.user_id) {
+      await supabase
+        .from('models')
+        .update({ user_id: userId })
+        .eq('id', modelData.id);
     }
-    
+
+    // ULTRA SIMPLE ZIP CREATION - no fancy options, no streams, no complications
     try {
-      // Create a zip file using JSZip
+      // Create a basic zip
       const zip = new JSZip();
       
-      // Add each file to the zip with a simple name
+      // Add files with numeric names only - nothing fancy
       for (let i = 0; i < files.length; i++) {
-        const file = files[i];
-        const arrayBuffer = await file.arrayBuffer();
+        const fileData = await files[i].arrayBuffer();
+        // Preserve original file extension if available, otherwise use generic index
+        const originalName = files[i].name;
+        const filename = originalName ? 
+          // Use simple index + original filename to maintain file type
+          `${i}_${originalName}` :
+          // Fallback to just an index if no filename
+          `file_${i}`;
         
-        // Use a simple numeric name to avoid any pattern matching issues
-        zip.file(`${i}.jpg`, arrayBuffer);
+        // Add to zip with original filename/extension
+        zip.file(filename, fileData);
       }
       
-      // Generate the zip file with maximum compression
-      const zipContent = await zip.generateAsync({ 
+      // Generate with minimal options
+      const zipData = await zip.generateAsync({ 
         type: 'arraybuffer',
-        compression: 'DEFLATE',
-        compressionOptions: {
-          level: 9
-        }
+        compression: 'DEFLATE' 
       });
       
-      // Check if zip size is approaching limit
-      const sizeLimit = 50 * 1024 * 1024; // 50MB
-      if (zipContent.byteLength > sizeLimit * 0.8) {
-        console.warn(`⚠️ Zip file size (${Math.round(zipContent.byteLength / (1024 * 1024))} MB) is approaching the bucket limit (${sizeLimit / (1024 * 1024)} MB)`);
-      }
-      
-      // Upload the zip file to Supabase
+      // Simple path
       const zipPath = `${modelOwner}/${modelName}/images.zip`;
       
+      // Upload to Supabase
       const { error: uploadError } = await supabase.storage
         .from('training-files')
-        .upload(zipPath, zipContent, {
+        .upload(zipPath, zipData, {
           contentType: 'application/zip',
-          cacheControl: '3600',
           upsert: true
         });
 
       if (uploadError) {
         return NextResponse.json(
-          { error: `Failed to upload zip file: ${uploadError.message}`, success: false },
+          { error: uploadError.message, success: false },
           { status: 500 }
         );
       }
       
-      // Generate a signed URL that expires in 1 hour
-      const { data: signedUrlData, error: signedUrlError } = await supabase.storage
+      // Get URL
+      const { data: urlData, error: urlError } = await supabase.storage
         .from('training-files')
-        .createSignedUrl(zipPath, 60 * 60); // 1 hour in seconds
+        .createSignedUrl(zipPath, 60 * 60);
 
-      if (signedUrlError || !signedUrlData) {
+      if (urlError) {
         return NextResponse.json(
-          { error: `Failed to generate signed URL: ${signedUrlError?.message || 'Unknown error'}`, success: false },
+          { error: urlError.message, success: false },
           { status: 500 }
         );
       }
       
-      // Update the model with the zip URL if we found the model
+      // Update model status if needed
       if (modelData) {
-        const { error: updateError } = await supabase
+        await supabase
           .from('models')
-          .update({ 
-            status: 'files_uploaded'
-          })
+          .update({ status: 'files_uploaded' })
           .eq('id', modelData.id);
-
-        if (updateError) {
-          // Continue anyway since the files were uploaded
-        }
       }
 
+      // Success!
       return NextResponse.json({
         success: true,
-        zipUrl: signedUrlData.signedUrl,
-        message: `Successfully uploaded ${files.length} files as a zip`
+        zipUrl: urlData?.signedUrl,
+        message: `Successfully uploaded ${files.length} files`
       });
-    } catch (zipError) {
-      console.error('Error generating or processing zip file:', zipError);
+    } catch (error) {
+      console.error('Error creating zip:', error);
       return NextResponse.json(
-        { error: `Failed to generate zip file: ${zipError instanceof Error ? zipError.message : 'Unknown error'}`, success: false },
+        { error: error instanceof Error ? error.message : 'Error creating zip file', success: false },
         { status: 500 }
       );
     }
   } catch (error) {
-    console.error('Error handling file upload:', error);
-    console.error('Full error details:', JSON.stringify(error, Object.getOwnPropertyNames(error)));
+    console.error('Error handling upload:', error);
     return NextResponse.json(
-      { 
-        error: error instanceof Error ? error.message : 'Failed to upload files',
-        success: false
-      },
+      { error: error instanceof Error ? error.message : 'Upload failed', success: false },
       { status: 500 }
     );
   }
