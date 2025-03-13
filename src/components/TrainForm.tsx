@@ -290,7 +290,20 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
       toast.info("Creating model...");
       setUploadProgress(10);
       
-      const createModelResponse = await fetch('/api/model', {
+      // Create a custom fetch function that includes the duplex option
+      const customFetch = (url: string, options: RequestInit & { body?: string | FormData | URLSearchParams }) => {
+        // Add the duplex option for requests with a body
+        const fetchOptions = {
+          ...options,
+        };
+        
+        // @ts-expect-error - Add the duplex option which is required but not in TypeScript definitions yet
+        if (options.body) fetchOptions.duplex = 'half';
+        
+        return fetch(url, fetchOptions);
+      };
+      
+      const createModelResponse = await customFetch('/api/model', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -329,12 +342,12 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
       });
       
       // Upload files using the server-side API with authentication
-      const uploadResponse = await fetch('/api/model', {
+      const uploadResponse = await customFetch('/api/model', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${session.access_token}`
         },
-        body: formData,
+        body: formData
       });
       
       if (!uploadResponse.ok) {
@@ -354,7 +367,7 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
       // Step 3: Start model training with the zip URL
       toast.info("Starting model training...");
       
-      const trainResponse = await fetch('/api/model', {
+      const trainResponse = await customFetch('/api/model', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
