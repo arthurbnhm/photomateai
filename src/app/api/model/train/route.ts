@@ -10,7 +10,7 @@ const replicate = new Replicate({
 
 // Define constant training parameters
 const TRAINING_PARAMS = {
-  steps: 3,
+  steps: 1000,
   lora_rank: 16,
   optimizer: "adamw8bit",
   batch_size: 1,

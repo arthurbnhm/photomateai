@@ -8,9 +8,9 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
 
 // Price IDs for each plan
 export const PRICE_IDS = {
-  basic: 'price_1R1EAcIvAcEHQuzp84dffBAi',
-  professional: 'price_1R1VuRIvAcEHQuzpHBcYDBfN',
-  executive: 'price_1R1VucIvAcEHQuzpk38ptDFA'
+  basic: 'price_1R2INxIrYxGc1sVMBYxciEI4',
+  professional: 'price_1R2INvIrYxGc1sVM9YvoxVjv',
+  executive: 'price_1R2INsIrYxGc1sVMzPna3T3I'
 };
 
 // Get or create a Stripe customer for a user
