@@ -413,11 +413,7 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
       
       // Show success message to the user
       toast.success("Model training started successfully! This may take a while to complete.", {
-        duration: 5000,
-        action: {
-          label: "View Training",
-          onClick: () => window.open(trainingData.training.url, '_blank')
-        }
+        duration: 5000
       });
 
       // Reset the form fields but keep the training status for the ModelListTable
