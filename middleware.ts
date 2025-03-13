@@ -24,21 +24,6 @@ const PROTECTED_ROUTES = {
 export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname
   
-  // Handle file uploads first
-  if (pathname.startsWith('/api/model')) {
-    // Clone the request headers
-    const requestHeaders = new Headers(request.headers)
-    // Set custom header to handle large files
-    requestHeaders.set('x-middleware-next', '1')
-
-    // Return response with modified headers
-    return NextResponse.next({
-      request: {
-        headers: requestHeaders,
-      },
-    })
-  }
-
   const supabase = await createClient()
   
   // Find matching protected route
@@ -104,7 +89,7 @@ export async function middleware(request: NextRequest) {
           )
         }
       }
-    } catch (_error) {
+    } catch {
       return NextResponse.redirect(new URL('/plans', request.url))
     }
   }

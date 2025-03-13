@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 import { createBrowserSupabaseClient } from "@/lib/supabase";
 import { useTheme } from "next-themes";
+import JSZip from 'jszip';
 
 // Reusable upload icon component
 const UploadIcon = ({ 
@@ -329,38 +330,44 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
       toast.success("Model created successfully");
       setUploadProgress(30);
       
-      // Step 2: Upload images to server which will create and upload a zip file
+      // Step 2: Upload images directly to Supabase storage
       toast.info("Uploading images...");
       
-      const formData = new FormData();
-      formData.append('modelOwner', modelData.model.owner);
-      formData.append('modelName', modelData.model.name);
+      const zipPath = `${modelData.model.owner}/${modelData.model.name}/images.zip`;
       
-      // Add all files to the form data
-      uploadedImages.forEach((file) => {
-        formData.append('files', file);
-      });
-      
-      // Upload files using the server-side API with authentication
-      const uploadResponse = await customFetch('/api/model', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${session.access_token}`
-        },
-        body: formData
-      });
-      
-      if (!uploadResponse.ok) {
-        const errorData = await uploadResponse.json();
-        throw new Error(errorData.error || 'Failed to upload images');
+      // Create and upload zip
+      const zip = new JSZip();
+      for (let i = 0; i < uploadedImages.length; i++) {
+        const file = uploadedImages[i];
+        zip.file(`${i}${file.name.substring(file.name.lastIndexOf('.'))}`, await file.arrayBuffer());
       }
       
-      const uploadData = await uploadResponse.json();
+      const zipData = await zip.generateAsync({ 
+        type: 'arraybuffer',
+        compression: 'DEFLATE' 
+      });
       
-      if (!uploadData.success || !uploadData.zipUrl) {
-        throw new Error('Failed to get zip URL from server');
+      // Upload directly to Supabase storage
+      const { error: uploadError } = await supabase.storage
+        .from('training-files')
+        .upload(zipPath, zipData, {
+          contentType: 'application/zip',
+          upsert: true
+        });
+
+      if (uploadError) {
+        throw new Error(uploadError.message || 'Failed to upload images');
       }
-      
+
+      // Get the URL for the uploaded file
+      const { data: urlData } = await supabase.storage
+        .from('training-files')
+        .createSignedUrl(zipPath, 60 * 60);
+
+      if (!urlData?.signedUrl) {
+        throw new Error('Failed to generate signed URL');
+      }
+
       toast.success("Images uploaded successfully");
       setUploadProgress(70);
       
@@ -377,7 +384,7 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
           action: 'train',
           modelOwner: modelData.model.owner,
           modelName: modelData.model.name,
-          zipUrl: uploadData.zipUrl,
+          zipUrl: urlData.signedUrl,
           userId: session.user.id
         }),
       });

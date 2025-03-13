@@ -2,16 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase-server';
 import { SupabaseClient } from '@supabase/supabase-js';
 
-// Remove the config export as it's not needed in App Router
 export async function POST(request: NextRequest) {
-  // Check if the request has been processed by middleware
-  if (!request.headers.get('x-middleware-next')) {
-    return NextResponse.json(
-      { error: 'Request not processed by middleware', success: false },
-      { status: 400 }
-    );
-  }
-
   try {
     // Initialize Supabase client with user session
     const supabase = createServerClient();
@@ -138,12 +129,11 @@ async function initializeBucket(supabase: SupabaseClient) {
         // Try to create the bucket
         const { error: createBucketError } = await supabase.storage.createBucket('training-files', {
           public: false, // Set to private as per RLS policies
-          fileSizeLimit: 50 * 1024 * 1024, // 50MB limit
+          fileSizeLimit: 250 * 1024 * 1024, // 250MB limit
         });
         
         if (createBucketError) {
           // Continue anyway, as the bucket might already exist but not be visible to this user
-        } else {
         }
       } catch (error) {
         void error; // Explicitly indicate we're ignoring this variable
