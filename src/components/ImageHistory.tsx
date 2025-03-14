@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge"
 import { createBrowserSupabaseClient } from "@/lib/supabase"
 import { MediaFocus } from "@/components/MediaFocus"
 import { useAuth } from "@/contexts/AuthContext"
-import { deleteImageFromCache } from "@/lib/imageCache"
+import { deleteImageFromCache, isServiceWorkerActive } from "@/lib/imageCache"
 
 // Define the type for image generation
 type ImageGeneration = {
@@ -102,6 +102,7 @@ export function ImageHistory({
   const [isCancelling, setIsCancelling] = useState<string | null>(null)
   const [elapsedTimes, setElapsedTimes] = useState<Record<string, number>>({})
   const [isMounted, setIsMounted] = useState(false)
+  const [swReady, setSwReady] = useState(false)
   const { user } = useAuth()
   
   // Create a stable reference to the Supabase client
@@ -157,6 +158,27 @@ export function ImageHistory({
       document.body.style.overflow = '';
     };
   }, [imageViewer.isOpen]);
+
+  // Check service worker status
+  useEffect(() => {
+    const checkSw = () => {
+      setSwReady(isServiceWorkerActive());
+    };
+
+    // Check initially
+    checkSw();
+
+    // Check whenever the service worker state changes
+    const handleSwChange = () => {
+      checkSw();
+    };
+
+    navigator.serviceWorker?.addEventListener('controllerchange', handleSwChange);
+    
+    return () => {
+      navigator.serviceWorker?.removeEventListener('controllerchange', handleSwChange);
+    };
+  }, []);
 
   // Load from cache or fetch from Supabase
   const loadGenerations = useCallback(async (forceFetch: boolean = false, silentUpdate: boolean = false) => {
@@ -1256,8 +1278,8 @@ export function ImageHistory({
                                     fill
                                     sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
                                     onError={() => handleImageError(generation.id, index)}
-                                    priority={false}
-                                    loading="lazy"
+                                    priority={!swReady}
+                                    loading={swReady ? "lazy" : "eager"}
                                     unoptimized={true}
                                   />
                                 )}
