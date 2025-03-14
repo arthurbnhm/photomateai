@@ -64,6 +64,47 @@ export function AuthButton({
         </Button>
       )
     }
+
+    // On create page, show billing button
+    const isCreatePage = pathname === '/create'
+    
+    if (isCreatePage) {
+      if (isMobileMenu) {
+        return (
+          <>
+            <DropdownMenuItem asChild>
+              <Link href="https://billing.stripe.com/p/login/6oE14c04k7BpeFGfYY" target="_blank" rel="noopener noreferrer">
+                Billing
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={signOut}>
+              Sign out
+            </DropdownMenuItem>
+          </>
+        )
+      }
+      
+      return (
+        <div className="flex gap-2">
+          <Button 
+            variant="outline" 
+            className="h-9 w-auto px-3"
+            asChild
+          >
+            <Link href="https://billing.stripe.com/p/login/6oE14c04k7BpeFGfYY" target="_blank" rel="noopener noreferrer">
+              Billing
+            </Link>
+          </Button>
+          <Button 
+            variant="outline" 
+            className="h-9 w-auto px-3"
+            onClick={signOut}
+          >
+            Sign out
+          </Button>
+        </div>
+      )
+    }
     
     // On other pages with a signed-in user
     return isMobileMenu ? (

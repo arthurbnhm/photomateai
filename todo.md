@@ -69,6 +69,7 @@
 - Add media sharing
 - Remove pooling, only keep realtime subscription or opposite
 - Rework all the caching system, centralize it?
+- Stripe portal
 
 # Improvements ideas
 
