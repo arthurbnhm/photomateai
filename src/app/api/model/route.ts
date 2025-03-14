@@ -35,27 +35,8 @@ export async function POST(request: NextRequest) {
         );
       }
     }
-    
-    // Check if this is a file upload request
-    const contentType = request.headers.get('content-type') || '';
-    if (contentType.includes('multipart/form-data')) {
-      // Forward to the upload endpoint
-      const uploadResponse = await fetch(new URL('/api/model/upload', request.url), {
-        method: 'POST',
-        body: request.body,
-        headers: request.headers,
-        // This ensures cookies and credentials are forwarded
-        credentials: 'include',
-        // @ts-expect-error - Add the duplex option which is required but not in TypeScript definitions yet
-        duplex: 'half'
-      });
-      
-      // Return the response directly
-      const responseData = await uploadResponse.json();
-      return NextResponse.json(responseData, { status: uploadResponse.status });
-    }
 
-    // For JSON requests, parse the body
+    // Parse the body
     const body = await request.json();
     const action = body.action;
 
