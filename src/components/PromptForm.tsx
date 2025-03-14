@@ -49,6 +49,49 @@ type PendingGeneration = {
   modelName?: string
 }
 
+// Aspect Ratio Frame component
+const AspectRatioFrame = ({ ratio, showLabel = true, isSelected = false }: { ratio: string; showLabel?: boolean; isSelected?: boolean }) => {
+  // Parse the ratio (e.g., "16:9" -> { width: 16, height: 9 })
+  const [width, height] = ratio.split(':').map(Number);
+  
+  // Calculate dimensions while maintaining proportions
+  const maxSize = 24; // Maximum size for the frame
+  let frameWidth, frameHeight;
+  
+  if (width >= height) {
+    frameWidth = maxSize;
+    frameHeight = (height / width) * maxSize;
+  } else {
+    frameHeight = maxSize;
+    frameWidth = (width / height) * maxSize;
+  }
+  
+  return (
+    <div className="flex items-center gap-2">
+      <div 
+        className={cn(
+          "border rounded-sm flex-shrink-0 overflow-hidden shadow-sm transition-all duration-200",
+          isSelected 
+            ? "border-primary/20 shadow-sm" 
+            : "border-primary/20 hover:border-primary/30"
+        )}
+        style={{ 
+          width: `${frameWidth}px`, 
+          height: `${frameHeight}px`,
+        }}
+      >
+        <div className={cn(
+          "w-full h-full transition-all duration-300",
+          isSelected
+            ? "bg-gradient-to-br from-primary/10 via-primary/5 to-background/80 hover:from-primary/15"
+            : "bg-gradient-to-br from-primary/10 via-primary/5 to-background/80 hover:from-primary/15"
+        )} />
+      </div>
+      {showLabel && <span className="text-xs text-muted-foreground">{ratio.replace(':', '∶')}</span>}
+    </div>
+  );
+};
+
 const formSchema = z.object({
   prompt: z.string().min(2, {
     message: "Prompt must be at least 2 characters.",
@@ -565,7 +608,7 @@ export function PromptForm({
                   control={form.control}
                   name="aspectRatio"
                   render={({ field }) => (
-                    <FormItem className="md:col-span-3">
+                    <FormItem className="md:col-span-4">
                       <FormLabel>Aspect Ratio</FormLabel>
                       <Select 
                         onValueChange={field.onChange} 
@@ -573,15 +616,53 @@ export function PromptForm({
                       >
                         <FormControl>
                           <SelectTrigger>
-                            <SelectValue placeholder="Select aspect ratio" />
+                            <SelectValue placeholder="Select aspect ratio">
+                              {field.value && (
+                                <div className="flex items-center gap-2">
+                                  <AspectRatioFrame ratio={field.value} showLabel={false} isSelected={true} />
+                                  <span>
+                                    {field.value === "1:1" ? "Square (1:1)" :
+                                     field.value === "16:9" ? "Landscape (16:9)" :
+                                     field.value === "9:16" ? "Portrait (9:16)" :
+                                     field.value === "4:3" ? "Standard (4:3)" :
+                                     field.value === "3:2" ? "Classic (3:2)" : field.value}
+                                  </span>
+                                </div>
+                              )}
+                            </SelectValue>
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          <SelectItem value="1:1">Square (1:1)</SelectItem>
-                          <SelectItem value="16:9">Landscape (16:9)</SelectItem>
-                          <SelectItem value="9:16">Portrait (9:16)</SelectItem>
-                          <SelectItem value="4:3">Standard (4:3)</SelectItem>
-                          <SelectItem value="3:2">Classic (3:2)</SelectItem>
+                          <SelectItem value="1:1">
+                            <div className="flex items-center gap-2">
+                              <AspectRatioFrame ratio="1:1" showLabel={false} isSelected={field.value === "1:1"} />
+                              <span>Square (1:1)</span>
+                            </div>
+                          </SelectItem>
+                          <SelectItem value="16:9">
+                            <div className="flex items-center gap-2">
+                              <AspectRatioFrame ratio="16:9" showLabel={false} isSelected={field.value === "16:9"} />
+                              <span>Landscape (16:9)</span>
+                            </div>
+                          </SelectItem>
+                          <SelectItem value="9:16">
+                            <div className="flex items-center gap-2">
+                              <AspectRatioFrame ratio="9:16" showLabel={false} isSelected={field.value === "9:16"} />
+                              <span>Portrait (9:16)</span>
+                            </div>
+                          </SelectItem>
+                          <SelectItem value="4:3">
+                            <div className="flex items-center gap-2">
+                              <AspectRatioFrame ratio="4:3" showLabel={false} isSelected={field.value === "4:3"} />
+                              <span>Standard (4:3)</span>
+                            </div>
+                          </SelectItem>
+                          <SelectItem value="3:2">
+                            <div className="flex items-center gap-2">
+                              <AspectRatioFrame ratio="3:2" showLabel={false} isSelected={field.value === "3:2"} />
+                              <span>Classic (3:2)</span>
+                            </div>
+                          </SelectItem>
                         </SelectContent>
                       </Select>
                       <FormMessage />
@@ -593,7 +674,7 @@ export function PromptForm({
                   control={form.control}
                   name="outputFormat"
                   render={({ field }) => (
-                    <FormItem className="md:col-span-2">
+                    <FormItem className="md:col-span-3">
                       <FormLabel>Format</FormLabel>
                       <Select 
                         onValueChange={field.onChange} 
@@ -614,12 +695,12 @@ export function PromptForm({
                     </FormItem>
                   )}
                 />
-                
+
                 <FormField
                   control={form.control}
                   name="modelId"
                   render={({ field }) => (
-                    <FormItem className="md:col-span-5">
+                    <FormItem className="md:col-span-3">
                       <FormLabel>Model</FormLabel>
                       <Select 
                         onValueChange={field.onChange} 
