@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   Table,
   TableBody,
@@ -85,8 +85,6 @@ export function ModelListTable({ newTraining, onClearNewTraining }: ModelListTab
   const [isDeleting, setIsDeleting] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
   const [trainingToCancel, setTrainingToCancel] = useState<{id: string, modelId: string} | null>(null);
-  const [realtimeSubscribed, setRealtimeSubscribed] = useState(false);
-  const fetchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const { user } = useAuth();
   
   // Check if newTraining is already in models list
@@ -145,22 +143,6 @@ export function ModelListTable({ newTraining, onClearNewTraining }: ModelListTab
     }
   }, [user?.id]);
 
-  // Immediate fetch function without debouncing for critical updates
-  const fetchModelsImmediate = useCallback((pageNum = 1) => {
-    fetchModels(pageNum);
-  }, [fetchModels]);
-
-  // Debounced version with minimal delay for non-critical updates
-  const debouncedFetchModels = useCallback((pageNum = 1) => {
-    if (fetchTimeoutRef.current) {
-      clearTimeout(fetchTimeoutRef.current);
-    }
-    
-    fetchTimeoutRef.current = setTimeout(() => {
-      fetchModels(pageNum);
-    }, 100); // Reduced from 300ms to 100ms for faster updates
-  }, [fetchModels]);
-
   // Initial fetch only once on mount
   useEffect(() => {
     fetchModels(1);
@@ -189,157 +171,6 @@ export function ModelListTable({ newTraining, onClearNewTraining }: ModelListTab
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [models, newTraining?.id]);
   
-  // Setup Supabase realtime subscription for trainings - only once
-  useEffect(() => {
-    // Only setup the subscription once
-    if (realtimeSubscribed) return;
-    
-    try {
-      // Subscribe to changes in the trainings table
-      const trainingSubscription = supabase
-        .channel('trainings-changes')
-        .on(
-          // Type assertion needed for Supabase Realtime - this is the correct channel name
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          'postgres_changes' as any, 
-          { 
-            event: '*', 
-            schema: 'public', 
-            table: 'trainings' 
-          }, 
-          (payload: { new: Training; old: Training }) => {
-            // Process ALL status changes to ensure we catch everything
-            if (payload?.new?.status) {
-              const status = payload.new.status;
-              const trainingId = payload.new.id;
-              
-              // For completed trainings, fetch immediately
-              if (status === 'succeeded' || status === 'failed' || status === 'cancelled') {
-                // Directly update the training in state for immediate UI refresh
-                if (trainingId) {
-                  setModels(prevModels => {
-                    return prevModels.map(model => {
-                      const updatedTrainings = model.trainings.map(training => {
-                        if (training.id === trainingId) {
-                          return {
-                            ...training,
-                            status: status,
-                            completed_at: status === 'succeeded' ? new Date().toISOString() : training.completed_at
-                          };
-                        }
-                        return training;
-                      });
-                      
-                      // Simple status update logic:
-                      // If training succeeded, model is trained
-                      // If training is active, model is training
-                      // Otherwise keep current status
-                      let newModelStatus = model.status;
-                      if (status === 'succeeded') {
-                        newModelStatus = 'trained';
-                      } else if (['training', 'processing', 'starting', 'queued'].includes(status)) {
-                        newModelStatus = 'training';
-                      }
-                      
-                      return {
-                        ...model,
-                        trainings: updatedTrainings,
-                        status: newModelStatus
-                      };
-                    });
-                  });
-                  
-                  // No timeout - fetch immediately
-                  fetchModelsImmediate(page);
-                }
-              }
-              
-              // If this is a newTraining and it's completed, clear it immediately
-              if (newTraining && onClearNewTraining && status === 'succeeded') {
-                onClearNewTraining();
-              }
-            }
-          }
-        )
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        .subscribe((status: any) => {
-          void status; // Explicitly indicate we're ignoring this variable
-        });
-      
-      // Also subscribe to changes in the models table
-      const modelSubscription = supabase
-        .channel('models-changes')
-        .on(
-          // Type assertion needed for Supabase Realtime - this is the correct channel name
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          'postgres_changes' as any, 
-          { 
-            event: '*', 
-            schema: 'public', 
-            table: 'models' 
-          }, 
-          (payload: { new: Model; old: Model }) => {
-            // Process model status changes
-            if (payload?.new?.status) {
-              const status = payload.new.status;
-              const modelId = payload.new.id;
-              
-              // Directly update the model in state for immediate UI refresh
-              if (modelId) {
-                setModels(prevModels => {
-                  return prevModels.map(model => 
-                    model.id === modelId ? { ...model, ...payload.new } : model
-                  );
-                });
-                
-                // For trained status, fetch immediately
-                if (status === 'trained') {
-                  fetchModelsImmediate(page);
-                }
-              }
-            }
-          }
-        )
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        .subscribe((status: any) => {
-          void status; // Explicitly indicate we're ignoring this variable
-        });
-      
-      // Set up a periodic refresh to ensure data consistency, but with longer interval
-      const refreshInterval = setInterval(() => {
-        debouncedFetchModels(page);
-      }, 60000); // Refresh every 60 seconds (reduced frequency)
-      
-      setRealtimeSubscribed(true);
-      
-      // Cleanup function
-      return () => {
-        trainingSubscription.unsubscribe();
-        modelSubscription.unsubscribe();
-        clearInterval(refreshInterval);
-        setRealtimeSubscribed(false);
-        
-        // Clear any pending timeouts
-        if (fetchTimeoutRef.current) {
-          clearTimeout(fetchTimeoutRef.current);
-          fetchTimeoutRef.current = null;
-        }
-      };
-    } catch (_error) {
-      void _error; // Explicitly indicate we're ignoring this variable
-      // Fallback to periodic polling
-      const intervalId = setInterval(() => {
-        fetchModels(page);
-      }, 5000);
-      
-      return () => {
-        clearInterval(intervalId);
-        setRealtimeSubscribed(false);
-      };
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   // Manual refresh when newTraining changes (with debounce)
   useEffect(() => {
     if (!newTraining) return;

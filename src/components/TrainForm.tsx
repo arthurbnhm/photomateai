@@ -45,24 +45,6 @@ const UploadIcon = ({
   </svg>
 );
 
-// Type for Supabase Realtime payload
-interface RealtimeTrainingPayload {
-  new: {
-    id: string;
-    status: string;
-    training_id: string;
-    error?: string;
-    completed_at?: string | null;
-    [key: string]: unknown;
-  };
-  old: {
-    id: string;
-    status: string;
-    [key: string]: unknown;
-  } | null;
-  [key: string]: unknown;
-}
-
 export interface TrainingStatus {
   id: string; 
   status: string; 
@@ -194,7 +176,12 @@ const createThumbnail = async (file: File, maxWidth = 500, maxHeight = 500): Pro
   });
 };
 
-export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormProps) {
+export function TrainForm({ onTrainingStatusChange }: TrainFormProps) {
+  // Initialize Supabase client
+  const supabaseRef = useRef(createBrowserSupabaseClient());
+  const getSupabase = useCallback(() => supabaseRef.current, []);
+  
+  // State variables
   const [displayModelName, setDisplayModelName] = useState("");
   const [actualModelName, setActualModelName] = useState("");
   const [uploadedImages, setUploadedImages] = useState<File[]>([]);
@@ -203,66 +190,8 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
   const [isGeneratingPreviews, setIsGeneratingPreviews] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [nameError, setNameError] = useState<string | null>(null);
-  const [realtimeSubscribed, setRealtimeSubscribed] = useState(false);
-  const subscriptionActiveRef = useRef(false);
-  const { resolvedTheme } = useTheme();
   const [thumbnails, setThumbnails] = useState<string[]>([]);
-
-  // Initialize Supabase client
-  const supabase = createBrowserSupabaseClient();
-
-  // Force theme application and check HTML element
-  useEffect(() => {
-    if (typeof window !== 'undefined' && resolvedTheme) {
-      // Log if the HTML element has the dark class
-      const hasDarkClass = document.documentElement.classList.contains('dark');
-      console.log('HTML has dark class:', hasDarkClass);
-      console.log('resolvedTheme:', resolvedTheme);
-      
-      // Force theme application for debugging
-      if (resolvedTheme === 'dark' && !hasDarkClass) {
-        document.documentElement.classList.add('dark');
-      } else if (resolvedTheme === 'light' && hasDarkClass) {
-        document.documentElement.classList.remove('dark');
-      }
-    }
-  }, [resolvedTheme]);
-
-  // Initialize the bucket when the component mounts
-  useEffect(() => {
-    const initBucket = async () => {
-      try {
-        // Get the authenticated user
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) {
-          console.error('No authenticated user found');
-          return;
-        }
-        
-        // Get the session for the access token
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session) {
-          console.error('No active session found');
-          return;
-        }
-
-        await fetch('/api/model', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${session.access_token}`
-          },
-          body: JSON.stringify({
-            action: 'initBucket'
-          }),
-        });
-      } catch (error) {
-        console.error('Error initializing bucket:', error);
-      }
-    };
-
-    initBucket();
-  }, [supabase]);
+  const { resolvedTheme } = useTheme();
 
   // Format model name to meet Replicate's requirements
   const formatModelName = (name: string): string => {
@@ -316,63 +245,6 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
     }
   }, [displayModelName]);
 
-  // Set up realtime subscription to track training status
-  useEffect(() => {
-    // Use the ref to check if already subscribed, but still keep realtimeSubscribed in deps
-    if (!trainingStatus || subscriptionActiveRef.current) return;
-    
-    // Define a type-safe handler for the Supabase realtime event
-    function handleTrainingUpdate(payload: RealtimeTrainingPayload) {
-      if (payload.new && trainingStatus) {
-        // Only update if the status has changed
-        if (payload.new.status !== trainingStatus.status) {
-          // Update the training status
-          onTrainingStatusChange({
-            ...(trainingStatus as TrainingStatus),
-            status: payload.new.status
-          });
-          
-          // Only show notifications for terminal states
-          if (payload.new.status === 'succeeded') {
-            toast.success('Model training completed successfully!');
-          } else if (payload.new.status === 'failed') {
-            toast.error(`Training failed: ${payload.new.error || 'Unknown error'}`);
-          } else if (payload.new.status === 'canceled') {
-            toast.info('Training was canceled');
-          }
-        }
-      }
-    }
-    
-    // Subscribe to changes on the trainings table for this training
-    const channel = supabase.channel(`training-${trainingStatus.id}`);
-    // Use type assertion to work around TypeScript limitations with Supabase Realtime
-    // This is necessary because the TypeScript definitions for Supabase Realtime are incomplete
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const trainingSubscription = (channel as any).on(
-      'postgres_changes', 
-      { 
-        event: '*', 
-        schema: 'public', 
-        table: 'trainings',
-        filter: `training_id=eq.${trainingStatus.id}`
-      }, 
-      handleTrainingUpdate
-    )
-    .subscribe();
-    
-    // Update both the state and the ref
-    setRealtimeSubscribed(true);
-    subscriptionActiveRef.current = true;
-    
-    // Cleanup function
-    return () => {
-      trainingSubscription.unsubscribe();
-      setRealtimeSubscribed(false);
-      subscriptionActiveRef.current = false;
-    };
-  }, [trainingStatus?.id, realtimeSubscribed, supabase, onTrainingStatusChange, trainingStatus]);
-
   // Handle form submission - now combines model creation and training
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -389,7 +261,7 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
     
     try {
       // Get the authenticated user
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { user } } = await getSupabase().auth.getUser();
       if (!user) {
         toast.error("You must be logged in to train a model");
         setIsProcessing(false);
@@ -397,7 +269,7 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
       }
       
       // Get the session for the access token
-      const { data: { session } } = await supabase.auth.getSession();
+      const { data: { session } } = await getSupabase().auth.getSession();
       if (!session) {
         toast.error("Unable to get authentication token");
         setIsProcessing(false);
@@ -516,7 +388,7 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
         setUploadProgress(70);
 
         // Upload with progress tracking
-        const { error: uploadError } = await supabase.storage
+        const { error: uploadError } = await getSupabase().storage
           .from('training-files')
           .upload(zipPath, zipData, {
             contentType: 'application/zip',
@@ -528,7 +400,7 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
         }
 
         // Get the URL for the uploaded file
-        const { data: urlData } = await supabase.storage
+        const { data: urlData } = await getSupabase().storage
           .from('training-files')
           .createSignedUrl(zipPath, 60 * 60);
 
@@ -976,6 +848,11 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
     // No need for cleanup as we're using data URLs, not object URLs
   }, [uploadedImages]);
 
+  // Clean up Supabase resources when component unmounts - remove since no realtime
+  useEffect(() => {
+    // No cleanup needed anymore
+  }, []);
+
   return (
     <ErrorBoundary>
       <div className="w-full">
@@ -987,10 +864,11 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
               inset: 0,
               zIndex: 50,
               display: 'flex',
+              flexDirection: 'column',
               alignItems: 'center',
               justifyContent: 'center',
-              backgroundColor: resolvedTheme === 'dark' ? 'rgba(30, 58, 138, 0.9)' : 'rgba(219, 234, 254, 0.9)', // more opacity
-              backdropFilter: 'blur(4px)' // add blur effect
+              backgroundColor: resolvedTheme === 'dark' ? 'rgb(30, 58, 138)' : 'rgb(219, 234, 254)',
+              gap: '1rem'
             }}
             onDragOver={handleDragOver}
             onDragEnter={handleDragEnter}
@@ -1001,24 +879,19 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
               setDragActive(false);
             }}
           >
-            <div className="text-center max-w-xs bg-background p-6 rounded-lg shadow-lg border-2 border-primary"> {/* more visible container */}
-              <div className="mb-4 mx-auto">
-                <UploadIcon 
-                  size={48} 
-                  className="mx-auto" 
-                  style={{ color: resolvedTheme === 'dark' ? '#93c5fd' : '#2563eb' }}
-                />
-              </div>
-              <h3 
-                className="text-xl font-semibold mb-1"
-                style={{ color: resolvedTheme === 'dark' ? '#bfdbfe' : '#1e40af' }}
-              >
-                Drop Images Here
-              </h3>
-              <p className="text-sm text-muted-foreground mt-2">
-                JPG, PNG, WebP - exactly 10 images required, max 100MB total
-              </p>
-            </div>
+            <UploadIcon 
+              size={48} 
+              style={{ color: resolvedTheme === 'dark' ? '#93c5fd' : '#2563eb' }}
+            />
+            <h3 
+              className="text-xl font-semibold"
+              style={{ color: resolvedTheme === 'dark' ? '#bfdbfe' : '#1e40af' }}
+            >
+              Drop Images Here
+            </h3>
+            <p className="text-sm text-muted-foreground">
+              JPG, PNG, WebP - exactly 10 images required, max 100MB total
+            </p>
           </div>
         )}
         
