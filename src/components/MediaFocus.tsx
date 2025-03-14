@@ -423,8 +423,8 @@ export function MediaFocus({
                           className="object-cover"
                           fill
                           sizes="15vw"
-                          priority={true}
-                          loading="eager"
+                          priority={index === currentImageIndex}
+                          loading={index === currentImageIndex ? "eager" : "lazy"}
                           unoptimized={true}
                         />
                       </AspectRatio>

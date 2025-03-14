@@ -11,7 +11,8 @@ import { Badge } from "@/components/ui/badge"
 import { createBrowserSupabaseClient } from "@/lib/supabase"
 import { MediaFocus } from "@/components/MediaFocus"
 import { useAuth } from "@/contexts/AuthContext"
-import { deleteImageFromCache, isServiceWorkerActive } from "@/lib/imageCache"
+import { deleteImageFromCache } from "@/lib/imageCache"
+import { onServiceWorkerReady } from "@/components/ServiceWorkerRegistration"
 
 // Define the type for image generation
 type ImageGeneration = {
@@ -102,9 +103,10 @@ export function ImageHistory({
   const [isCancelling, setIsCancelling] = useState<string | null>(null)
   const [elapsedTimes, setElapsedTimes] = useState<Record<string, number>>({})
   const [isMounted, setIsMounted] = useState(false)
-  const [swReady, setSwReady] = useState(false)
-  const retryCountRef = useRef<Record<string, number>>({})
   const { user } = useAuth()
+  
+  // Add retry count tracking
+  const imageRetryCount = useRef<Record<string, number>>({});
   
   // Create a stable reference to the Supabase client
   const supabaseClientRef = useRef<ReturnType<typeof createBrowserSupabaseClient> | null>(null);
@@ -159,37 +161,6 @@ export function ImageHistory({
       document.body.style.overflow = '';
     };
   }, [imageViewer.isOpen]);
-
-  // Check service worker status
-  useEffect(() => {
-    const checkSw = async () => {
-      const isActive = isServiceWorkerActive()
-      console.log('Service Worker status:', isActive ? 'active' : 'inactive')
-      setSwReady(isActive)
-      
-      // If service worker is not active, wait and retry
-      if (!isActive && 'serviceWorker' in navigator) {
-        await new Promise(resolve => setTimeout(resolve, 1000))
-        const retryActive = isServiceWorkerActive()
-        console.log('Service Worker retry status:', retryActive ? 'active' : 'inactive')
-        setSwReady(retryActive)
-      }
-    }
-
-    checkSw()
-
-    const handleSwChange = () => {
-      checkSw()
-      // Clear retry counts when service worker changes
-      retryCountRef.current = {}
-    }
-
-    navigator.serviceWorker?.addEventListener('controllerchange', handleSwChange)
-    
-    return () => {
-      navigator.serviceWorker?.removeEventListener('controllerchange', handleSwChange)
-    }
-  }, [])
 
   // Load from cache or fetch from Supabase
   const loadGenerations = useCallback(async (forceFetch: boolean = false, silentUpdate: boolean = false) => {
@@ -362,144 +333,146 @@ export function ImageHistory({
   useEffect(() => {
     if (!isMounted) return;
     
-    // Initial load should not be forced to use cache if available
-    loadGenerations(false);
-    
-    // Set up Supabase Realtime subscription
-    const supabase = getSupabaseClient();
     let successChannel: ReturnType<typeof supabase.channel> | null = null;
     let errorChannel: ReturnType<typeof supabase.channel> | null = null;
+    const supabase = getSupabaseClient();
     
-    try {
-      // Subscribe to changes in the predictions table for successful generations
-      successChannel = supabase
-        .channel('successful-predictions')
-        .on('postgres_changes', 
-          { 
-            event: 'UPDATE', 
-            schema: 'public', 
-            table: 'predictions',
-            filter: 'status=eq.succeeded'
-          }, 
-          (payload) => {
-            // Process the updated prediction
-            if (payload.new && 
-                payload.new.status === 'succeeded' && 
-                payload.new.storage_urls && 
-                payload.new.storage_urls.length > 0) {
-              
-              // Look for matching pending generation
-              const matchingPending = pendingGenerations.find(p => 
-                p.replicate_id === payload.new.replicate_id
-              );
-              
-              if (matchingPending) {
-                // Process the new image data
-                const processedImages = processOutput(payload.new.storage_urls);
+    // Wait for service worker to be ready before loading
+    onServiceWorkerReady(() => {
+      // Initial load should not be forced to use cache if available
+      loadGenerations(false);
+      
+      try {
+        // Subscribe to changes in the predictions table for successful generations
+        successChannel = supabase
+          .channel('successful-predictions')
+          .on('postgres_changes', 
+            { 
+              event: 'UPDATE', 
+              schema: 'public', 
+              table: 'predictions',
+              filter: 'status=eq.succeeded'
+            }, 
+            (payload) => {
+              // Process the updated prediction
+              if (payload.new && 
+                  payload.new.status === 'succeeded' && 
+                  payload.new.storage_urls && 
+                  payload.new.storage_urls.length > 0) {
                 
-                // Update generations state
-                setGenerations(prev => {
-                  const existingIndex = prev.findIndex(g => g.id === matchingPending.id);
-                  const updatedGenerations = [...prev];
+                // Look for matching pending generation
+                const matchingPending = pendingGenerations.find(p => 
+                  p.replicate_id === payload.new.replicate_id
+                );
+                
+                if (matchingPending) {
+                  // Process the new image data
+                  const processedImages = processOutput(payload.new.storage_urls);
                   
-                  if (existingIndex >= 0) {
-                    // Update existing generation
-                    updatedGenerations[existingIndex] = {
-                      ...updatedGenerations[existingIndex],
-                      images: processedImages
-                    };
-                  } else {
-                    // Add as new generation
-                    const newGeneration = {
-                      id: matchingPending.id,
-                      replicate_id: payload.new.replicate_id,
-                      prompt: matchingPending.prompt,
-                      timestamp: new Date().toISOString(),
-                      images: processedImages,
-                      aspectRatio: matchingPending.aspectRatio,
-                      format: matchingPending.format || payload.new.input?.output_format || 'png',
-                      modelName: matchingPending.modelName || payload.new.model_name || 'Default Model'
-                    };
-                    // Add to the beginning of the array
-                    updatedGenerations.unshift(newGeneration);
+                  // Update generations state
+                  setGenerations(prev => {
+                    const existingIndex = prev.findIndex(g => g.id === matchingPending.id);
+                    const updatedGenerations = [...prev];
+                    
+                    if (existingIndex >= 0) {
+                      // Update existing generation
+                      updatedGenerations[existingIndex] = {
+                        ...updatedGenerations[existingIndex],
+                        images: processedImages
+                      };
+                    } else {
+                      // Add as new generation
+                      const newGeneration = {
+                        id: matchingPending.id,
+                        replicate_id: payload.new.replicate_id,
+                        prompt: matchingPending.prompt,
+                        timestamp: new Date().toISOString(),
+                        images: processedImages,
+                        aspectRatio: matchingPending.aspectRatio,
+                        format: matchingPending.format || payload.new.input?.output_format || 'png',
+                        modelName: matchingPending.modelName || payload.new.model_name || 'Default Model'
+                      };
+                      // Add to the beginning of the array
+                      updatedGenerations.unshift(newGeneration);
+                    }
+                    
+                    // Update localStorage cache
+                    localStorage.setItem(CACHE_KEY, JSON.stringify(updatedGenerations));
+                    localStorage.setItem(CACHE_TIMESTAMP_KEY, Date.now().toString());
+                    
+                    return updatedGenerations;
+                  });
+                  
+                  // Instead of immediately removing from pending, delay it slightly
+                  // to allow for a smooth transition
+                  setTimeout(() => {
+                    setPendingGenerations(prev => 
+                      prev.filter(g => g.id !== matchingPending.id)
+                    );
+                  }, 800); // Increased to 800ms for an even smoother transition
+                } else {
+                  // Use silent update to avoid UI loading flicker
+                  loadGenerations(true, true);
+                }
+              }
+            }
+          )
+          .subscribe((status) => {
+            if (status === 'TIMED_OUT') {
+              console.warn('Realtime subscription timed out, reconnecting...');
+              // Re-subscribe on timeout
+              if (successChannel) {
+                supabase.removeChannel(successChannel);
+                successChannel = null;
+              }
+            }
+          });
+        
+        // Subscribe to errors and cancelled predictions
+        errorChannel = supabase
+          .channel('failed-predictions')
+          .on('postgres_changes', 
+            { 
+              event: 'UPDATE', 
+              schema: 'public', 
+              table: 'predictions',
+              filter: 'or(status=eq.failed,is_cancelled=eq.true)'
+            }, 
+            (payload) => {
+              if (payload.new) {
+                // Find matching pending generation
+                const matchingPending = pendingGenerations.find(p => 
+                  p.replicate_id === payload.new.replicate_id
+                );
+                
+                if (matchingPending) {
+                  // Show error toast if there's an error
+                  if (payload.new.error) {
+                    toast.error(`Generation failed: ${payload.new.error}`);
                   }
                   
-                  // Update localStorage cache
-                  localStorage.setItem(CACHE_KEY, JSON.stringify(updatedGenerations));
-                  localStorage.setItem(CACHE_TIMESTAMP_KEY, Date.now().toString());
-                  
-                  return updatedGenerations;
-                });
-                
-                // Instead of immediately removing from pending, delay it slightly
-                // to allow for a smooth transition
-                setTimeout(() => {
+                  // Remove from pending
                   setPendingGenerations(prev => 
                     prev.filter(g => g.id !== matchingPending.id)
                   );
-                }, 800); // Increased to 800ms for an even smoother transition
-              } else {
-                // Use silent update to avoid UI loading flicker
-                loadGenerations(true, true);
-              }
-            }
-          }
-        )
-        .subscribe((status) => {
-          if (status === 'TIMED_OUT') {
-            console.warn('Realtime subscription timed out, reconnecting...');
-            // Re-subscribe on timeout
-            if (successChannel) {
-              supabase.removeChannel(successChannel);
-              successChannel = null;
-            }
-          }
-        });
-      
-      // Subscribe to errors and cancelled predictions
-      errorChannel = supabase
-        .channel('failed-predictions')
-        .on('postgres_changes', 
-          { 
-            event: 'UPDATE', 
-            schema: 'public', 
-            table: 'predictions',
-            filter: 'or(status=eq.failed,is_cancelled=eq.true)'
-          }, 
-          (payload) => {
-            if (payload.new) {
-              // Find matching pending generation
-              const matchingPending = pendingGenerations.find(p => 
-                p.replicate_id === payload.new.replicate_id
-              );
-              
-              if (matchingPending) {
-                // Show error toast if there's an error
-                if (payload.new.error) {
-                  toast.error(`Generation failed: ${payload.new.error}`);
                 }
-                
-                // Remove from pending
-                setPendingGenerations(prev => 
-                  prev.filter(g => g.id !== matchingPending.id)
-                );
               }
             }
-          }
-        )
-        .subscribe((status) => {
-          if (status === 'TIMED_OUT') {
-            console.warn('Realtime subscription timed out, reconnecting...');
-            // Re-subscribe on timeout
-            if (errorChannel) {
-              supabase.removeChannel(errorChannel);
-              errorChannel = null;
+          )
+          .subscribe((status) => {
+            if (status === 'TIMED_OUT') {
+              console.warn('Realtime subscription timed out, reconnecting...');
+              // Re-subscribe on timeout
+              if (errorChannel) {
+                supabase.removeChannel(errorChannel);
+                errorChannel = null;
+              }
             }
-          }
-        });
-    } catch (error) {
-      console.error('Error setting up Supabase realtime:', error);
-    }
+          });
+      } catch (error) {
+        console.error('Error setting up Supabase realtime:', error);
+      }
+    });
     
     // Clean up the subscriptions when component unmounts
     return () => {
@@ -942,30 +915,17 @@ export function ImageHistory({
     }
   };
 
-  // Enhanced error handler with retry logic
-  const handleImageError = useCallback((generationId: string, imageIndex: number) => {
-    const retryKey = `${generationId}-${imageIndex}`
-    const currentRetries = retryCountRef.current[retryKey] || 0
+  // Modified handleImageError with retry mechanism
+  const handleImageError = (generationId: string, imageIndex: number) => {
+    const retryKey = `${generationId}-${imageIndex}`;
+    const currentRetries = imageRetryCount.current[retryKey] || 0;
     
-    if (currentRetries < 2) { // Allow 2 retries
-      console.log(`Retrying image load (${currentRetries + 1}/2):`, retryKey)
-      retryCountRef.current[retryKey] = currentRetries + 1
+    // Only retry up to 3 times
+    if (currentRetries < 3) {
+      console.log(`Retrying image load (attempt ${currentRetries + 1}/3):`, retryKey);
+      imageRetryCount.current[retryKey] = currentRetries + 1;
       
-      // Force a re-render of the image by updating its generation
-      setGenerations(prev => prev.map(gen => {
-        if (gen.id === generationId) {
-          return {
-            ...gen,
-            images: gen.images.map((img, idx) => ({
-              ...img,
-              url: idx === imageIndex ? `${img.url}${currentRetries === 0 ? '?retry=1' : '?retry=2'}` : img.url
-            }))
-          }
-        }
-        return gen
-      }))
-    } else {
-      console.log('Max retries reached, marking as expired:', retryKey)
+      // Force a re-render of the image by updating a timestamp
       setGenerations(prev => 
         prev.map(gen => 
           gen.id === generationId
@@ -973,15 +933,34 @@ export function ImageHistory({
                 ...gen,
                 images: gen.images.map((img, idx) => 
                   idx === imageIndex
-                    ? { ...img, isExpired: true }
+                    ? { ...img, url: `${img.url}${img.url.includes('?') ? '&' : '?'}retry=${Date.now()}` }
                     : img
                 )
               }
             : gen
         )
-      )
+      );
+      
+      return;
     }
-  }, [])
+    
+    // After 3 retries, mark as expired
+    console.warn(`Image load failed after 3 retries:`, retryKey);
+    setGenerations(prev => 
+      prev.map(gen => 
+        gen.id === generationId
+          ? {
+              ...gen,
+              images: gen.images.map((img, idx) => 
+                idx === imageIndex
+                  ? { ...img, isExpired: true }
+                  : img
+              )
+            }
+          : gen
+      )
+    );
+  };
 
   // Clear a specific pending generation by ID
   const clearPendingGeneration = (id: string) => {
@@ -1299,8 +1278,8 @@ export function ImageHistory({
                                     fill
                                     sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
                                     onError={() => handleImageError(generation.id, index)}
-                                    priority={true}
-                                    loading="eager"
+                                    priority={index === 0 && generation === getAllGenerations()[0]}
+                                    loading={index === 0 && generation === getAllGenerations()[0] ? "eager" : "lazy"}
                                     unoptimized={true}
                                   />
                                 )}
