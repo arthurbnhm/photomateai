@@ -61,9 +61,7 @@
 
 # Attention to:
 
-- State Management:
-
-You're using local storage for state management in some places (PENDING_GENERATIONS_KEY, CLIENT_HISTORY_KEY). For a more robust solution, consider using a state management library or React Context.
+- ✅ State Management You're using local storage for state management in some places (PENDING_GENERATIONS_KEY, CLIENT_HISTORY_KEY). For a more robust solution, consider using a state management library or React Context.
 
 # Others
 

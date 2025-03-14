@@ -97,6 +97,14 @@ export default async function PlansPage() {
                     <Check className="h-4 w-4 text-green-500" />
                     <span>Flux™ 1.1 photorealistic model</span>
                   </span>
+                  <span className="flex items-center gap-x-2">
+                    <Check className="h-4 w-4 text-green-500" />
+                    <span>Upscaler (coming soon)</span>
+                  </span>
+                  <span className="flex items-center gap-x-2">
+                    <Check className="h-4 w-4 text-green-500" />
+                    <span>Animate Images (coming soon)</span>
+                  </span>
                 </span>
               </CardDescription>
             </CardHeader>
@@ -125,6 +133,14 @@ export default async function PlansPage() {
                   <span className="flex items-center gap-x-2">
                     <Check className="h-4 w-4 text-green-500" />
                     <span>Flux™ 1.1 photorealistic model</span>
+                  </span>
+                  <span className="flex items-center gap-x-2">
+                    <Check className="h-4 w-4 text-green-500" />
+                    <span>Upscaler (coming soon)</span>
+                  </span>
+                  <span className="flex items-center gap-x-2">
+                    <Check className="h-4 w-4 text-green-500" />
+                    <span>Animate Images (coming soon)</span>
                   </span>
                 </span>
               </CardDescription>
