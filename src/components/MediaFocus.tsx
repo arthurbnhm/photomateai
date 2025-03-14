@@ -8,6 +8,7 @@ import { toast } from "sonner"
 import { motion, AnimatePresence } from "framer-motion"
 import { X, Download, ChevronLeft, ChevronRight } from "lucide-react"
 import { AspectRatio } from "@/components/ui/aspect-ratio"
+import { createBrowserSupabaseClient } from "@/lib/supabase"
 
 // Define the types needed for the component
 export type ImageWithStatus = {
@@ -22,6 +23,7 @@ export type ImageGeneration = {
   timestamp: string
   images: ImageWithStatus[]
   aspectRatio: string
+  format?: string      // Add format from prediction
 }
 
 type MediaFocusProps = {
@@ -40,6 +42,7 @@ export function MediaFocus({
   onNavigate
 }: MediaFocusProps) {
   const [mounted, setMounted] = React.useState(false)
+  const supabase = createBrowserSupabaseClient()
   
   // Handle mounting for portal
   useEffect(() => {
@@ -149,124 +152,65 @@ export function MediaFocus({
     
     try {
       const imageUrl = currentGeneration.images[currentImageIndex].url
-      const promptText = currentGeneration.prompt.slice(0, 20).replace(/[^a-z0-9]/gi, '_')
+
+      // Extract the path from the signed URL
+      // The URL format is like: https://<project>.supabase.co/storage/v1/object/sign/<bucket>/<path>
+      const url = new URL(imageUrl)
+      const pathSegments = url.pathname.split('/')
+      const bucketIndex = pathSegments.findIndex(segment => segment === 'sign') + 2
+      if (bucketIndex >= pathSegments.length) {
+        throw new Error('Invalid storage URL format')
+      }
+      const path = pathSegments.slice(bucketIndex).join('/')
       
+      // Get the original filename from the path
+      const filename = path.split('/').pop() || 'image'
+
+      // Download directly from Supabase storage
+      const { data: blob, error } = await supabase.storage
+        .from('images')
+        .download(path)
+
+      if (error) {
+        throw error
+      }
+
+      // Check if we should use mobile share
       const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)
-      
       if (isMobile && navigator.share && navigator.canShare) {
         try {
-          const response = await fetch(imageUrl)
-          const blob = await response.blob()
-          
-          // Determine the file extension from the content type or URL
-          let fileExtension = 'png' // Default extension
-          
-          // Try to get extension from content type
-          const contentType = response.headers.get('content-type')
-          if (contentType) {
-            if (contentType.includes('jpeg') || contentType.includes('jpg')) {
-              fileExtension = 'jpg'
-            } else if (contentType.includes('png')) {
-              fileExtension = 'png'
-            } else if (contentType.includes('webp')) {
-              fileExtension = 'webp'
-            } else if (contentType.includes('gif')) {
-              fileExtension = 'gif'
-            }
-          } else {
-            // Fallback: try to extract extension from URL
-            const urlExtension = imageUrl.split('.').pop()?.toLowerCase()
-            if (urlExtension && ['jpg', 'jpeg', 'png', 'webp', 'gif'].includes(urlExtension)) {
-              fileExtension = urlExtension === 'jpeg' ? 'jpg' : urlExtension
-            }
-          }
-          
-          const filename = `photomate_${promptText}_${currentImageIndex + 1}.${fileExtension}`
-          const file = new File([blob], filename, { type: contentType || 'image/png' })
+          const file = new File([blob], filename, { type: blob.type })
           const shareData = { files: [file] }
           
           if (navigator.canShare(shareData)) {
-            try {
-              await navigator.share(shareData)
-              toast.success('Image shared successfully')
-            } catch (shareError: unknown) {
-              if (shareError && typeof shareError === 'object' && 'name' in shareError && shareError.name === 'AbortError') {
-                console.log('Share cancelled by user')
-              } else {
-                console.error('Error sharing image:', shareError)
-                await performRegularDownload(imageUrl, filename, blob)
-              }
-            }
+            await navigator.share(shareData)
+            toast.success('Image shared successfully')
             return
           }
-        } catch (error) {
-          console.error('Error preparing image for sharing:', error)
+        } catch (shareError: unknown) {
+          if (shareError && typeof shareError === 'object' && 'name' in shareError && shareError.name === 'AbortError') {
+            console.log('Share cancelled by user')
+            return
+          }
+          // If sharing fails, fall back to regular download
+          console.error('Error sharing:', shareError)
         }
       }
-      
+
       // Regular download flow
-      const response = await fetch(imageUrl)
-      const blob = await response.blob()
-      
-      // Determine the file extension from the content type or URL
-      let fileExtension = 'png' // Default extension
-      
-      // Try to get extension from content type
-      const contentType = response.headers.get('content-type')
-      if (contentType) {
-        if (contentType.includes('jpeg') || contentType.includes('jpg')) {
-          fileExtension = 'jpg'
-        } else if (contentType.includes('png')) {
-          fileExtension = 'png'
-        } else if (contentType.includes('webp')) {
-          fileExtension = 'webp'
-        } else if (contentType.includes('gif')) {
-          fileExtension = 'gif'
-        }
-      } else {
-        // Fallback: try to extract extension from URL
-        const urlExtension = imageUrl.split('.').pop()?.toLowerCase()
-        if (urlExtension && ['jpg', 'jpeg', 'png', 'webp', 'gif'].includes(urlExtension)) {
-          fileExtension = urlExtension === 'jpeg' ? 'jpg' : urlExtension
-        }
-      }
-      
-      const filename = `photomate_${promptText}_${currentImageIndex + 1}.${fileExtension}`
-      await performRegularDownload(imageUrl, filename, blob)
+      const downloadUrl = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = downloadUrl
+      link.download = filename
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      URL.revokeObjectURL(downloadUrl)
+
+      toast.success('Image downloaded successfully')
     } catch (error) {
       console.error('Error downloading image:', error)
       toast.error('Failed to download image')
-    }
-  }
-  
-  const performRegularDownload = async (imageUrl: string, filename: string, existingBlob?: Blob) => {
-    try {
-      let blob = existingBlob
-      
-      if (!blob) {
-        const response = await fetch(imageUrl)
-        blob = await response.blob()
-      }
-      
-      const blobUrl = URL.createObjectURL(blob)
-      
-      const link = document.createElement('a')
-      link.href = blobUrl
-      link.setAttribute('download', filename)
-      link.style.display = 'none'
-      document.body.appendChild(link)
-      link.click()
-      
-      setTimeout(() => {
-        document.body.removeChild(link)
-        URL.revokeObjectURL(blobUrl)
-      }, 100)
-      
-      toast.success('Image downloaded successfully')
-    } catch (error) {
-      console.error('Error in regular download:', error)
-      toast.error('Failed to download image')
-      throw error
     }
   }
 

@@ -57,7 +57,7 @@ function verifyWebhookSignature(
 }
 
 // Function to download and store an image
-async function downloadAndStoreImage(url: string, userId: string): Promise<string | null> {
+async function downloadAndStoreImage(url: string, userId: string, format: string = 'png'): Promise<string | null> {
   try {
     // Validate userId to prevent 'undefined' in storage paths
     if (!userId || userId === 'undefined') {
@@ -72,7 +72,10 @@ async function downloadAndStoreImage(url: string, userId: string): Promise<strin
     }
 
     const blob = await response.blob();
-    const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.png`;
+    
+    const contentType = `image/${format}`;
+    const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${format}`;
+    
     // Ensure userId is valid before constructing the path
     const filePath = `${userId}/${fileName}`;
 
@@ -93,7 +96,7 @@ async function downloadAndStoreImage(url: string, userId: string): Promise<strin
     const { error: uploadError } = await supabase.storage
       .from('images')
       .upload(filePath, blob, {
-        contentType: 'image/png',
+        contentType: contentType,
         cacheControl: '3600',
         upsert: false
       });
@@ -292,8 +295,9 @@ export async function POST(request: Request) {
 
       // Download and store images
       try {
+        const format = prediction.input?.output_format || 'png';
         const storageUrls = await Promise.all(
-          urls.map(url => downloadAndStoreImage(url, userId))
+          urls.map(url => downloadAndStoreImage(url, userId, format))
         );
 
         // Filter out any null values from failed uploads

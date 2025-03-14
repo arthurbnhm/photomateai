@@ -31,6 +31,8 @@
 - ✅ Image focus
 - ✅ Add the badges
 - ✅ Change naming of download and storage (merger)
+- The image should download the actual format selected
+- Image should be same name as the one in supabase
 
 # App
 
@@ -47,7 +49,6 @@
 - 🟡 A chat that interacts with my api, know the format to use etc
 - ✅ Make sure we dont use supabase admin key anymore
 - ✅ Add payment
-- The image should download the actual format selected
 
 # Authentication
 
@@ -69,7 +70,7 @@
 - Add media sharing
 - Remove pooling, only keep realtime subscription or opposite
 - Rework all the caching system, centralize it?
-- Stripe portal
+- ✅ Stripe portal
 
 # Improvements ideas
 
