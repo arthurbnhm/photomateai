@@ -103,6 +103,7 @@ export function ImageHistory({
   const [elapsedTimes, setElapsedTimes] = useState<Record<string, number>>({})
   const [isMounted, setIsMounted] = useState(false)
   const [swReady, setSwReady] = useState(false)
+  const retryCountRef = useRef<Record<string, number>>({})
   const { user } = useAuth()
   
   // Create a stable reference to the Supabase client
@@ -161,24 +162,34 @@ export function ImageHistory({
 
   // Check service worker status
   useEffect(() => {
-    const checkSw = () => {
-      setSwReady(isServiceWorkerActive());
-    };
+    const checkSw = async () => {
+      const isActive = isServiceWorkerActive()
+      console.log('Service Worker status:', isActive ? 'active' : 'inactive')
+      setSwReady(isActive)
+      
+      // If service worker is not active, wait and retry
+      if (!isActive && 'serviceWorker' in navigator) {
+        await new Promise(resolve => setTimeout(resolve, 1000))
+        const retryActive = isServiceWorkerActive()
+        console.log('Service Worker retry status:', retryActive ? 'active' : 'inactive')
+        setSwReady(retryActive)
+      }
+    }
 
-    // Check initially
-    checkSw();
+    checkSw()
 
-    // Check whenever the service worker state changes
     const handleSwChange = () => {
-      checkSw();
-    };
+      checkSw()
+      // Clear retry counts when service worker changes
+      retryCountRef.current = {}
+    }
 
-    navigator.serviceWorker?.addEventListener('controllerchange', handleSwChange);
+    navigator.serviceWorker?.addEventListener('controllerchange', handleSwChange)
     
     return () => {
-      navigator.serviceWorker?.removeEventListener('controllerchange', handleSwChange);
-    };
-  }, []);
+      navigator.serviceWorker?.removeEventListener('controllerchange', handleSwChange)
+    }
+  }, [])
 
   // Load from cache or fetch from Supabase
   const loadGenerations = useCallback(async (forceFetch: boolean = false, silentUpdate: boolean = false) => {
@@ -931,36 +942,46 @@ export function ImageHistory({
     }
   };
 
-  // Mark image as having an error
-  const handleImageError = (generationId: string, imageIndex: number) => {
-    console.log('Image error detected, marking as expired:', generationId, imageIndex);
+  // Enhanced error handler with retry logic
+  const handleImageError = useCallback((generationId: string, imageIndex: number) => {
+    const retryKey = `${generationId}-${imageIndex}`
+    const currentRetries = retryCountRef.current[retryKey] || 0
     
-    // Check URL for undefined path which is a common error pattern
-    const generation = generations.find(gen => gen.id === generationId);
-    if (generation && generation.images[imageIndex]) {
-      const url = generation.images[imageIndex].url;
-      // Check if URL contains "undefined" folder path which indicates a storage issue
-      if (url && url.includes('/undefined/')) {
-        console.warn('Detected invalid storage path with "undefined":', url);
-      }
-    }
-    
-    // Mark the image as expired
-    setGenerations(prev => 
-      prev.map(gen => 
-        gen.id === generationId
-          ? {
-              ...gen,
-              images: gen.images.map((img, idx) => 
-                idx === imageIndex
-                  ? { ...img, isExpired: true }
-                  : img
-              )
-            }
-          : gen
+    if (currentRetries < 2) { // Allow 2 retries
+      console.log(`Retrying image load (${currentRetries + 1}/2):`, retryKey)
+      retryCountRef.current[retryKey] = currentRetries + 1
+      
+      // Force a re-render of the image by updating its generation
+      setGenerations(prev => prev.map(gen => {
+        if (gen.id === generationId) {
+          return {
+            ...gen,
+            images: gen.images.map((img, idx) => ({
+              ...img,
+              url: idx === imageIndex ? `${img.url}${currentRetries === 0 ? '?retry=1' : '?retry=2'}` : img.url
+            }))
+          }
+        }
+        return gen
+      }))
+    } else {
+      console.log('Max retries reached, marking as expired:', retryKey)
+      setGenerations(prev => 
+        prev.map(gen => 
+          gen.id === generationId
+            ? {
+                ...gen,
+                images: gen.images.map((img, idx) => 
+                  idx === imageIndex
+                    ? { ...img, isExpired: true }
+                    : img
+                )
+              }
+            : gen
+        )
       )
-    );
-  };
+    }
+  }, [])
 
   // Clear a specific pending generation by ID
   const clearPendingGeneration = (id: string) => {
@@ -1278,8 +1299,8 @@ export function ImageHistory({
                                     fill
                                     sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
                                     onError={() => handleImageError(generation.id, index)}
-                                    priority={!swReady}
-                                    loading={swReady ? "lazy" : "eager"}
+                                    priority={true}
+                                    loading="eager"
                                     unoptimized={true}
                                   />
                                 )}
