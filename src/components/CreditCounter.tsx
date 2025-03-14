@@ -207,7 +207,7 @@ export function CreditCounter() {
                 includeCommas={true}
                 incrementColor="inherit" 
                 decrementColor="inherit"
-                containerStyles={{ color: 'inherit' }}
+                containerStyles={{ color: 'inherit', fontVariantNumeric: 'tabular-nums' }}
                 digitStyles={{ fontWeight: 500 }}
                 decimalPrecision={0}
               />
