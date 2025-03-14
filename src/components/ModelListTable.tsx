@@ -121,8 +121,8 @@ export function ModelListTable({ newTraining, onClearNewTraining }: ModelListTab
       // Include user_id in the API request if user is authenticated
       const userId = user?.id;
       const url = userId 
-        ? `/api/model/list?page=${pageNum}&limit=5&user_id=${userId}` 
-        : `/api/model/list?page=${pageNum}&limit=5`;
+        ? `/api/model/list?page=${pageNum}&user_id=${userId}` 
+        : `/api/model/list?page=${pageNum}`;
       
       const response = await fetch(url);
       

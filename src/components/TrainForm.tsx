@@ -124,7 +124,7 @@ class ErrorBoundary extends Component<
 }
 
 // Add a helper function to resize images before preview
-const createThumbnail = async (file: File, maxWidth = 250, maxHeight = 250): Promise<string> => {
+const createThumbnail = async (file: File, maxWidth = 500, maxHeight = 500): Promise<string> => {
   return new Promise<string>((resolve, reject) => {
     // Create a FileReader to read the image
     const reader = new FileReader();
@@ -168,8 +168,8 @@ const createThumbnail = async (file: File, maxWidth = 250, maxHeight = 250): Pro
         ctx.imageSmoothingQuality = 'high';
         ctx.drawImage(img, 0, 0, width, height);
         
-        // Convert the canvas to a data URL and resolve
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.7); // Use JPEG with 70% quality
+        // Convert the canvas to a data URL and resolve with higher quality
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.85); // Increased quality from 0.7 to 0.85
         resolve(dataUrl);
         
         // Clean up to free memory
@@ -599,6 +599,7 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
         // Reset the form fields but keep the training status for the ModelListTable
         setDisplayModelName("");
         setUploadedImages([]);
+        setIsProcessing(false);
         
       } catch (error) {
         console.error("Error processing model:", error);
@@ -1076,63 +1077,56 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
                       </span>
                     </div>
                     
-                    {isGeneratingPreviews ? (
-                      <div className="flex items-center justify-center p-6">
-                        <Loader2 className="h-8 w-8 animate-spin text-primary mr-2" />
-                        <span>Generating previews...</span>
-                      </div>
-                    ) : (
-                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4 mt-2">
-                        {uploadedImages.map((file, index) => (
-                          <Card key={index} className="overflow-hidden relative group">
-                            <CardContent className="p-0">
-                              <div className="relative aspect-square">
-                                {thumbnails[index] ? (
-                                  <Image
-                                    src={thumbnails[index]}
-                                    alt={`Uploaded image ${index + 1}`}
-                                    fill
-                                    className="object-cover"
-                                    loading="lazy"
-                                    onLoad={() => {
-                                      // Hint to the browser to clean up memory
-                                      if (window.requestIdleCallback) {
-                                        window.requestIdleCallback(() => null);
-                                      }
-                                    }}
-                                  />
-                                ) : (
-                                  <div className="flex items-center justify-center h-full bg-muted/30">
-                                    <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                                  </div>
-                                )}
-                                <button
-                                  type="button"
-                                  onClick={() => removeImage(index)}
-                                  className="absolute top-1 right-1 bg-background/80 dark:bg-foreground/20 text-foreground dark:text-background rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                                  aria-label="Remove image"
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4 mt-2">
+                      {uploadedImages.map((file, index) => (
+                        <Card key={index} className="overflow-hidden relative group">
+                          <CardContent className="p-0">
+                            <div className="relative aspect-square">
+                              {thumbnails[index] ? (
+                                <Image
+                                  src={thumbnails[index]}
+                                  alt={`Uploaded image ${index + 1}`}
+                                  fill
+                                  className="object-cover"
+                                  loading="lazy"
+                                  onLoad={() => {
+                                    // Hint to the browser to clean up memory
+                                    if (window.requestIdleCallback) {
+                                      window.requestIdleCallback(() => null);
+                                    }
+                                  }}
+                                />
+                              ) : (
+                                <div className="flex items-center justify-center h-full bg-muted/30">
+                                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                                </div>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => removeImage(index)}
+                                className="absolute top-1 right-1 bg-background/80 dark:bg-foreground/20 text-foreground dark:text-background rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                                aria-label="Remove image"
+                              >
+                                <svg
+                                  xmlns="http://www.w3.org/2000/svg" 
+                                  width="16" 
+                                  height="16" 
+                                  viewBox="0 0 24 24" 
+                                  fill="none"
+                                  stroke="currentColor"
+                                  strokeWidth="2" 
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
                                 >
-                                  <svg
-                                    xmlns="http://www.w3.org/2000/svg" 
-                                    width="16" 
-                                    height="16" 
-                                    viewBox="0 0 24 24" 
-                                    fill="none"
-                                    stroke="currentColor"
-                                    strokeWidth="2" 
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                  >
-                                    <path d="M18 6 6 18"></path>
-                                    <path d="m6 6 12 12"></path>
-                                  </svg>
-                                </button>
-                              </div>
-                            </CardContent>
-                          </Card>
-                        ))}
-                      </div>
-                    )}
+                                  <path d="M18 6 6 18"></path>
+                                  <path d="m6 6 12 12"></path>
+                                </svg>
+                              </button>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
                   </div>
                 )}
                 
