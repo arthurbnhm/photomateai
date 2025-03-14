@@ -105,29 +105,12 @@ export function ImageHistory({
   const [isMounted, setIsMounted] = useState(false)
   const { user } = useAuth()
   
+  // Create a Supabase client reference - not using realtime subscriptions
+  // so no need to call removeAllChannels() on cleanup
+  const supabaseClient = useRef(createBrowserSupabaseClient());
+  
   // Add retry count tracking
   const imageRetryCount = useRef<Record<string, number>>({});
-  
-  // Create a stable reference to the Supabase client
-  const supabaseClientRef = useRef<ReturnType<typeof createBrowserSupabaseClient> | null>(null);
-  
-  // Get or create the Supabase client
-  const getSupabaseClient = useCallback(() => {
-    if (!supabaseClientRef.current) {
-      supabaseClientRef.current = createBrowserSupabaseClient();
-    }
-    return supabaseClientRef.current;
-  }, []);
-  
-  // Clean up the Supabase client when component unmounts
-  useEffect(() => {
-    return () => {
-      if (supabaseClientRef.current) {
-        // Remove all channels and cleanup
-        supabaseClientRef.current.removeAllChannels();
-      }
-    };
-  }, []);
   
   // Refs for polling mechanism
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -143,7 +126,10 @@ export function ImageHistory({
   // Set mounted state on component init
   useEffect(() => {
     setIsMounted(true)
-    return () => setIsMounted(false)
+    return () => {
+      setIsMounted(false)
+      // No need to clean up Supabase client since we're not using realtime subscriptions
+    }
   }, [])
 
   // Add effect to prevent scrolling when modal is open
@@ -203,19 +189,17 @@ export function ImageHistory({
       setError('Failed to load image history. Please try again later.');
       setIsLoading(false);
     }
-  }, [user?.id, getSupabaseClient]);
+  }, [user?.id]);
 
   // Separate Supabase fetch logic
   const fetchFromSupabase = async (silentUpdate: boolean = false) => {
-    const supabase = getSupabaseClient();
-    
     // Add timeout to the fetch operation
     const abortController = new AbortController();
     const timeoutId = setTimeout(() => abortController.abort(), 10000); // 10 second timeout
     
     try {
       // Build the query with user_id filter if user is authenticated
-      let query = supabase
+      let query = supabaseClient.current
         .from('predictions')
         .select('*')
         .eq('is_deleted', false);
@@ -329,165 +313,19 @@ export function ImageHistory({
     }
   }, [isMounted, cleanupImageCache]);
 
-  // Initial load and Supabase Realtime setup
+  // Initial load and setup
   useEffect(() => {
     if (!isMounted) return;
-    
-    let successChannel: ReturnType<typeof supabase.channel> | null = null;
-    let errorChannel: ReturnType<typeof supabase.channel> | null = null;
-    const supabase = getSupabaseClient();
     
     // Wait for service worker to be ready before loading
     onServiceWorkerReady(() => {
       // Initial load should not be forced to use cache if available
       loadGenerations(false);
-      
-      try {
-        // Subscribe to changes in the predictions table for successful generations
-        successChannel = supabase
-          .channel('successful-predictions')
-          .on('postgres_changes', 
-            { 
-              event: 'UPDATE', 
-              schema: 'public', 
-              table: 'predictions',
-              filter: 'status=eq.succeeded'
-            }, 
-            (payload) => {
-              // Process the updated prediction
-              if (payload.new && 
-                  payload.new.status === 'succeeded' && 
-                  payload.new.storage_urls && 
-                  payload.new.storage_urls.length > 0) {
-                
-                // Look for matching pending generation
-                const matchingPending = pendingGenerations.find(p => 
-                  p.replicate_id === payload.new.replicate_id
-                );
-                
-                if (matchingPending) {
-                  // Process the new image data
-                  const processedImages = processOutput(payload.new.storage_urls);
-                  
-                  // Update generations state
-                  setGenerations(prev => {
-                    const existingIndex = prev.findIndex(g => g.id === matchingPending.id);
-                    const updatedGenerations = [...prev];
-                    
-                    if (existingIndex >= 0) {
-                      // Update existing generation
-                      updatedGenerations[existingIndex] = {
-                        ...updatedGenerations[existingIndex],
-                        images: processedImages
-                      };
-                    } else {
-                      // Add as new generation
-                      const newGeneration = {
-                        id: matchingPending.id,
-                        replicate_id: payload.new.replicate_id,
-                        prompt: matchingPending.prompt,
-                        timestamp: new Date().toISOString(),
-                        images: processedImages,
-                        aspectRatio: matchingPending.aspectRatio,
-                        format: matchingPending.format || payload.new.input?.output_format || 'png',
-                        modelName: matchingPending.modelName || payload.new.model_name || 'Default Model'
-                      };
-                      // Add to the beginning of the array
-                      updatedGenerations.unshift(newGeneration);
-                    }
-                    
-                    // Update localStorage cache
-                    localStorage.setItem(CACHE_KEY, JSON.stringify(updatedGenerations));
-                    localStorage.setItem(CACHE_TIMESTAMP_KEY, Date.now().toString());
-                    
-                    return updatedGenerations;
-                  });
-                  
-                  // Instead of immediately removing from pending, delay it slightly
-                  // to allow for a smooth transition
-                  setTimeout(() => {
-                    setPendingGenerations(prev => 
-                      prev.filter(g => g.id !== matchingPending.id)
-                    );
-                  }, 800); // Increased to 800ms for an even smoother transition
-                } else {
-                  // Use silent update to avoid UI loading flicker
-                  loadGenerations(true, true);
-                }
-              }
-            }
-          )
-          .subscribe((status) => {
-            if (status === 'TIMED_OUT') {
-              console.warn('Realtime subscription timed out, reconnecting...');
-              // Re-subscribe on timeout
-              if (successChannel) {
-                supabase.removeChannel(successChannel);
-                successChannel = null;
-              }
-            }
-          });
-        
-        // Subscribe to errors and cancelled predictions
-        errorChannel = supabase
-          .channel('failed-predictions')
-          .on('postgres_changes', 
-            { 
-              event: 'UPDATE', 
-              schema: 'public', 
-              table: 'predictions',
-              filter: 'or(status=eq.failed,is_cancelled=eq.true)'
-            }, 
-            (payload) => {
-              if (payload.new) {
-                // Find matching pending generation
-                const matchingPending = pendingGenerations.find(p => 
-                  p.replicate_id === payload.new.replicate_id
-                );
-                
-                if (matchingPending) {
-                  // Show error toast if there's an error
-                  if (payload.new.error) {
-                    toast.error(`Generation failed: ${payload.new.error}`);
-                  }
-                  
-                  // Remove from pending
-                  setPendingGenerations(prev => 
-                    prev.filter(g => g.id !== matchingPending.id)
-                  );
-                }
-              }
-            }
-          )
-          .subscribe((status) => {
-            if (status === 'TIMED_OUT') {
-              console.warn('Realtime subscription timed out, reconnecting...');
-              // Re-subscribe on timeout
-              if (errorChannel) {
-                supabase.removeChannel(errorChannel);
-                errorChannel = null;
-              }
-            }
-          });
-      } catch (error) {
-        console.error('Error setting up Supabase realtime:', error);
-      }
     });
     
-    // Clean up the subscriptions when component unmounts
-    return () => {
-      try {
-        if (successChannel) {
-          supabase.removeChannel(successChannel);
-        }
-        if (errorChannel) {
-          supabase.removeChannel(errorChannel);
-        }
-      } catch (error) {
-        console.error('Error removing channels:', error);
-      }
-    };
-  }, [isMounted, pendingGenerations, loadGenerations, setPendingGenerations, getSupabaseClient]);
+    // Clean up function
+    return () => {};
+  }, [isMounted, loadGenerations]);
   
   // Add a fallback polling mechanism for pending generations
   useEffect(() => {
@@ -508,8 +346,6 @@ export function ImageHistory({
         // Skip if no generation has been running long enough
         if (!shouldStartPolling()) return;
         
-        const supabase = getSupabaseClient();
-        
         // Get all pending replicate_ids that we need to check
         const replicateIds = pendingGenerations
           .filter(gen => gen.replicate_id)
@@ -523,7 +359,7 @@ export function ImageHistory({
         
         try {
           // Fetch all predictions with these replicate_ids in a single query
-          const { data, error } = await supabase
+          const { data, error } = await supabaseClient.current
             .from('predictions')
             .select('*')
             .in('replicate_id', replicateIds);

@@ -123,54 +123,6 @@ export function CreditCounter() {
 
     // Initial fetch (even if we loaded from localStorage, we still want to get the latest)
     fetchCredits()
-
-    // Set up real-time subscription to the user's subscription record
-    const setupSubscription = async () => {
-      // Get current user using getUser() for better security
-      const { data: { user }, error: userError } = await supabase.auth.getUser()
-      
-      if (userError || !user) {
-        console.error('Error fetching user for subscription setup:', userError)
-        return
-      }
-      
-      // Subscribe to changes in the user's subscription
-      const subscription = supabase
-        .channel('credit-updates')
-        .on(
-          'postgres_changes',
-          {
-            event: 'UPDATE',
-            schema: 'public',
-            table: 'subscriptions',
-            filter: `user_id=eq.${user.id}`,
-          },
-          (payload) => {
-            if (mounted && payload.new) {
-              // Check if credits are decreasing
-              if (previousCredits !== null && previousCredits > payload.new.credits_remaining) {
-                setIsDecrementing(true)
-                // Reset the decrementing state after animation completes
-                setTimeout(() => {
-                  if (mounted) setIsDecrementing(false)
-                }, 2000)
-              }
-              
-              previousCredits = payload.new.credits_remaining
-              setCredits(payload.new.credits_remaining)
-              
-              // Store the latest credit value in localStorage
-              localStorage.setItem(CREDITS_STORAGE_KEY, payload.new.credits_remaining.toString())
-            }
-          }
-        )
-        .subscribe()
-      
-      return subscription
-    }
-    
-    // Set up the subscription
-    const subscriptionPromise = setupSubscription()
     
     // Listen for client-side credit update events
     const handleCreditUpdate = (event: CustomEvent<{ credits: number }>) => {
@@ -197,13 +149,6 @@ export function CreditCounter() {
       
       // Remove event listener
       window.removeEventListener('credit-update', handleCreditUpdate as EventListener)
-      
-      // Unsubscribe from the channel when component unmounts
-      subscriptionPromise.then(subscription => {
-        if (subscription) {
-          supabase.removeChannel(subscription)
-        }
-      })
     }
   }, [isPlansPage])
 

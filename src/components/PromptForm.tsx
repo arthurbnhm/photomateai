@@ -587,11 +587,9 @@ export function PromptForm({
   // Clean up Supabase resources when component unmounts
   useEffect(() => {
     return () => {
-      // Cleanup supabase realtime connections if needed
-      const supabase = getSupabase();
-      supabase.removeAllChannels();
+      // We're no longer using realtime, so no cleanup needed
     };
-  }, [getSupabase]);
+  }, []);
 
   return (
     <div className="w-full">

@@ -21,6 +21,8 @@ const getEnvVariables = () => {
 };
 
 // Create a Supabase client with the public API key (for client-side use)
+// Note: If you experience WebSocket connection issues, avoid calling removeAllChannels()
+// unless you're actually using realtime subscriptions
 export const createBrowserSupabaseClient = () => {
   const { supabaseUrl, supabaseAnonKey } = getEnvVariables();
 
