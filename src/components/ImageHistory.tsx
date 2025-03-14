@@ -11,8 +11,6 @@ import { Badge } from "@/components/ui/badge"
 import { createBrowserSupabaseClient } from "@/lib/supabase"
 import { MediaFocus } from "@/components/MediaFocus"
 import { useAuth } from "@/contexts/AuthContext"
-import { deleteImageFromCache } from "@/lib/imageCache"
-import { onServiceWorkerReady } from "@/components/ServiceWorkerRegistration"
 
 // Define the type for image generation
 type ImageGeneration = {
@@ -64,11 +62,6 @@ type ImageWithStatus = {
   url: string
   isExpired: boolean
 }
-
-// Local storage keys
-const CACHE_KEY = 'photomate_image_cache';
-const CACHE_TIMESTAMP_KEY = 'photomate_cache_timestamp';
-const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes in milliseconds
 
 // Simplified processOutput to only use storage URLs
 const processOutput = (storageUrls: string[] | null): ImageWithStatus[] => {
@@ -148,51 +141,8 @@ export function ImageHistory({
     };
   }, [imageViewer.isOpen]);
 
-  // Load from cache or fetch from Supabase
-  const loadGenerations = useCallback(async (forceFetch: boolean = false, silentUpdate: boolean = false) => {
-    try {
-      // Only set loading state if this isn't a silent update
-      if (!silentUpdate) {
-        setIsLoading(true);
-      }
-      
-      // Check cache first
-      if (!forceFetch) {
-        const cachedTimestamp = localStorage.getItem(CACHE_TIMESTAMP_KEY);
-        const cachedData = localStorage.getItem(CACHE_KEY);
-        
-        if (cachedTimestamp && cachedData) {
-          const timestamp = parseInt(cachedTimestamp);
-          const now = Date.now();
-          
-          // If cache is still valid
-          if (now - timestamp < CACHE_DURATION) {
-            try {
-              const parsed = JSON.parse(cachedData);
-              if (Array.isArray(parsed)) {
-                setGenerations(parsed);
-                setIsLoading(false);
-                // Even if we use cache, fetch in background to update
-                fetchFromSupabase(true);
-                return;
-              }
-            } catch (e) {
-              console.error('Error parsing cached data:', e);
-            }
-          }
-        }
-      }
-      
-      await fetchFromSupabase(silentUpdate);
-    } catch (err) {
-      console.error('Error loading generations:', err);
-      setError('Failed to load image history. Please try again later.');
-      setIsLoading(false);
-    }
-  }, [user?.id]);
-
   // Separate Supabase fetch logic
-  const fetchFromSupabase = async (silentUpdate: boolean = false) => {
+  const fetchFromSupabase = useCallback(async (silentUpdate: boolean = false) => {
     // Add timeout to the fetch operation
     const abortController = new AbortController();
     const timeoutId = setTimeout(() => abortController.abort(), 10000); // 10 second timeout
@@ -237,10 +187,6 @@ export function ImageHistory({
         
         // Update state immediately without checking for changes
         setGenerations(processedData);
-        
-        // Update cache
-        localStorage.setItem(CACHE_KEY, JSON.stringify(processedData));
-        localStorage.setItem(CACHE_TIMESTAMP_KEY, Date.now().toString());
       }
       
       if (!silentUpdate) {
@@ -258,75 +204,32 @@ export function ImageHistory({
         setIsLoading(false);
       }
     }
-  };
+  }, [user?.id]);
 
-  // Function to clean up the image cache by removing generations with invalid URLs
-  const cleanupImageCache = useCallback(() => {
-    const hasUndefinedPath = (url: string): boolean => url.includes('/undefined/');
-    
-    setGenerations(prevGenerations => {
-      // Identify generations with "undefined" in the URL path
-      const invalidGenerations = prevGenerations.filter(gen => 
-        gen.images.some(img => hasUndefinedPath(img.url))
-      );
-      
-      if (invalidGenerations.length === 0) {
-        return prevGenerations; // No invalid generations found
+  // Load generations from Supabase
+  const loadGenerations = useCallback(async (silentUpdate: boolean = false) => {
+    try {
+      // Only set loading state if this isn't a silent update
+      if (!silentUpdate) {
+        setIsLoading(true);
       }
       
-      console.log(`Found ${invalidGenerations.length} generations with invalid paths, cleaning up cache`);
-      
-      // Clean up the cache by removing or marking as expired the invalid generations
-      const cleanedGenerations = prevGenerations.map(gen => {
-        if (gen.images.some(img => hasUndefinedPath(img.url))) {
-          // Mark all images in this generation as expired rather than removing entirely
-          return {
-            ...gen,
-            images: gen.images.map(img => {
-              // If the image URL has an undefined path, mark it as expired and remove from service worker cache
-              if (hasUndefinedPath(img.url)) {
-                // Delete from service worker cache as well
-                deleteImageFromCache(img.url).catch(err => 
-                  console.error('Error removing invalid image from cache:', err)
-                );
-                return { ...img, isExpired: true };
-              }
-              return img;
-            })
-          };
-        }
-        return gen;
-      });
-      
-      // Update the localStorage cache with the cleaned data
-      localStorage.setItem(CACHE_KEY, JSON.stringify(cleanedGenerations));
-      localStorage.setItem(CACHE_TIMESTAMP_KEY, Date.now().toString());
-      
-      return cleanedGenerations;
-    });
-  }, []);
-  
-  // Run the cache cleanup on initial mount
-  useEffect(() => {
-    if (isMounted) {
-      cleanupImageCache();
+      await fetchFromSupabase(silentUpdate);
+    } catch (err) {
+      console.error('Error loading generations:', err);
+      setError('Failed to load image history. Please try again later.');
+      setIsLoading(false);
     }
-  }, [isMounted, cleanupImageCache]);
+  }, [fetchFromSupabase]);
 
-  // Initial load and setup
+  // Initial data load
   useEffect(() => {
-    if (!isMounted) return;
-    
-    // Wait for service worker to be ready before loading
-    onServiceWorkerReady(() => {
-      // Initial load should not be forced to use cache if available
+    if (isMounted && user) {
+      // Initial load
       loadGenerations(false);
-    });
-    
-    // Clean up function
-    return () => {};
-  }, [isMounted, loadGenerations]);
-  
+    }
+  }, [isMounted, user, loadGenerations]);
+
   // Add a fallback polling mechanism for pending generations
   useEffect(() => {
     if (!isMounted || pendingGenerations.length === 0) return;
@@ -412,10 +315,6 @@ export function ImageHistory({
                       updatedGenerations.unshift(newGeneration);
                     }
                     
-                    // Update localStorage cache
-                    localStorage.setItem(CACHE_KEY, JSON.stringify(updatedGenerations));
-                    localStorage.setItem(CACHE_TIMESTAMP_KEY, Date.now().toString());
-                    
                     return updatedGenerations;
                   });
                   
@@ -464,7 +363,7 @@ export function ImageHistory({
             
             // Do a silent refresh if needed
             if (shouldRefreshGenerations) {
-              loadGenerations(true, true); // Silent update
+              loadGenerations(true); // Silent update
             }
           }
         } catch (fetchError: unknown) {
@@ -608,52 +507,39 @@ export function ImageHistory({
     return () => clearInterval(interval);
   }, [pendingGenerations, setPendingGenerations]);
 
-  // Function to delete a generation
   const performDeletion = async (id: string): Promise<boolean> => {
     try {
       setIsDeleting(id);
       
-      // Find the generation by ID
-      const generation = generations.find(g => g.id === id);
-      
-      if (!generation) {
-        toast.error('Generation not found');
+      // Find the generation to delete
+      const generationToDelete = generations.find(g => g.id === id);
+      if (!generationToDelete) {
+        toast.error("Generation not found");
         return false;
       }
       
-      // Send delete request
-      const success = await sendDeleteRequest(generation.replicate_id, generation.images.map(img => img.url));
+      // Get the replicate_id and image URLs
+      const { replicate_id, images } = generationToDelete;
+      const imageUrls = images.map(img => img.url);
+      
+      // Send the delete request to the API
+      const success = await sendDeleteRequest(replicate_id, imageUrls);
       
       if (success) {
-        // Also remove each image from the service worker cache
-        const imageUrls = generation.images.map(img => img.url);
+        // Update the UI by removing the deleted generation
+        setGenerations(prevGenerations => 
+          prevGenerations.filter(g => g.id !== id)
+        );
         
-        // Remove each image from the service worker cache
-        for (const url of imageUrls) {
-          try {
-            await deleteImageFromCache(url);
-          } catch (error) {
-            console.error('Error removing image from cache:', error);
-            // Continue with other images even if one fails
-          }
-        }
-        
-        // Update state to remove deleted generation
-        setGenerations(prev => prev.filter(g => g.id !== id));
-        
-        // Update localStorage cache
-        localStorage.setItem(CACHE_KEY, JSON.stringify(generations.filter(g => g.id !== id)));
-        localStorage.setItem(CACHE_TIMESTAMP_KEY, Date.now().toString());
-        
-        toast.success('Generation deleted successfully');
+        toast.success("Image deleted successfully");
         return true;
       } else {
-        toast.error('Failed to delete generation');
+        toast.error("Failed to delete image");
         return false;
       }
     } catch (error) {
-      console.error('Error deleting generation:', error);
-      toast.error('Error deleting generation');
+      console.error("Error deleting image:", error);
+      toast.error("An error occurred while deleting the image");
       return false;
     } finally {
       setIsDeleting(null);
@@ -741,7 +627,6 @@ export function ImageHistory({
         // Mark as cancelled in the UI
         updatedGenerations.splice(existingIndex, 1);
         setGenerations(updatedGenerations);
-        localStorage.setItem(CACHE_KEY, JSON.stringify(updatedGenerations));
       }
       
       return true;
@@ -802,17 +687,6 @@ export function ImageHistory({
   const clearPendingGeneration = (id: string) => {
     // Remove from pendingGenerations state
     setPendingGenerations(prev => prev.filter(gen => gen.id !== id));
-    
-    // Also check if we need to clean up localStorage
-    try {
-      // Check if there's any localStorage data for this generation
-      const pendingKey = `pending_generation_${id}`;
-      if (localStorage.getItem(pendingKey)) {
-        localStorage.removeItem(pendingKey);
-      }
-    } catch (error) {
-      console.error('Error cleaning up localStorage:', error);
-    }
   };
 
   const handleDelete = async (id: string) => {
@@ -847,7 +721,7 @@ export function ImageHistory({
       } else {
         toast.error('Failed to delete image');
         // Refresh the generations to ensure UI is in sync with server
-        loadGenerations(true, true);
+        loadGenerations(true);
       }
       
       setIsDeleting('');
@@ -856,7 +730,7 @@ export function ImageHistory({
       toast.error('An error occurred while processing your request');
       setIsDeleting('');
       // Refresh the generations to ensure UI is in sync with server
-      loadGenerations(true, true);
+      loadGenerations(true);
     }
   };
 

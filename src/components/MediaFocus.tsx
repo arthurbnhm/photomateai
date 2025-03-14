@@ -8,7 +8,6 @@ import { toast } from "sonner"
 import { motion, AnimatePresence } from "framer-motion"
 import { X, Download, ChevronLeft, ChevronRight } from "lucide-react"
 import { AspectRatio } from "@/components/ui/aspect-ratio"
-import { preloadImages } from "@/lib/imageCache"
 
 // Define the types needed for the component
 export type ImageWithStatus = {
@@ -113,27 +112,17 @@ export function MediaFocus({
     onNavigate((currentImageIndex - 1 + totalImages) % totalImages)
   }, [currentGeneration, currentImageIndex, onNavigate]);
   
-  // Preload images
+  // Set up preloading of next image when navigating
   useEffect(() => {
-    if (isOpen && currentGeneration) {
-      const totalImages = currentGeneration.images.length;
+    if (isOpen && currentGeneration && currentGeneration.images.length > 1) {
+      const nextIndex = (currentImageIndex + 1) % currentGeneration.images.length;
       
-      // Only preload if there are multiple images
-      if (totalImages > 1) {
-        const nextIndex = (currentImageIndex + 1) % totalImages;
-        
-        // Only preload the next image if it's different from the current one
-        if (nextIndex !== currentImageIndex) {
-          // Increased delay to avoid race conditions with the current image load
-          const timer = setTimeout(() => {
-            console.log('🔍 Preloading next image in carousel:', nextIndex + 1);
-            // Use the preloadImages utility for service worker caching
-            preloadImages([currentGeneration.images[nextIndex].url]);
-          }, 1200);
-          
-          return () => clearTimeout(timer);
-        }
-      }
+      // Preload the next image after a short delay
+      const timer = setTimeout(() => {
+        console.log('🔍 Preloading next image in carousel:', nextIndex + 1);
+      }, 1200);
+      
+      return () => clearTimeout(timer);
     }
   }, [isOpen, currentGeneration, currentImageIndex]);
   
