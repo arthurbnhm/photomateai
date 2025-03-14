@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useRef, Component, ErrorInfo, ReactNode } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -83,6 +83,46 @@ const formatSizeInMB = (bytes: number): string => {
   return `${(bytes / (1024 * 1024)).toFixed(2)}MB`;
 };
 
+// Error Boundary Component
+class ErrorBoundary extends Component<
+  { children: ReactNode },
+  { hasError: boolean; error: Error | null }
+> {
+  constructor(props: { children: ReactNode }) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    console.error('Error caught by boundary:', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="p-4 rounded-lg bg-destructive/10 text-destructive">
+          <h3 className="font-semibold mb-2">Something went wrong</h3>
+          <p className="text-sm mb-4">
+            {this.state.error?.message || "An unexpected error occurred"}
+          </p>
+          <Button
+            variant="outline"
+            onClick={() => this.setState({ hasError: false, error: null })}
+          >
+            Try again
+          </Button>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+
 export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormProps) {
   const [displayModelName, setDisplayModelName] = useState("");
   const [actualModelName, setActualModelName] = useState("");
@@ -95,6 +135,8 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
   // Add a ref to track subscription status without triggering re-renders
   const subscriptionActiveRef = useRef(false);
   const { resolvedTheme } = useTheme();
+  // Add state for tracking object URLs
+  const [imageUrls, setImageUrls] = useState<string[]>([]);
 
   // Initialize Supabase client
   const supabase = createBrowserSupabaseClient();
@@ -335,24 +377,77 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
       toast.success("Model created successfully");
       setUploadProgress(30);
       
-      // Step 2: Upload images directly to Supabase storage
-      toast.info("Uploading images...");
+      // Step 2: Upload images with chunked processing
+      toast.info("Processing and uploading images...");
       
       const zipPath = `${modelData.model.owner}/${modelData.model.name}/images.zip`;
       
-      // Create and upload zip
+      // Initialize JSZip with a lower memory footprint
       const zip = new JSZip();
-      for (let i = 0; i < uploadedImages.length; i++) {
-        const file = uploadedImages[i];
-        zip.file(`${i}${file.name.substring(file.name.lastIndexOf('.'))}`, await file.arrayBuffer());
+      
+      // Process images in chunks to avoid memory issues
+      const CHUNK_SIZE = 2; // Process 2 images at a time
+      const totalChunks = Math.ceil(uploadedImages.length / CHUNK_SIZE);
+      
+      for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex++) {
+        const start = chunkIndex * CHUNK_SIZE;
+        const end = Math.min(start + CHUNK_SIZE, uploadedImages.length);
+        const chunk = uploadedImages.slice(start, end);
+        
+        // Update progress for processing
+        const processingProgress = 30 + Math.round((chunkIndex / totalChunks) * 20);
+        setUploadProgress(processingProgress);
+        
+        // Process each image in the chunk
+        for (let i = 0; i < chunk.length; i++) {
+          const file = chunk[i];
+          const index = start + i;
+          
+          try {
+            // Convert file to ArrayBuffer in a memory-efficient way
+            const arrayBuffer = await new Promise<ArrayBuffer>((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onload = () => resolve(reader.result as ArrayBuffer);
+              reader.onerror = reject;
+              reader.readAsArrayBuffer(file);
+            });
+            
+            // Add to zip with compression
+            zip.file(`${index}${file.name.substring(file.name.lastIndexOf('.'))}`, arrayBuffer, {
+              compression: 'DEFLATE',
+              compressionOptions: {
+                level: 6 // Balanced between speed and compression
+              }
+            });
+          } catch (error) {
+            console.error(`Error processing file ${file.name}:`, error);
+            throw new Error(`Failed to process image ${file.name}`);
+          }
+        }
+        
+        // Small delay to prevent UI freezing
+        await new Promise(resolve => setTimeout(resolve, 50));
       }
+      
+      // Generate zip in chunks
+      toast.info("Preparing files for upload...");
+      setUploadProgress(50);
       
       const zipData = await zip.generateAsync({ 
         type: 'arraybuffer',
-        compression: 'DEFLATE' 
+        compression: 'DEFLATE',
+        streamFiles: true, // Enable streaming for better memory usage
+      }, (metadata) => {
+        // Update progress during zip generation
+        const generationProgress = 50 + Math.round(metadata.percent * 0.2);
+        setUploadProgress(generationProgress);
       });
       
-      // Upload directly to Supabase storage
+      // Upload the zip file
+      toast.info("Uploading files...");
+      setUploadProgress(70);
+
+      // Upload with progress tracking
       const { error: uploadError } = await supabase.storage
         .from('training-files')
         .upload(zipPath, zipData, {
@@ -374,7 +469,7 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
       }
 
       toast.success("Images uploaded successfully");
-      setUploadProgress(70);
+      setUploadProgress(85);
       
       // Step 3: Start model training with the zip URL
       toast.info("Starting model training...");
@@ -713,200 +808,204 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
     };
   }, []);
 
-  // Add cleanup for object URLs when component unmounts
+  // Update effect for creating and cleaning up Object URLs
   useEffect(() => {
-    // Cleanup function to revoke object URLs when component unmounts
+    // Create Object URLs for all uploaded images
+    const urls = uploadedImages.map(file => URL.createObjectURL(file));
+    setImageUrls(urls);
+
+    // Cleanup function to revoke Object URLs
     return () => {
-      uploadedImages.forEach(file => {
-        URL.revokeObjectURL(URL.createObjectURL(file));
-      });
+      urls.forEach(url => URL.revokeObjectURL(url));
     };
-  }, []);
+  }, [uploadedImages]);
 
   return (
-    <div className="w-full">
-      {/* Overlay that appears when dragging image files over the page */}
-      {dragActive && (
+    <ErrorBoundary>
+      <div className="w-full">
+        {/* Overlay that appears when dragging image files over the page */}
+        {dragActive && (
+          <div 
+            style={{
+              position: 'fixed',
+              inset: 0,
+              zIndex: 50,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: resolvedTheme === 'dark' ? 'rgba(30, 58, 138, 0.9)' : 'rgba(219, 234, 254, 0.9)', // more opacity
+              backdropFilter: 'blur(4px)' // add blur effect
+            }}
+            onDragOver={handleDragOver}
+            onDragEnter={handleDragEnter}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+            onDragEnd={(e) => {
+              e.preventDefault();
+              setDragActive(false);
+            }}
+          >
+            <div className="text-center max-w-xs bg-background p-6 rounded-lg shadow-lg border-2 border-primary"> {/* more visible container */}
+              <div className="mb-4 mx-auto">
+                <UploadIcon 
+                  size={48} 
+                  className="mx-auto" 
+                  style={{ color: resolvedTheme === 'dark' ? '#93c5fd' : '#2563eb' }}
+                />
+              </div>
+              <h3 
+                className="text-xl font-semibold mb-1"
+                style={{ color: resolvedTheme === 'dark' ? '#bfdbfe' : '#1e40af' }}
+              >
+                Drop Images Here
+              </h3>
+              <p className="text-sm text-muted-foreground mt-2">
+                JPG, PNG, WebP - exactly 10 images required, max 100MB total
+              </p>
+            </div>
+          </div>
+        )}
+        
         <div 
-          style={{
-            position: 'fixed',
-            inset: 0,
-            zIndex: 50,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            backgroundColor: resolvedTheme === 'dark' ? 'rgba(30, 58, 138, 0.9)' : 'rgba(219, 234, 254, 0.9)', // more opacity
-            backdropFilter: 'blur(4px)' // add blur effect
-          }}
+          className="w-full bg-card border border-border rounded-xl overflow-hidden shadow-lg"
           onDragOver={handleDragOver}
-          onDragEnter={handleDragEnter}
           onDragLeave={handleDragLeave}
-          onDrop={handleDrop}
           onDragEnd={(e) => {
             e.preventDefault();
             setDragActive(false);
           }}
+          onDrop={handleDrop}
         >
-          <div className="text-center max-w-xs bg-background p-6 rounded-lg shadow-lg border-2 border-primary"> {/* more visible container */}
-            <div className="mb-4 mx-auto">
-              <UploadIcon 
-                size={48} 
-                className="mx-auto" 
-                style={{ color: resolvedTheme === 'dark' ? '#93c5fd' : '#2563eb' }}
-              />
-            </div>
-            <h3 
-              className="text-xl font-semibold mb-1"
-              style={{ color: resolvedTheme === 'dark' ? '#bfdbfe' : '#1e40af' }}
-            >
-              Drop Images Here
-            </h3>
-            <p className="text-sm text-muted-foreground mt-2">
-              JPG, PNG, WebP - exactly 10 images required, max 100MB total
-            </p>
-          </div>
-        </div>
-      )}
-      
-      <div 
-        className="w-full bg-card border border-border rounded-xl overflow-hidden shadow-lg"
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        onDragEnd={(e) => {
-          e.preventDefault();
-          setDragActive(false);
-        }}
-        onDrop={handleDrop}
-      >
-        <div className="p-5">
-          <form className="space-y-6">
-            <div className="space-y-4">
-              <div>
-                <Label htmlFor="model-name">Model Name</Label>
-                <Input
-                  id="model-name" 
-                  placeholder="Enter a name for your model"
-                  value={displayModelName}
-                  onChange={(e) => setDisplayModelName(e.target.value)}
-                  className={`mt-1 ${nameError ? 'border-red-500' : ''}`}
-                />
-                {nameError ? (
-                  <p className="text-xs text-red-500 mt-1">{nameError}</p>
-                ) : null}
-                {actualModelName && !nameError && (
-                  <p className="text-xs text-green-600 mt-1">
-                    Model will be created as: <span className="font-mono">{actualModelName}</span>
-                  </p>
+          <div className="p-5">
+            <form className="space-y-6">
+              <div className="space-y-4">
+                <div>
+                  <Label htmlFor="model-name">Model Name</Label>
+                  <Input
+                    id="model-name" 
+                    placeholder="Enter a name for your model"
+                    value={displayModelName}
+                    onChange={(e) => setDisplayModelName(e.target.value)}
+                    className={`mt-1 ${nameError ? 'border-red-500' : ''}`}
+                  />
+                  {nameError ? (
+                    <p className="text-xs text-red-500 mt-1">{nameError}</p>
+                  ) : null}
+                  {actualModelName && !nameError && (
+                    <p className="text-xs text-green-600 mt-1">
+                      Model will be created as: <span className="font-mono">{actualModelName}</span>
+                    </p>
+                  )}
+                </div>
+                
+                <div className="space-y-2">
+                  <Label>Upload Images (exactly 10 required)</Label>
+                  <div 
+                    {...getRootProps()} 
+                    className={`bg-muted/50 border ${
+                      isDragActive || dragActive ? 'border-2 border-primary' : 'border-border'
+                    } rounded-lg p-6 text-center cursor-pointer transition-colors hover:border-primary/50`}
+                  >
+                    <input {...getInputProps()} />
+                    <div className="flex flex-col items-center justify-center gap-2">
+                      <UploadIcon 
+                        size={24} 
+                        className="mx-auto" 
+                        style={{ color: resolvedTheme === 'dark' ? '#93c5fd' : '#2563eb' }}
+                      />
+                      <p className="text-muted-foreground">
+                        Drag and drop images here, or click to select files
+                      </p>
+                      <p className="text-xs text-muted-foreground/80 mt-1">
+                        JPG, PNG, WebP - exactly 10 images required, max 100MB total
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                
+                {uploadedImages.length > 0 && (
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center">
+                      <Label>
+                        {uploadedImages.length} of 10 images uploaded {uploadedImages.length < 10 && `(${10 - uploadedImages.length} more needed)`}
+                      </Label>
+                      <span className="text-sm text-muted-foreground">
+                        Total size: {formatSizeInMB(uploadedImages.reduce((total, file) => total + file.size, 0))} / 100MB
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4 mt-2">
+                      {uploadedImages.map((file, index) => (
+                        <Card key={index} className="overflow-hidden relative group">
+                          <CardContent className="p-0">
+                            <div className="relative aspect-square">
+                              <Image
+                                src={imageUrls[index] || ''}
+                                alt={`Uploaded image ${index + 1}`}
+                                fill
+                                className="object-cover"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => removeImage(index)}
+                                className="absolute top-1 right-1 bg-background/80 dark:bg-foreground/20 text-foreground dark:text-background rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                                aria-label="Remove image"
+                              >
+                                <svg
+                                  xmlns="http://www.w3.org/2000/svg" 
+                                  width="16" 
+                                  height="16" 
+                                  viewBox="0 0 24 24" 
+                                  fill="none"
+                                  stroke="currentColor"
+                                  strokeWidth="2" 
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                >
+                                  <path d="M18 6 6 18"></path>
+                                  <path d="m6 6 12 12"></path>
+                                </svg>
+                              </button>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                
+                {isProcessing && uploadProgress > 0 && (
+                  <div className="mt-4">
+                    <div className="flex justify-between mb-1">
+                      <span className="text-sm font-medium">Processing...</span>
+                      <span className="text-sm font-medium">{uploadProgress}%</span>
+                    </div>
+                    <div className="w-full bg-muted rounded-full h-2.5">
+                      <div
+                        className="bg-primary h-2.5 rounded-full" 
+                        style={{ width: `${uploadProgress}%` }}
+                      ></div>
+                    </div>
+                  </div>
                 )}
               </div>
               
-              <div className="space-y-2">
-                <Label>Upload Images (exactly 10 required)</Label>
-                <div 
-                  {...getRootProps()} 
-                  className={`bg-muted/50 border ${
-                    isDragActive || dragActive ? 'border-2 border-primary' : 'border-border'
-                  } rounded-lg p-6 text-center cursor-pointer transition-colors hover:border-primary/50`}
-                >
-                  <input {...getInputProps()} />
-                  <div className="flex flex-col items-center justify-center gap-2">
-                    <UploadIcon 
-                      size={24} 
-                      className="mx-auto" 
-                      style={{ color: resolvedTheme === 'dark' ? '#93c5fd' : '#2563eb' }}
-                    />
-                    <p className="text-muted-foreground">
-                      Drag and drop images here, or click to select files
-                    </p>
-                    <p className="text-xs text-muted-foreground/80 mt-1">
-                      JPG, PNG, WebP - exactly 10 images required, max 100MB total
-                    </p>
-                  </div>
-                </div>
-              </div>
-              
-              {uploadedImages.length > 0 && (
-                <div className="space-y-2">
-                  <div className="flex justify-between items-center">
-                    <Label>
-                      {uploadedImages.length} of 10 images uploaded {uploadedImages.length < 10 && `(${10 - uploadedImages.length} more needed)`}
-                    </Label>
-                    <span className="text-sm text-muted-foreground">
-                      Total size: {formatSizeInMB(uploadedImages.reduce((total, file) => total + file.size, 0))} / 100MB
-                    </span>
-                  </div>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4 mt-2">
-                    {uploadedImages.map((file, index) => (
-                      <Card key={index} className="overflow-hidden relative group">
-                        <CardContent className="p-0">
-                          <div className="relative aspect-square">
-                            <Image
-                              src={URL.createObjectURL(file)}
-                              alt={`Uploaded image ${index + 1}`}
-                              fill
-                              className="object-cover"
-                            />
-                            <button
-                              type="button"
-                              onClick={() => removeImage(index)}
-                              className="absolute top-1 right-1 bg-background/80 dark:bg-foreground/20 text-foreground dark:text-background rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                              aria-label="Remove image"
-                            >
-                              <svg
-                                xmlns="http://www.w3.org/2000/svg" 
-                                width="16" 
-                                height="16" 
-                                viewBox="0 0 24 24" 
-                                fill="none"
-                                stroke="currentColor"
-                                strokeWidth="2" 
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                              >
-                                <path d="M18 6 6 18"></path>
-                                <path d="m6 6 12 12"></path>
-                              </svg>
-                            </button>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </div>
-                </div>
-              )}
-              
-              {isProcessing && uploadProgress > 0 && (
-                <div className="mt-4">
-                  <div className="flex justify-between mb-1">
-                    <span className="text-sm font-medium">Processing...</span>
-                    <span className="text-sm font-medium">{uploadProgress}%</span>
-                  </div>
-                  <div className="w-full bg-muted rounded-full h-2.5">
-                    <div
-                      className="bg-primary h-2.5 rounded-full" 
-                      style={{ width: `${uploadProgress}%` }}
-                    ></div>
-                  </div>
-                </div>
-              )}
-            </div>
-            
-            <Button
-              type="submit"
-              className="w-full"
-              disabled={!displayModelName || nameError !== null || uploadedImages.length === 0 || isProcessing}
-              onClick={handleSubmit}
-            >
-              {isProcessing ? (
-                <span className="flex items-center justify-center">
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Processing...
-                </span>
-              ) : 'Train My Model'}
-            </Button>
-          </form>
+              <Button
+                type="submit"
+                className="w-full"
+                disabled={!displayModelName || nameError !== null || uploadedImages.length === 0 || isProcessing}
+                onClick={handleSubmit}
+              >
+                {isProcessing ? (
+                  <span className="flex items-center justify-center">
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Processing...
+                  </span>
+                ) : 'Train My Model'}
+              </Button>
+            </form>
+          </div>
         </div>
       </div>
-    </div>
+    </ErrorBoundary>
   );
 } 
