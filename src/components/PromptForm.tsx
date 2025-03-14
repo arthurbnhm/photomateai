@@ -145,7 +145,9 @@ export function PromptForm({
     deletingSpeed: 40,
     pauseBeforeDelete: 2000,
     pauseBeforeNewExample: 500,
-    timeoutRef: null as NodeJS.Timeout | null
+    timeoutRef: null as NodeJS.Timeout | null,
+    lastAnimationTime: 0,
+    currentText: "Describe your image..."
   });
   
   // Load saved state from localStorage on initial mount
@@ -489,31 +491,46 @@ export function PromptForm({
   };
 
   // Function to stop the animation
-  const stopAnimation = () => {
+  const stopAnimation = useCallback(() => {
     setIsAnimating(false);
     if (animationState.current.timeoutRef) {
       clearTimeout(animationState.current.timeoutRef);
       animationState.current.timeoutRef = null;
     }
     setPlaceholderText("Describe your image...");
-  };
+  }, []);
   
-  // Typing animation effect
+  // Typing animation effect - optimized version
   useEffect(() => {
     if (!isAnimating) return;
     
-    const animatePlaceholder = () => {
+    let rafId: number | null = null;
+    
+    const animatePlaceholder = (timestamp: number) => {
       if (!isAnimating) return;
       
       const state = animationState.current;
       const currentExample = placeholderExamples[state.currentExampleIndex];
+      const elapsed = timestamp - state.lastAnimationTime;
+      
+      // Check if enough time has passed for the next animation frame
+      const speedToUse = state.isDeleting ? state.deletingSpeed : state.typingSpeed;
+      
+      if (elapsed < speedToUse) {
+        rafId = requestAnimationFrame(animatePlaceholder);
+        return;
+      }
+      
+      // Update the last animation time
+      state.lastAnimationTime = timestamp;
       
       if (state.isDeleting) {
         // Deleting text
         if (state.currentCharIndex > 0) {
-          setPlaceholderText(currentExample.substring(0, state.currentCharIndex - 1));
           state.currentCharIndex -= 1;
-          state.timeoutRef = setTimeout(animatePlaceholder, state.deletingSpeed);
+          state.currentText = currentExample.substring(0, state.currentCharIndex);
+          setPlaceholderText(state.currentText);
+          rafId = requestAnimationFrame(animatePlaceholder);
         } else {
           // Finished deleting
           state.isDeleting = false;
@@ -525,26 +542,38 @@ export function PromptForm({
             return;
           }
           
-          state.timeoutRef = setTimeout(animatePlaceholder, state.pauseBeforeNewExample);
+          state.timeoutRef = setTimeout(() => {
+            state.lastAnimationTime = performance.now();
+            rafId = requestAnimationFrame(animatePlaceholder);
+          }, state.pauseBeforeNewExample);
         }
       } else {
         // Typing text
         if (state.currentCharIndex < currentExample.length) {
-          setPlaceholderText(currentExample.substring(0, state.currentCharIndex + 1));
           state.currentCharIndex += 1;
-          state.timeoutRef = setTimeout(animatePlaceholder, state.typingSpeed);
+          state.currentText = currentExample.substring(0, state.currentCharIndex);
+          setPlaceholderText(state.currentText);
+          rafId = requestAnimationFrame(animatePlaceholder);
         } else {
           // Finished typing
           state.isDeleting = true;
-          state.timeoutRef = setTimeout(animatePlaceholder, state.pauseBeforeDelete);
+          state.timeoutRef = setTimeout(() => {
+            state.lastAnimationTime = performance.now();
+            rafId = requestAnimationFrame(animatePlaceholder);
+          }, state.pauseBeforeDelete);
         }
       }
     };
     
-    animationState.current.timeoutRef = setTimeout(animatePlaceholder, 1000); // Initial delay
+    // Start the animation
+    animationState.current.lastAnimationTime = performance.now();
+    rafId = requestAnimationFrame(animatePlaceholder);
     
     return () => {
-      // Store the ref value in a variable to avoid the React Hook warning
+      if (rafId) {
+        cancelAnimationFrame(rafId);
+      }
+      
       const timeoutRef = animationState.current.timeoutRef;
       if (timeoutRef) {
         clearTimeout(timeoutRef);
