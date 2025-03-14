@@ -38,6 +38,10 @@ const nextConfig = {
     dangerouslyAllowSVG: false,
   },
   serverExternalPackages: ['sharp'],
+  experimental: {
+    optimizeCss: true,
+    optimizeServerReact: true,
+  },
 };
 
 module.exports = nextConfig; 
