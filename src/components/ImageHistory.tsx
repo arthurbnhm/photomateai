@@ -71,7 +71,7 @@ const processOutput = (storageUrls: string[] | null): ImageWithStatus[] => {
   
   return storageUrls.map(url => ({
     url,
-    isExpired: false
+    isExpired: false // Always initialize as not expired
   }));
 };
 
@@ -101,9 +101,6 @@ export function ImageHistory({
   // Create a Supabase client reference - not using realtime subscriptions
   // so no need to call removeAllChannels() on cleanup
   const supabaseClient = useRef(createBrowserSupabaseClient());
-  
-  // Add retry count tracking
-  const imageRetryCount = useRef<Record<string, number>>({});
   
   // Refs for polling mechanism
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -636,37 +633,12 @@ export function ImageHistory({
     }
   };
 
-  // Modified handleImageError with retry mechanism
+  // Simplified handleImageError without retry mechanism
   const handleImageError = (generationId: string, imageIndex: number) => {
-    const retryKey = `${generationId}-${imageIndex}`;
-    const currentRetries = imageRetryCount.current[retryKey] || 0;
+    // Instead of retrying multiple times, just attempt to refresh the URL once
+    console.log(`Attempting to refresh image: ${generationId}-${imageIndex}`);
     
-    // Only retry up to 3 times
-    if (currentRetries < 3) {
-      console.log(`Retrying image load (attempt ${currentRetries + 1}/3):`, retryKey);
-      imageRetryCount.current[retryKey] = currentRetries + 1;
-      
-      // Force a re-render of the image by updating a timestamp
-      setGenerations(prev => 
-        prev.map(gen => 
-          gen.id === generationId
-            ? {
-                ...gen,
-                images: gen.images.map((img, idx) => 
-                  idx === imageIndex
-                    ? { ...img, url: `${img.url}${img.url.includes('?') ? '&' : '?'}retry=${Date.now()}` }
-                    : img
-                )
-              }
-            : gen
-        )
-      );
-      
-      return;
-    }
-    
-    // After 3 retries, mark as expired
-    console.warn(`Image load failed after 3 retries:`, retryKey);
+    // Force a re-render of the image by updating the URL with a cache-busting parameter
     setGenerations(prev => 
       prev.map(gen => 
         gen.id === generationId
@@ -674,7 +646,7 @@ export function ImageHistory({
               ...gen,
               images: gen.images.map((img, idx) => 
                 idx === imageIndex
-                  ? { ...img, isExpired: true }
+                  ? { ...img, url: `${img.url}${img.url.includes('?') ? '&' : '?'}t=${Date.now()}` }
                   : img
               )
             }
@@ -978,7 +950,7 @@ export function ImageHistory({
                                 <div className="absolute inset-0 bg-gradient-to-br from-primary/10 to-primary/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-10"></div>
                                 {image.isExpired ? (
                                   <div className="w-full h-full flex items-center justify-center bg-muted/30">
-                                    <p className="text-sm text-muted-foreground">Image expired</p>
+                                    <p className="text-sm text-muted-foreground">Image unavailable</p>
                                   </div>
                                 ) : (
                                   <Image 
@@ -988,8 +960,8 @@ export function ImageHistory({
                                     fill
                                     sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
                                     onError={() => handleImageError(generation.id, index)}
-                                    priority={index === 0 && generation === getAllGenerations()[0]}
-                                    loading={index === 0 && generation === getAllGenerations()[0] ? "eager" : "lazy"}
+                                    priority={true}
+                                    loading="eager"
                                     unoptimized={true}
                                   />
                                 )}

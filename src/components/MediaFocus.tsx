@@ -112,28 +112,18 @@ export function MediaFocus({
     onNavigate((currentImageIndex - 1 + totalImages) % totalImages)
   }, [currentGeneration, currentImageIndex, onNavigate]);
   
-  // Set up preloading of next image when navigating
+  // Simplified preloading that immediately preloads all images in the current generation
   useEffect(() => {
-    if (isOpen && currentGeneration && currentGeneration.images.length > 1) {
-      const nextIndex = (currentImageIndex + 1) % currentGeneration.images.length;
-      
-      // Preload the next image after a short delay
-      const timer = setTimeout(() => {
-        console.log('🔍 Preloading next image in carousel:', nextIndex + 1);
-      }, 1200);
-      
-      return () => clearTimeout(timer);
+    if (isOpen && currentGeneration) {
+      // Force immediate load of all images in this generation
+      currentGeneration.images.forEach(image => {
+        if (!image.isExpired) {
+          const img = new Image();
+          img.src = image.url;
+        }
+      });
     }
-  }, [isOpen, currentGeneration, currentImageIndex]);
-  
-  // Preload the current image immediately when it changes
-  useEffect(() => {
-    if (isOpen && currentGeneration && currentGeneration.images[currentImageIndex]) {
-      // Force immediate load of the current image
-      const img = new Image();
-      img.src = currentGeneration.images[currentImageIndex].url;
-    }
-  }, [isOpen, currentGeneration, currentImageIndex]);
+  }, [isOpen, currentGeneration]);
   
   // Keyboard navigation
   useEffect(() => {
@@ -360,7 +350,10 @@ export function MediaFocus({
                     width: 'auto', 
                     height: 'auto' 
                   }}
-                  onError={() => toast.error("Failed to load image")}
+                  onError={(e) => {
+                    console.error("Image failed to load:", e);
+                    toast.error("Image could not be loaded");
+                  }}
                   unoptimized={true}
                   priority={true}
                 />
@@ -412,8 +405,8 @@ export function MediaFocus({
                           className="object-cover"
                           fill
                           sizes="15vw"
-                          priority={index === currentImageIndex}
-                          loading={index === currentImageIndex ? "eager" : "lazy"}
+                          priority={true}
+                          loading="eager"
                           unoptimized={true}
                         />
                       </AspectRatio>
