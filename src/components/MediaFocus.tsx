@@ -239,10 +239,12 @@ export function MediaFocus({
           {/* Main content container */}
           <div 
             className="relative flex flex-col items-center justify-between w-full h-full z-10 px-[5vw] py-[3vh]"
-            onClick={(e) => e.stopPropagation()}
           >
             {/* Top bar with counter and controls */}
-            <div className="w-full flex items-center justify-between z-20 px-[3vw]">
+            <div 
+              className="w-full flex items-center justify-between z-20 px-[3vw]"
+              onClick={(e) => e.stopPropagation()}
+            >
               <div className="bg-muted py-[1vh] px-4 rounded-full text-sm font-medium text-foreground">
                 {currentImageIndex + 1} / {currentGeneration.images.length}
               </div>
@@ -269,7 +271,9 @@ export function MediaFocus({
             </div>
             
             {/* Middle section with image and navigation */}
-            <div className="flex-1 w-full flex items-center justify-center relative my-[3vh]">
+            <div 
+              className="flex-1 w-full flex items-center justify-center relative my-[3vh]"
+            >
               {/* Main image */}
               <motion.div
                 key={currentImageIndex}
@@ -281,6 +285,7 @@ export function MediaFocus({
                   maxWidth: '90vw',
                   maxHeight: '50vh',
                 }}
+                onClick={(e) => e.stopPropagation()}
               >
                 <NextImage
                   src={currentGeneration.images[currentImageIndex].url}
@@ -328,7 +333,10 @@ export function MediaFocus({
             </div>
             
             {/* Bottom section with thumbnails - no background */}
-            <div className="w-full z-20 px-[3vw]">
+            <div 
+              className="w-full z-20 px-[3vw]"
+              onClick={(e) => e.stopPropagation()}
+            >
               <div className="mx-auto py-[2vh] rounded-lg overflow-x-auto">
                 <div className="flex items-center gap-[2vw] justify-center">
                   {currentGeneration.images.map((image, index) => (

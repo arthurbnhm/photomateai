@@ -31,8 +31,8 @@
 - ✅ Image focus
 - ✅ Add the badges
 - ✅ Change naming of download and storage (merger)
-- The image should download the actual format selected
-- Image should be same name as the one in supabase
+- ✅ The image should download the actual format selected
+- ✅ Image should be same name as the one in supabase
 
 # App
 
