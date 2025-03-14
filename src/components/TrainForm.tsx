@@ -332,7 +332,7 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
             status: payload.new.status
           });
           
-          // If training is completed or failed, show a message
+          // Only show notifications for terminal states
           if (payload.new.status === 'succeeded') {
             toast.success('Model training completed successfully!');
           } else if (payload.new.status === 'failed') {
@@ -405,7 +405,6 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
       }
 
       // Step 1: Create the model in Replicate
-      toast.info("Creating model...");
       setUploadProgress(10);
       
       // Create a custom fetch function that includes the duplex option
@@ -444,12 +443,9 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
         throw new Error(modelData.error || 'Failed to create model');
       }
 
-      toast.success("Model created successfully");
       setUploadProgress(30);
       
       // Step 2: Upload images with chunked processing
-      toast.info("Processing and uploading images...");
-      
       const zipPath = `${modelData.model.owner}/${modelData.model.name}/images.zip`;
       
       // Initialize JSZip with a lower memory footprint
@@ -475,12 +471,6 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
             const index = start + i;
             
             try {
-              // Update UI with more detailed progress
-              toast.info(`Processing image ${index + 1} of ${uploadedImages.length}`, {
-                id: 'processing-progress',
-                duration: 1000
-              });
-              
               // Convert file to ArrayBuffer in a memory-efficient way
               const arrayBuffer = await new Promise<ArrayBuffer>((resolve, reject) => {
                 const reader = new FileReader();
@@ -510,7 +500,6 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
         }
 
         // Generate zip in chunks
-        toast.info("Preparing files for upload...");
         setUploadProgress(50);
         
         const zipData = await zip.generateAsync({ 
@@ -524,7 +513,6 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
         });
         
         // Upload the zip file
-        toast.info("Uploading files...");
         setUploadProgress(70);
 
         // Upload with progress tracking
@@ -548,12 +536,9 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
           throw new Error('Failed to generate signed URL');
         }
 
-        toast.success("Images uploaded successfully");
         setUploadProgress(85);
         
         // Step 3: Start model training with the zip URL
-        toast.info("Starting model training...");
-        
         const trainResponse = await customFetch('/api/model', {
           method: 'POST',
           headers: {
@@ -592,7 +577,7 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
         setUploadProgress(100);
         
         // Show success message to the user
-        toast.success("Model training started successfully! This may take a while to complete.", {
+        toast.success("Training started! You'll be notified when it's complete.", {
           duration: 5000
         });
 
@@ -628,9 +613,11 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
     
     // Check if the total size of existing and new files would exceed 100MB
     const MAX_TOTAL_SIZE = 100 * 1024 * 1024; // 100MB in bytes
+    const MAX_INDIVIDUAL_FILE_SIZE = 10 * 1024 * 1024; // 10MB per file
     const currentTotalSize = uploadedImages.reduce((total, file) => total + file.size, 0);
     let newFilesTotalSize = 0;
     const validFiles: File[] = [];
+    const oversizedFiles: File[] = [];
     
     // Sort files by size in ascending order to prioritize smaller files
     const sortedFiles = [...acceptedFiles].sort((a, b) => a.size - b.size);
@@ -639,30 +626,37 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
     for (let i = 0; i < sortedFiles.length; i++) {
       const file = sortedFiles[i];
       
-      // Skip very large files completely - they're likely to cause memory issues
-      const MAX_INDIVIDUAL_FILE_SIZE = 10 * 1024 * 1024; // 10MB per file (reduced from 20MB)
+      // Check individual file size first
       if (file.size > MAX_INDIVIDUAL_FILE_SIZE) {
-        toast.error(`File "${file.name}" (${formatSizeInMB(file.size)}) exceeds the 10MB individual file limit`);
+        oversizedFiles.push(file);
         continue;
       }
       
+      // Then check if adding this file would exceed total size limit
       if (currentTotalSize + newFilesTotalSize + file.size <= MAX_TOTAL_SIZE) {
         validFiles.push(file);
         newFilesTotalSize += file.size;
       } else {
-        // We've hit the size limit
+        // We've hit the total size limit
         break;
       }
     }
     
-    // Check if we had to reject any files due to size limits
-    const rejectedCount = acceptedFiles.length - validFiles.length;
-    if (rejectedCount > 0) {
-      const totalAttemptedSize = formatSizeInMB(currentTotalSize + acceptedFiles.reduce((total, file) => total + file.size, 0));
-      toast.error(`${rejectedCount} file(s) were rejected because total size would be ${totalAttemptedSize} (max 100MB)`);
+    // Show appropriate error messages
+    if (oversizedFiles.length > 0) {
+      oversizedFiles.forEach(file => {
+        toast.error(`File "${file.name}" (${formatSizeInMB(file.size)}) exceeds the individual file limit of 10MB`);
+      });
     }
     
-    // If we have no valid files after size check, return early
+    // Check if any files were rejected due to total size limit
+    const totalSizeRejected = sortedFiles.length - validFiles.length - oversizedFiles.length;
+    if (totalSizeRejected > 0) {
+      const wouldBeTotalSize = formatSizeInMB(currentTotalSize + sortedFiles.reduce((total, file) => total + file.size, 0));
+      toast.error(`${totalSizeRejected} file(s) were rejected because total size would be ${wouldBeTotalSize} (max 100MB)`);
+    }
+    
+    // If we have no valid files after size checks, return early
     if (validFiles.length === 0) {
       return;
     }
@@ -694,15 +688,24 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
     },
     maxFiles: 10,
     validator: (file) => {
-      // Check current total size plus this file
+      // Check individual file size first
+      const MAX_INDIVIDUAL_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+      if (file.size > MAX_INDIVIDUAL_FILE_SIZE) {
+        return {
+          code: 'file-too-large',
+          message: `File "${file.name}" (${formatSizeInMB(file.size)}) exceeds the individual file limit of 10MB`
+        };
+      }
+      
+      // Then check total size
       const currentTotalSize = uploadedImages.reduce((total, f) => total + f.size, 0);
       const MAX_TOTAL_SIZE = 100 * 1024 * 1024; // 100MB
       
       if (currentTotalSize + file.size > MAX_TOTAL_SIZE) {
         const wouldBeTotalSize = formatSizeInMB(currentTotalSize + file.size);
         return {
-          code: 'file-too-large',
-          message: `Total size would be ${wouldBeTotalSize} (max 100MB)`
+          code: 'total-size-too-large',
+          message: `Adding this file would make total size ${wouldBeTotalSize} (max 100MB)`
         };
       }
       
@@ -712,9 +715,15 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
       const typeRejected = rejectedFiles.filter(item => 
         item.errors.some(err => err.code === 'file-invalid-type')
       );
-      const sizeRejected = rejectedFiles.filter(item => 
+      
+      const individualSizeRejected = rejectedFiles.filter(item => 
         item.errors.some(err => err.code === 'file-too-large')
       );
+      
+      const totalSizeRejected = rejectedFiles.filter(item => 
+        item.errors.some(err => err.code === 'total-size-too-large')
+      );
+      
       const tooManyFiles = rejectedFiles.some(item => 
         item.errors.some(err => err.code === 'too-many-files')
       );
@@ -723,11 +732,15 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
         toast.error(`${typeRejected.length} file(s) have an invalid file type. Only JPG, PNG, and WebP formats are accepted.`);
       }
       
-      if (sizeRejected.length > 0) {
-        const totalSize = formatSizeInMB(uploadedImages.reduce((total, file) => total + file.size, 0) + 
-          sizeRejected.reduce((total, item) => total + item.file.size, 0));
-        toast.error(`${sizeRejected.length} file(s) would make total size ${totalSize} (max 100MB)`);
-      }
+      individualSizeRejected.forEach(item => {
+        toast.error(`File "${item.file.name}" (${formatSizeInMB(item.file.size)}) exceeds the individual file limit of 10MB`);
+      });
+      
+      totalSizeRejected.forEach(item => {
+        const currentTotalSize = uploadedImages.reduce((total, file) => total + file.size, 0);
+        const wouldBeTotalSize = formatSizeInMB(currentTotalSize + item.file.size);
+        toast.error(`Adding "${item.file.name}" would make total size ${wouldBeTotalSize} (max 100MB)`);
+      });
 
       if (tooManyFiles) {
         const remainingSlots = 10 - uploadedImages.length;
