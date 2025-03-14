@@ -1256,8 +1256,8 @@ export function ImageHistory({
                                     fill
                                     sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
                                     onError={() => handleImageError(generation.id, index)}
-                                    priority={true}
-                                    loading="eager"
+                                    priority={false}
+                                    loading="lazy"
                                     unoptimized={true}
                                   />
                                 )}
