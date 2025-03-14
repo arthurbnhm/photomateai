@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase-server';
 
+// Define maximum total file size (100MB)
+const MAX_TOTAL_SIZE = 100 * 1024 * 1024; // 100MB in bytes
+
 export async function POST(request: NextRequest) {
   try {
     // Initialize Supabase client with user session
@@ -51,6 +54,24 @@ export async function POST(request: NextRequest) {
     if (!files || files.length === 0) {
       return NextResponse.json(
         { error: 'No files provided', success: false },
+        { status: 400 }
+      );
+    }
+
+    // Check if the total file size exceeds the limit
+    let totalSize = 0;
+    for (const file of files) {
+      if (file instanceof File) {
+        totalSize += file.size;
+      }
+    }
+    
+    if (totalSize > MAX_TOTAL_SIZE) {
+      return NextResponse.json(
+        { 
+          error: `Total file size of ${(totalSize / (1024 * 1024)).toFixed(2)}MB exceeds the 100MB limit`,
+          success: false
+        },
         { status: 400 }
       );
     }

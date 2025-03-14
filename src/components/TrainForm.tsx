@@ -78,11 +78,16 @@ interface TrainFormProps {
   trainingStatus: TrainingStatus | null;
 }
 
+// Add helper function to format bytes to MB with 2 decimal places
+const formatSizeInMB = (bytes: number): string => {
+  return `${(bytes / (1024 * 1024)).toFixed(2)}MB`;
+};
+
 export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormProps) {
   const [displayModelName, setDisplayModelName] = useState("");
   const [actualModelName, setActualModelName] = useState("");
   const [uploadedImages, setUploadedImages] = useState<File[]>([]);
-  const [isDraggingImages, setIsDraggingImages] = useState(false);
+  const [dragActive, setDragActive] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [nameError, setNameError] = useState<string | null>(null);
@@ -431,16 +436,53 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
 
   // Handle file drop for the dropzone component
   const onDrop = useCallback((acceptedFiles: File[]) => {
-    // Limit to 10 images total
     const newImages = [...uploadedImages];
-    const remainingSlots = 10 - newImages.length;
     
-    if (remainingSlots > 0) {
-      const filesToAdd = acceptedFiles.slice(0, remainingSlots);
-      setUploadedImages([...newImages, ...filesToAdd]);
-    } else {
-      toast.warning("Maximum 10 images allowed");
+    // Check if the total size of existing and new files would exceed 100MB
+    const MAX_TOTAL_SIZE = 100 * 1024 * 1024; // 100MB in bytes
+    const currentTotalSize = uploadedImages.reduce((total, file) => total + file.size, 0);
+    let newFilesTotalSize = 0;
+    const validFiles: File[] = [];
+    
+    // Process files in order until we hit the size limit
+    for (let i = 0; i < acceptedFiles.length; i++) {
+      const file = acceptedFiles[i];
+      if (currentTotalSize + newFilesTotalSize + file.size <= MAX_TOTAL_SIZE) {
+        validFiles.push(file);
+        newFilesTotalSize += file.size;
+      } else {
+        // We've hit the size limit
+        break;
+      }
     }
+    
+    // Check if we had to reject any files due to size limits
+    const rejectedCount = acceptedFiles.length - validFiles.length;
+    if (rejectedCount > 0) {
+      const totalAttemptedSize = formatSizeInMB(currentTotalSize + acceptedFiles.reduce((total, file) => total + file.size, 0));
+      toast.error(`${rejectedCount} file(s) were rejected because total size would be ${totalAttemptedSize} (max 100MB)`);
+    }
+    
+    // If we have no valid files after size check, return early
+    if (validFiles.length === 0) {
+      return;
+    }
+    
+    // Check if adding these files would exceed or not meet the 10 image requirement
+    if (newImages.length + validFiles.length > 10) {
+      const excessCount = newImages.length + validFiles.length - 10;
+      toast.error(`You can only upload exactly 10 images. Please remove ${excessCount} image(s).`);
+      return;
+    } else if (newImages.length + validFiles.length < 10) {
+      const neededCount = 10 - (newImages.length + validFiles.length);
+      toast.error(`You need to upload exactly 10 images. Please add ${neededCount} more image(s).`);
+      // Still add the valid files so they can continue adding more
+      setUploadedImages([...newImages, ...validFiles]);
+      return;
+    }
+    
+    // If we get here, we have exactly 10 images
+    setUploadedImages([...newImages, ...validFiles]);
   }, [uploadedImages]);
 
   // Setup dropzone
@@ -451,7 +493,52 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
       'image/png': [],
       'image/webp': []
     },
-    maxFiles: 10
+    maxFiles: 10,
+    validator: (file) => {
+      // Check current total size plus this file
+      const currentTotalSize = uploadedImages.reduce((total, f) => total + f.size, 0);
+      const MAX_TOTAL_SIZE = 100 * 1024 * 1024; // 100MB
+      
+      if (currentTotalSize + file.size > MAX_TOTAL_SIZE) {
+        const wouldBeTotalSize = formatSizeInMB(currentTotalSize + file.size);
+        return {
+          code: 'file-too-large',
+          message: `Total size would be ${wouldBeTotalSize} (max 100MB)`
+        };
+      }
+      
+      return null;
+    },
+    onDropRejected: (rejectedFiles) => {
+      const typeRejected = rejectedFiles.filter(item => 
+        item.errors.some(err => err.code === 'file-invalid-type')
+      );
+      const sizeRejected = rejectedFiles.filter(item => 
+        item.errors.some(err => err.code === 'file-too-large')
+      );
+      const tooManyFiles = rejectedFiles.some(item => 
+        item.errors.some(err => err.code === 'too-many-files')
+      );
+      
+      if (typeRejected.length > 0) {
+        toast.error(`${typeRejected.length} file(s) have an invalid file type. Only JPG, PNG, and WebP formats are accepted.`);
+      }
+      
+      if (sizeRejected.length > 0) {
+        const totalSize = formatSizeInMB(uploadedImages.reduce((total, file) => total + file.size, 0) + 
+          sizeRejected.reduce((total, item) => total + item.file.size, 0));
+        toast.error(`${sizeRejected.length} file(s) would make total size ${totalSize} (max 100MB)`);
+      }
+
+      if (tooManyFiles) {
+        const remainingSlots = 10 - uploadedImages.length;
+        if (remainingSlots > 0) {
+          toast.error(`You need exactly ${remainingSlots} more image(s) to reach 10 images.`);
+        } else {
+          toast.error('You already have 10 images. Please remove some before adding more.');
+        }
+      }
+    }
   });
 
   // Remove an image from the uploaded images
@@ -459,6 +546,9 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
     const newImages = [...uploadedImages];
     newImages.splice(index, 1);
     setUploadedImages(newImages);
+    // Show message about how many more images are needed
+    const remainingNeeded = 10 - newImages.length;
+    toast.info(`You need to add ${remainingNeeded} more image(s) to reach 10 images.`);
   };
 
   // Check if the dragged items contain image files
@@ -475,69 +565,108 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
   // Handle page-level drag events
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
+    e.stopPropagation();
     
     // Only show overlay if dragging image files
     if (e.dataTransfer.items && containsImageFiles(e.dataTransfer.items)) {
-      setIsDraggingImages(true);
+      setDragActive(true);
+    }
+  };
+
+  const handleDragEnter = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    if (e.dataTransfer.items && containsImageFiles(e.dataTransfer.items)) {
+      setDragActive(true);
     }
   };
 
   const handleDragLeave = (e: React.DragEvent) => {
     e.preventDefault();
+    e.stopPropagation();
     
     // Only set to false if we're leaving the main container
-    // This prevents the state from toggling when moving between child elements
     if (e.currentTarget === e.target) {
-      setIsDraggingImages(false);
+      setDragActive(false);
     }
-  };
-
-  const handleDragEnd = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDraggingImages(false);
   };
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
-    setIsDraggingImages(false);
+    e.stopPropagation();
+    setDragActive(false);
     
     // If the dragged items are not files, do nothing
     if (!e.dataTransfer.files || e.dataTransfer.files.length === 0) {
       return;
     }
     
-    // Create an array from the FileList
+    // Check if files would exceed total size limit before processing
+    const MAX_TOTAL_SIZE = 100 * 1024 * 1024; // 100MB in bytes
+    const currentTotalSize = uploadedImages.reduce((total, file) => total + file.size, 0);
+    
+    // Create an array from the FileList and filter only image files
     const fileArray = Array.from(e.dataTransfer.files);
+    const imageFiles = fileArray.filter(file => file.type.startsWith('image/'));
     
-    // Filter only image files
-    const imageFiles = fileArray.filter(file => 
-      file.type.startsWith('image/')
-    );
-    
-    if (imageFiles.length > 0) {
-      // Pass the image files to the dropzone's onDrop function
-      onDrop(imageFiles);
+    if (imageFiles.length === 0) {
+      toast.error('Only image files are accepted');
+      return;
     }
+
+    // Check if this would exceed or not meet the 10 image requirement
+    if (uploadedImages.length + imageFiles.length > 10) {
+      toast.error(`You can only upload exactly 10 images. Please select ${10 - uploadedImages.length} image(s).`);
+      return;
+    }
+    
+    // Check total size before processing
+    let newFilesTotalSize = 0;
+    const validFiles: File[] = [];
+    
+    for (const file of imageFiles) {
+      if (currentTotalSize + newFilesTotalSize + file.size <= MAX_TOTAL_SIZE) {
+        validFiles.push(file);
+        newFilesTotalSize += file.size;
+      } else {
+        // We've hit the size limit
+        break;
+      }
+    }
+    
+    const rejectedCount = imageFiles.length - validFiles.length;
+    if (rejectedCount > 0) {
+      const totalAttemptedSize = formatSizeInMB(currentTotalSize + imageFiles.reduce((total, file) => total + file.size, 0));
+      toast.error(`${rejectedCount} file(s) would make total size ${totalAttemptedSize} (max 100MB)`);
+    }
+    
+    if (validFiles.length === 0) {
+      return;
+    }
+
+    // Let onDrop handle the validation and addition of files
+    onDrop(validFiles);
   };
 
-  // Update effect for handling isDraggingImages changes
+  // Update effect for handling dragActive changes
   useEffect(() => {
     // Dispatch event to hide/show ActionButtons when drag overlay state changes
     const event = new CustomEvent('imageDropOverlayStateChange', { 
-      detail: { isOpen: isDraggingImages } 
+      detail: { isOpen: dragActive } 
     });
     window.dispatchEvent(event);
 
     // Log the current theme for debugging
     console.log('Current theme:', resolvedTheme);
-  }, [isDraggingImages, resolvedTheme]);
+  }, [dragActive, resolvedTheme]);
 
   // Add global event listeners for drag and drop
   useEffect(() => {
     const handleGlobalDragOver = (e: DragEvent) => {
       e.preventDefault();
       if (e.dataTransfer?.items && containsImageFiles(e.dataTransfer.items)) {
-        setIsDraggingImages(true);
+        setDragActive(true);
       }
     };
     
@@ -545,25 +674,25 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
       e.preventDefault();
       // Only consider leaving if it's to the document.body or document.documentElement
       if (e.target === document.body || e.target === document.documentElement) {
-        setIsDraggingImages(false);
+        setDragActive(false);
       }
     };
     
     const handleGlobalDragEnd = () => {
-      setIsDraggingImages(false);
+      setDragActive(false);
     };
 
     const handleGlobalDrop = () => {
-      setIsDraggingImages(false);
+      setDragActive(false);
     };
 
     const handleGlobalMouseLeave = () => {
-      setIsDraggingImages(false);
+      setDragActive(false);
     };
 
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        setIsDraggingImages(false);
+        setDragActive(false);
       }
     };
     
@@ -584,10 +713,20 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
     };
   }, []);
 
+  // Add cleanup for object URLs when component unmounts
+  useEffect(() => {
+    // Cleanup function to revoke object URLs when component unmounts
+    return () => {
+      uploadedImages.forEach(file => {
+        URL.revokeObjectURL(URL.createObjectURL(file));
+      });
+    };
+  }, []);
+
   return (
     <div className="w-full">
       {/* Overlay that appears when dragging image files over the page */}
-      {isDraggingImages && (
+      {dragActive && (
         <div 
           style={{
             position: 'fixed',
@@ -596,14 +735,19 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            backgroundColor: resolvedTheme === 'dark' ? '#1e3a8a' : '#dbeafe' // dark:bg-blue-900 and bg-blue-100
+            backgroundColor: resolvedTheme === 'dark' ? 'rgba(30, 58, 138, 0.9)' : 'rgba(219, 234, 254, 0.9)', // more opacity
+            backdropFilter: 'blur(4px)' // add blur effect
           }}
           onDragOver={handleDragOver}
+          onDragEnter={handleDragEnter}
           onDragLeave={handleDragLeave}
-          onDragEnd={handleDragEnd}
           onDrop={handleDrop}
+          onDragEnd={(e) => {
+            e.preventDefault();
+            setDragActive(false);
+          }}
         >
-          <div className="text-center max-w-xs">
+          <div className="text-center max-w-xs bg-background p-6 rounded-lg shadow-lg border-2 border-primary"> {/* more visible container */}
             <div className="mb-4 mx-auto">
               <UploadIcon 
                 size={48} 
@@ -613,10 +757,13 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
             </div>
             <h3 
               className="text-xl font-semibold mb-1"
-              style={{ color: resolvedTheme === 'dark' ? '#bfdbfe' : '#1e40af' }} // dark:text-blue-200 and text-blue-800
+              style={{ color: resolvedTheme === 'dark' ? '#bfdbfe' : '#1e40af' }}
             >
               Drop Images Here
             </h3>
+            <p className="text-sm text-muted-foreground mt-2">
+              JPG, PNG, WebP - exactly 10 images required, max 100MB total
+            </p>
           </div>
         </div>
       )}
@@ -625,7 +772,10 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
         className="w-full bg-card border border-border rounded-xl overflow-hidden shadow-lg"
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
-        onDragEnd={handleDragEnd}
+        onDragEnd={(e) => {
+          e.preventDefault();
+          setDragActive(false);
+        }}
         onDrop={handleDrop}
       >
         <div className="p-5">
@@ -651,12 +801,12 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
               </div>
               
               <div className="space-y-2">
-                <Label>Upload Images (10 max)</Label>
+                <Label>Upload Images (exactly 10 required)</Label>
                 <div 
                   {...getRootProps()} 
-                  className={`bg-muted/50 border border-border rounded-lg p-6 text-center cursor-pointer transition-colors ${
-                    isDragActive || isDraggingImages ? 'bg-primary/5 border-primary' : 'hover:border-primary/50'
-                  }`}
+                  className={`bg-muted/50 border ${
+                    isDragActive || dragActive ? 'border-2 border-primary' : 'border-border'
+                  } rounded-lg p-6 text-center cursor-pointer transition-colors hover:border-primary/50`}
                 >
                   <input {...getInputProps()} />
                   <div className="flex flex-col items-center justify-center gap-2">
@@ -669,7 +819,7 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
                       Drag and drop images here, or click to select files
                     </p>
                     <p className="text-xs text-muted-foreground/80 mt-1">
-                      JPG, PNG, WebP up to 10 images
+                      JPG, PNG, WebP - exactly 10 images required, max 100MB total
                     </p>
                   </div>
                 </div>
@@ -677,7 +827,14 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
               
               {uploadedImages.length > 0 && (
                 <div className="space-y-2">
-                  <Label>{uploadedImages.length} of 10 images uploaded</Label>
+                  <div className="flex justify-between items-center">
+                    <Label>
+                      {uploadedImages.length} of 10 images uploaded {uploadedImages.length < 10 && `(${10 - uploadedImages.length} more needed)`}
+                    </Label>
+                    <span className="text-sm text-muted-foreground">
+                      Total size: {formatSizeInMB(uploadedImages.reduce((total, file) => total + file.size, 0))} / 100MB
+                    </span>
+                  </div>
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4 mt-2">
                     {uploadedImages.map((file, index) => (
                       <Card key={index} className="overflow-hidden relative group">
