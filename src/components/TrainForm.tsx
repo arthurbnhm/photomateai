@@ -123,20 +123,90 @@ class ErrorBoundary extends Component<
   }
 }
 
+// Add a helper function to resize images before preview
+const createThumbnail = async (file: File, maxWidth = 250, maxHeight = 250): Promise<string> => {
+  return new Promise<string>((resolve, reject) => {
+    // Create a FileReader to read the image
+    const reader = new FileReader();
+    reader.onload = (event: ProgressEvent<FileReader>) => {
+      if (!event.target || !event.target.result) {
+        reject(new Error('Failed to read image data'));
+        return;
+      }
+      
+      // Create an image element to load the file data
+      const img = document.createElement('img');
+      img.onload = () => {
+        // Create a canvas to resize the image
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+        
+        // Calculate the new dimensions while maintaining aspect ratio
+        if (width > height) {
+          if (width > maxWidth) {
+            height = Math.round(height * (maxWidth / width));
+            width = maxWidth;
+          }
+        } else {
+          if (height > maxHeight) {
+            width = Math.round(width * (maxHeight / height));
+            height = maxHeight;
+          }
+        }
+        
+        // Set canvas dimensions and draw the resized image
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          reject(new Error('Failed to get canvas context'));
+          return;
+        }
+        
+        // Draw the image with smoothing for better quality
+        ctx.imageSmoothingQuality = 'high';
+        ctx.drawImage(img, 0, 0, width, height);
+        
+        // Convert the canvas to a data URL and resolve
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.7); // Use JPEG with 70% quality
+        resolve(dataUrl);
+        
+        // Clean up to free memory
+        canvas.width = 0;
+        canvas.height = 0;
+      };
+      
+      img.onerror = () => {
+        reject(new Error('Failed to load image'));
+      };
+      
+      // Set the image source to the file data
+      img.src = event.target.result as string;
+    };
+    
+    reader.onerror = () => {
+      reject(new Error('Failed to read file'));
+    };
+    
+    // Read the file as a data URL
+    reader.readAsDataURL(file);
+  });
+};
+
 export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormProps) {
   const [displayModelName, setDisplayModelName] = useState("");
   const [actualModelName, setActualModelName] = useState("");
   const [uploadedImages, setUploadedImages] = useState<File[]>([]);
   const [dragActive, setDragActive] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isGeneratingPreviews, setIsGeneratingPreviews] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [nameError, setNameError] = useState<string | null>(null);
   const [realtimeSubscribed, setRealtimeSubscribed] = useState(false);
-  // Add a ref to track subscription status without triggering re-renders
   const subscriptionActiveRef = useRef(false);
   const { resolvedTheme } = useTheme();
-  // Add state for tracking object URLs
-  const [imageUrls, setImageUrls] = useState<string[]>([]);
+  const [thumbnails, setThumbnails] = useState<string[]>([]);
 
   // Initialize Supabase client
   const supabase = createBrowserSupabaseClient();
@@ -386,151 +456,173 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
       const zip = new JSZip();
       
       // Process images in chunks to avoid memory issues
-      const CHUNK_SIZE = 2; // Process 2 images at a time
+      const CHUNK_SIZE = 1; // Process 1 image at a time for maximum stability
       const totalChunks = Math.ceil(uploadedImages.length / CHUNK_SIZE);
       
-      for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex++) {
-        const start = chunkIndex * CHUNK_SIZE;
-        const end = Math.min(start + CHUNK_SIZE, uploadedImages.length);
-        const chunk = uploadedImages.slice(start, end);
-        
-        // Update progress for processing
-        const processingProgress = 30 + Math.round((chunkIndex / totalChunks) * 20);
-        setUploadProgress(processingProgress);
-        
-        // Process each image in the chunk
-        for (let i = 0; i < chunk.length; i++) {
-          const file = chunk[i];
-          const index = start + i;
+      try {
+        for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex++) {
+          const start = chunkIndex * CHUNK_SIZE;
+          const end = Math.min(start + CHUNK_SIZE, uploadedImages.length);
+          const chunk = uploadedImages.slice(start, end);
           
-          try {
-            // Convert file to ArrayBuffer in a memory-efficient way
-            const arrayBuffer = await new Promise<ArrayBuffer>((resolve, reject) => {
-              const reader = new FileReader();
-              reader.onload = () => resolve(reader.result as ArrayBuffer);
-              reader.onerror = reject;
-              reader.readAsArrayBuffer(file);
-            });
+          // Update progress for processing
+          const processingProgress = 30 + Math.round((chunkIndex / totalChunks) * 20);
+          setUploadProgress(processingProgress);
+          
+          // Process each image in the chunk
+          for (let i = 0; i < chunk.length; i++) {
+            const file = chunk[i];
+            const index = start + i;
             
-            // Add to zip with compression
-            zip.file(`${index}${file.name.substring(file.name.lastIndexOf('.'))}`, arrayBuffer, {
-              compression: 'DEFLATE',
-              compressionOptions: {
-                level: 6 // Balanced between speed and compression
-              }
-            });
-          } catch (error) {
-            console.error(`Error processing file ${file.name}:`, error);
-            throw new Error(`Failed to process image ${file.name}`);
+            try {
+              // Update UI with more detailed progress
+              toast.info(`Processing image ${index + 1} of ${uploadedImages.length}`, {
+                id: 'processing-progress',
+                duration: 1000
+              });
+              
+              // Convert file to ArrayBuffer in a memory-efficient way
+              const arrayBuffer = await new Promise<ArrayBuffer>((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result as ArrayBuffer);
+                reader.onerror = reject;
+                reader.readAsArrayBuffer(file);
+              });
+              
+              // Add to zip with compression
+              zip.file(`${index}${file.name.substring(file.name.lastIndexOf('.'))}`, arrayBuffer, {
+                compression: 'DEFLATE',
+                compressionOptions: {
+                  level: 5 // Use a slightly lower compression level for better performance
+                }
+              });
+              
+              // Clean up to prevent memory leaks
+              arrayBuffer.slice(0, 0); // Trick to help with garbage collection
+            } catch (error) {
+              console.error(`Error processing file ${file.name}:`, error);
+              throw new Error(`Failed to process image ${file.name}`);
+            }
           }
+          
+          // Small delay to prevent UI freezing and give GC a chance to run
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+
+        // Generate zip in chunks
+        toast.info("Preparing files for upload...");
+        setUploadProgress(50);
+        
+        const zipData = await zip.generateAsync({ 
+          type: 'arraybuffer',
+          compression: 'DEFLATE',
+          streamFiles: true, // Enable streaming for better memory usage
+        }, (metadata) => {
+          // Update progress during zip generation
+          const generationProgress = 50 + Math.round(metadata.percent * 0.2);
+          setUploadProgress(generationProgress);
+        });
+        
+        // Upload the zip file
+        toast.info("Uploading files...");
+        setUploadProgress(70);
+
+        // Upload with progress tracking
+        const { error: uploadError } = await supabase.storage
+          .from('training-files')
+          .upload(zipPath, zipData, {
+            contentType: 'application/zip',
+            upsert: true
+          });
+
+        if (uploadError) {
+          throw new Error(uploadError.message || 'Failed to upload images');
+        }
+
+        // Get the URL for the uploaded file
+        const { data: urlData } = await supabase.storage
+          .from('training-files')
+          .createSignedUrl(zipPath, 60 * 60);
+
+        if (!urlData?.signedUrl) {
+          throw new Error('Failed to generate signed URL');
+        }
+
+        toast.success("Images uploaded successfully");
+        setUploadProgress(85);
+        
+        // Step 3: Start model training with the zip URL
+        toast.info("Starting model training...");
+        
+        const trainResponse = await customFetch('/api/model', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`
+          },
+          body: JSON.stringify({
+            action: 'train',
+            modelOwner: modelData.model.owner,
+            modelName: modelData.model.name,
+            zipUrl: urlData.signedUrl,
+            userId: session.user.id
+          }),
+        });
+        
+        const trainingData = await trainResponse.json();
+        
+        if (!trainingData.success) {
+          throw new Error(trainingData.error || 'Failed to start model training');
         }
         
-        // Small delay to prevent UI freezing
-        await new Promise(resolve => setTimeout(resolve, 50));
-      }
-      
-      // Generate zip in chunks
-      toast.info("Preparing files for upload...");
-      setUploadProgress(50);
-      
-      const zipData = await zip.generateAsync({ 
-        type: 'arraybuffer',
-        compression: 'DEFLATE',
-        streamFiles: true, // Enable streaming for better memory usage
-      }, (metadata) => {
-        // Update progress during zip generation
-        const generationProgress = 50 + Math.round(metadata.percent * 0.2);
-        setUploadProgress(generationProgress);
-      });
-      
-      // Upload the zip file
-      toast.info("Uploading files...");
-      setUploadProgress(70);
-
-      // Upload with progress tracking
-      const { error: uploadError } = await supabase.storage
-        .from('training-files')
-        .upload(zipPath, zipData, {
-          contentType: 'application/zip',
-          upsert: true
+        // Set the training status
+        const newTrainingStatus = {
+          id: trainingData.training.id,
+          status: trainingData.training.status,
+          url: trainingData.training.url,
+          modelId: modelData.model.id,
+          modelName: modelData.model.name,
+          modelOwner: modelData.model.owner,
+          displayName: displayModelName
+        };
+        
+        onTrainingStatusChange(newTrainingStatus);
+        
+        // Complete progress
+        setUploadProgress(100);
+        
+        // Show success message to the user
+        toast.success("Model training started successfully! This may take a while to complete.", {
+          duration: 5000
         });
 
-      if (uploadError) {
-        throw new Error(uploadError.message || 'Failed to upload images');
+        // Reset the form fields but keep the training status for the ModelListTable
+        setDisplayModelName("");
+        setUploadedImages([]);
+        
+      } catch (error) {
+        console.error("Error processing model:", error);
+        toast.error(`Error: ${error instanceof Error ? error.message : 'Something went wrong'}`);
+        setUploadProgress(0);
+        setIsProcessing(false);
+        return;
       }
-
-      // Get the URL for the uploaded file
-      const { data: urlData } = await supabase.storage
-        .from('training-files')
-        .createSignedUrl(zipPath, 60 * 60);
-
-      if (!urlData?.signedUrl) {
-        throw new Error('Failed to generate signed URL');
-      }
-
-      toast.success("Images uploaded successfully");
-      setUploadProgress(85);
-      
-      // Step 3: Start model training with the zip URL
-      toast.info("Starting model training...");
-      
-      const trainResponse = await customFetch('/api/model', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`
-        },
-        body: JSON.stringify({
-          action: 'train',
-          modelOwner: modelData.model.owner,
-          modelName: modelData.model.name,
-          zipUrl: urlData.signedUrl,
-          userId: session.user.id
-        }),
-      });
-      
-      const trainingData = await trainResponse.json();
-      
-      if (!trainingData.success) {
-        throw new Error(trainingData.error || 'Failed to start model training');
-      }
-      
-      // Set the training status
-      const newTrainingStatus = {
-        id: trainingData.training.id,
-        status: trainingData.training.status,
-        url: trainingData.training.url,
-        modelId: modelData.model.id,
-        modelName: modelData.model.name,
-        modelOwner: modelData.model.owner,
-        displayName: displayModelName
-      };
-      
-      onTrainingStatusChange(newTrainingStatus);
-      
-      // Complete progress
-      setUploadProgress(100);
-      
-      // Show success message to the user
-      toast.success("Model training started successfully! This may take a while to complete.", {
-        duration: 5000
-      });
-
-      // Reset the form fields but keep the training status for the ModelListTable
-      setDisplayModelName("");
-      setUploadedImages([]);
-      
     } catch (error) {
       console.error("Error processing model:", error);
       toast.error(`Error: ${error instanceof Error ? error.message : 'Something went wrong'}`);
       setUploadProgress(0);
-    } finally {
       setIsProcessing(false);
     }
   };
 
   // Handle file drop for the dropzone component
   const onDrop = useCallback((acceptedFiles: File[]) => {
+    // If already processing, don't accept more files
+    if (isGeneratingPreviews || isProcessing) {
+      toast.error("Please wait for current processing to complete");
+      return;
+    }
+
     const newImages = [...uploadedImages];
     
     // Check if the total size of existing and new files would exceed 100MB
@@ -539,9 +631,20 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
     let newFilesTotalSize = 0;
     const validFiles: File[] = [];
     
+    // Sort files by size in ascending order to prioritize smaller files
+    const sortedFiles = [...acceptedFiles].sort((a, b) => a.size - b.size);
+    
     // Process files in order until we hit the size limit
-    for (let i = 0; i < acceptedFiles.length; i++) {
-      const file = acceptedFiles[i];
+    for (let i = 0; i < sortedFiles.length; i++) {
+      const file = sortedFiles[i];
+      
+      // Skip very large files completely - they're likely to cause memory issues
+      const MAX_INDIVIDUAL_FILE_SIZE = 10 * 1024 * 1024; // 10MB per file (reduced from 20MB)
+      if (file.size > MAX_INDIVIDUAL_FILE_SIZE) {
+        toast.error(`File "${file.name}" (${formatSizeInMB(file.size)}) exceeds the 10MB individual file limit`);
+        continue;
+      }
+      
       if (currentTotalSize + newFilesTotalSize + file.size <= MAX_TOTAL_SIZE) {
         validFiles.push(file);
         newFilesTotalSize += file.size;
@@ -578,7 +681,7 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
     
     // If we get here, we have exactly 10 images
     setUploadedImages([...newImages, ...validFiles]);
-  }, [uploadedImages]);
+  }, [uploadedImages, isGeneratingPreviews, isProcessing]);
 
   // Setup dropzone
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
@@ -808,16 +911,55 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
     };
   }, []);
 
-  // Update effect for creating and cleaning up Object URLs
+  // Replace the effect for Object URLs with thumbnail generation
   useEffect(() => {
-    // Create Object URLs for all uploaded images
-    const urls = uploadedImages.map(file => URL.createObjectURL(file));
-    setImageUrls(urls);
-
-    // Cleanup function to revoke Object URLs
-    return () => {
-      urls.forEach(url => URL.revokeObjectURL(url));
+    const generateThumbnails = async () => {
+      if (uploadedImages.length === 0) {
+        setThumbnails([]);
+        return;
+      }
+      
+      // Set loading state
+      setIsGeneratingPreviews(true);
+      
+      try {
+        // Process images in small batches to avoid memory pressure
+        // Note: These thumbnails are only for UI preview - the original full-resolution images
+        // will be used for actual model training
+        const newThumbnails: string[] = [];
+        const batchSize = 2;
+        const numBatches = Math.ceil(uploadedImages.length / batchSize);
+        
+        for (let batchIndex = 0; batchIndex < numBatches; batchIndex++) {
+          const start = batchIndex * batchSize;
+          const end = Math.min(start + batchSize, uploadedImages.length);
+          const batch = uploadedImages.slice(start, end);
+          
+          // Process each image in the batch
+          const batchThumbnails = await Promise.all(
+            batch.map(file => createThumbnail(file))
+          );
+          
+          newThumbnails.push(...batchThumbnails);
+          
+          // Small delay to prevent UI freezing
+          if (batchIndex < numBatches - 1) {
+            await new Promise(resolve => setTimeout(resolve, 10));
+          }
+        }
+        
+        setThumbnails(newThumbnails);
+      } catch (error) {
+        console.error("Error generating thumbnails:", error);
+        toast.error("Failed to generate image previews");
+      } finally {
+        setIsGeneratingPreviews(false);
+      }
     };
+    
+    generateThumbnails();
+    
+    // No need for cleanup as we're using data URLs, not object URLs
   }, [uploadedImages]);
 
   return (
@@ -933,43 +1075,64 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
                         Total size: {formatSizeInMB(uploadedImages.reduce((total, file) => total + file.size, 0))} / 100MB
                       </span>
                     </div>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4 mt-2">
-                      {uploadedImages.map((file, index) => (
-                        <Card key={index} className="overflow-hidden relative group">
-                          <CardContent className="p-0">
-                            <div className="relative aspect-square">
-                              <Image
-                                src={imageUrls[index] || ''}
-                                alt={`Uploaded image ${index + 1}`}
-                                fill
-                                className="object-cover"
-                              />
-                              <button
-                                type="button"
-                                onClick={() => removeImage(index)}
-                                className="absolute top-1 right-1 bg-background/80 dark:bg-foreground/20 text-foreground dark:text-background rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                                aria-label="Remove image"
-                              >
-                                <svg
-                                  xmlns="http://www.w3.org/2000/svg" 
-                                  width="16" 
-                                  height="16" 
-                                  viewBox="0 0 24 24" 
-                                  fill="none"
-                                  stroke="currentColor"
-                                  strokeWidth="2" 
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
+                    
+                    {isGeneratingPreviews ? (
+                      <div className="flex items-center justify-center p-6">
+                        <Loader2 className="h-8 w-8 animate-spin text-primary mr-2" />
+                        <span>Generating previews...</span>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4 mt-2">
+                        {uploadedImages.map((file, index) => (
+                          <Card key={index} className="overflow-hidden relative group">
+                            <CardContent className="p-0">
+                              <div className="relative aspect-square">
+                                {thumbnails[index] ? (
+                                  <Image
+                                    src={thumbnails[index]}
+                                    alt={`Uploaded image ${index + 1}`}
+                                    fill
+                                    className="object-cover"
+                                    loading="lazy"
+                                    onLoad={() => {
+                                      // Hint to the browser to clean up memory
+                                      if (window.requestIdleCallback) {
+                                        window.requestIdleCallback(() => null);
+                                      }
+                                    }}
+                                  />
+                                ) : (
+                                  <div className="flex items-center justify-center h-full bg-muted/30">
+                                    <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                                  </div>
+                                )}
+                                <button
+                                  type="button"
+                                  onClick={() => removeImage(index)}
+                                  className="absolute top-1 right-1 bg-background/80 dark:bg-foreground/20 text-foreground dark:text-background rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                                  aria-label="Remove image"
                                 >
-                                  <path d="M18 6 6 18"></path>
-                                  <path d="m6 6 12 12"></path>
-                                </svg>
-                              </button>
-                            </div>
-                          </CardContent>
-                        </Card>
-                      ))}
-                    </div>
+                                  <svg
+                                    xmlns="http://www.w3.org/2000/svg" 
+                                    width="16" 
+                                    height="16" 
+                                    viewBox="0 0 24 24" 
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth="2" 
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                  >
+                                    <path d="M18 6 6 18"></path>
+                                    <path d="m6 6 12 12"></path>
+                                  </svg>
+                                </button>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
                 
