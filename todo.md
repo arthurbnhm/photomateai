@@ -68,14 +68,17 @@
 
 - Include costs
 - Add media sharing
-- Remove pooling, only keep realtime subscription or opposite
-- Rework all the caching system, centralize it?
+- ✅ Remove pooling, only keep realtime subscription or opposite
+- ✅ Rework all the caching system, centralize it?
 - ✅ Stripe portal
 
-# Improvements ideas
+# Improvements
 
 - Stalled and Generations as a same design 
 - Beautiful landing page
+- Review all the columns
+- Merge Trainings and Models
+- Better handle the webhooks status
 
 # Bugs
 
@@ -86,6 +89,6 @@
 # Caching
 
 - ✅ Images
-- Coins
+- ✅ Coins
 - Models
 - Form values
