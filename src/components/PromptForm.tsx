@@ -352,9 +352,6 @@ export function PromptForm({
         console.error('Error fetching current credits for UI update:', err);
       }
       
-      // Small delay to show initial loading state
-      await new Promise(resolve => setTimeout(resolve, 300));
-      
       try {
         // Find the selected model to get the name
         let modelName: string | null = null;

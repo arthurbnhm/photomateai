@@ -80,7 +80,7 @@
 - Merge Trainings and Models
 - Better handle the webhooks status
 - Many fetches happen at once
-- Add vercel analytics
+- ✅ Add vercel analytics
 
 # Bugs
 
