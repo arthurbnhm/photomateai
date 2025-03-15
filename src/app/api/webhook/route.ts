@@ -310,7 +310,7 @@ export async function POST(request: Request) {
             .update({
               status: 'failed',
               error: 'Failed to store any images',
-              updated_at: new Date().toISOString()
+              completed_at: new Date().toISOString()
             })
             .eq('id', prediction.id);
 
@@ -327,7 +327,7 @@ export async function POST(request: Request) {
           .update({
             status: webhookData.status,
             storage_urls: validStorageUrls,
-            updated_at: new Date().toISOString()
+            completed_at: new Date().toISOString()
           })
           .eq('id', prediction.id);
 
@@ -346,7 +346,7 @@ export async function POST(request: Request) {
         .update({
           status: webhookData.status,
           error: webhookData.error,
-          updated_at: new Date().toISOString()
+          completed_at: new Date().toISOString()
         })
         .eq('id', prediction.id);
 

@@ -312,8 +312,7 @@ export async function POST(request: NextRequest) {
             .update({
               status: 'failed',
               error: errorMessage,
-              completed_at: new Date().toISOString(),
-              updated_at: new Date().toISOString()
+              completed_at: new Date().toISOString()
             })
             .eq('id', dbRecordId);
         } catch (updateError) {
