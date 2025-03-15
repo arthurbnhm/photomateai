@@ -26,9 +26,6 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 
-// Local storage keys
-const PENDING_GENERATIONS_KEY = 'photomate_pending_generations';
-
 // Define the model interface
 interface Model {
   id: string;
@@ -104,7 +101,7 @@ const formSchema = z.object({
 })
 
 export function PromptForm({
-  pendingGenerations,
+  pendingGenerations, // Required prop for parent component integration, used in addPendingGeneration and removePendingGeneration
   setPendingGenerations
 }: {
   pendingGenerations: PendingGeneration[];
@@ -123,7 +120,6 @@ export function PromptForm({
   const [placeholderText, setPlaceholderText] = useState("Describe your image...");
   const [isAnimating, setIsAnimating] = useState(true);
   const [creditDeducting, setCreditDeducting] = useState(false);
-  const isInitializedRef = useRef(false);
 
   const placeholderExamples = useMemo(() => [
     "A serene landscape with mountains at sunset",
@@ -149,31 +145,6 @@ export function PromptForm({
     lastAnimationTime: 0,
     currentText: "Describe your image..."
   });
-  
-  // Load saved state from localStorage on initial mount
-  useEffect(() => {
-    if (typeof window !== 'undefined' && !isInitializedRef.current) {
-      try {
-        const savedPendingGenerations = localStorage.getItem(PENDING_GENERATIONS_KEY);
-        if (savedPendingGenerations) {
-          const parsed = JSON.parse(savedPendingGenerations);
-          if (Array.isArray(parsed)) {
-            setPendingGenerations(parsed);
-          }
-        }
-      } catch (error) {
-        console.error('Error loading state from localStorage:', error);
-      }
-      isInitializedRef.current = true;
-    }
-  }, [setPendingGenerations]);
-
-  // Save pending generations to localStorage whenever they change
-  useEffect(() => {
-    if (isInitializedRef.current && typeof window !== 'undefined') {
-      localStorage.setItem(PENDING_GENERATIONS_KEY, JSON.stringify(pendingGenerations));
-    }
-  }, [pendingGenerations]);
   
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -292,8 +263,8 @@ export function PromptForm({
         return;
       }
       
-      // Generate a unique ID for this generation
-      const generationId = Date.now().toString();
+      // Generate a temporary ID for UI purposes - will be replaced with Replicate ID
+      const tempId = Date.now().toString();
       
       // Store the current modelId and form values before we do anything else
       const currentModelId = form.getValues().modelId;
@@ -311,7 +282,7 @@ export function PromptForm({
       
       // Add to pending generations with start time
       addPendingGeneration({
-        id: generationId,
+        id: tempId,
         prompt: currentPrompt,
         aspectRatio: currentAspectRatio,
         startTime: new Date().toISOString(),
@@ -368,7 +339,7 @@ export function PromptForm({
             if (modelDisplayName) {
               setPendingGenerations(prev => 
                 prev.map(gen => 
-                  gen.id === generationId 
+                  gen.id === tempId 
                     ? { ...gen, modelName: modelDisplayName } 
                     : gen
                 )
@@ -387,7 +358,7 @@ export function PromptForm({
         
         if (!modelName) {
           setError("Please select a valid model");
-          removePendingGeneration(generationId);
+          removePendingGeneration(tempId);
           return;
         }
         
@@ -423,7 +394,7 @@ export function PromptForm({
             prompt: currentPrompt,
             aspectRatio: currentAspectRatio,
             outputFormat: currentOutputFormat,
-            generationId: generationId,
+            generationId: tempId,
             modelVersion: modelVersion,
             modelName: modelName,
             userId: userId
@@ -441,24 +412,34 @@ export function PromptForm({
           setErrorDetails(errorData.details || null);
           
           // Remove from pending generations
-          removePendingGeneration(generationId);
+          removePendingGeneration(tempId);
           return;
         }
         
         const result = await response.json();
         
-        // Update the pending generation with the replicate_id
+        // Update the pending generation with the replicate_id and database ID
         if (result && result.replicate_id) {
-          setPendingGenerations(prev => 
-            prev.map(gen => 
-              gen.id === generationId 
-                ? { ...gen, replicate_id: result.replicate_id } 
-                : gen
-            )
-          );
-          
-          // We already updated the UI credit counter above,
-          // the actual database update happens via the API call
+          // If we have a database ID from the result, use it to replace our temporary ID
+          if (result.id) {
+            // First update the existing entry with replicate_id
+            setPendingGenerations(prev => 
+              prev.map(gen => 
+                gen.id === tempId 
+                  ? { ...gen, replicate_id: result.replicate_id, id: result.id } 
+                  : gen
+              )
+            );
+          } else {
+            // Just update the replicate_id if no database ID is available
+            setPendingGenerations(prev => 
+              prev.map(gen => 
+                gen.id === tempId 
+                  ? { ...gen, replicate_id: result.replicate_id } 
+                  : gen
+              )
+            );
+          }
         }
         
         // If the generation has already completed and returned results
@@ -480,7 +461,7 @@ export function PromptForm({
         }
         
         // Remove from pending generations
-        removePendingGeneration(generationId);
+        removePendingGeneration(tempId);
       }
     } catch (err) {
       console.error('Error in onSubmit:', err);
@@ -587,6 +568,9 @@ export function PromptForm({
           console.error('Error getting user:', userError);
         } else if (user) {
           setUserId(user.id);
+          
+          // Once we have the user ID, fetch their pending generations
+          fetchPendingGenerations(user.id);
         }
       } catch (error) {
         console.error('Error getting user session:', error);
@@ -595,6 +579,115 @@ export function PromptForm({
 
     getUserId();
   }, [supabaseRef]);
+  
+  // Fetch pending generations from the database
+  const fetchPendingGenerations = async (userId: string) => {
+    try {
+      const supabase = getSupabase();
+      
+      // Fetch predictions with status "starting" or "processing"
+      const { data, error } = await supabase
+        .from('predictions')
+        .select('*')
+        .eq('user_id', userId)
+        .in('status', ['starting', 'processing'])
+        .order('created_at', { ascending: false });
+        
+      if (error) {
+        console.error('Error fetching pending generations:', error);
+        return;
+      }
+      
+      if (data && data.length > 0) {
+        // Convert database records to PendingGeneration format
+        const pendingGens = data.map(record => ({
+          id: record.id,
+          replicate_id: record.replicate_id,
+          prompt: record.prompt,
+          aspectRatio: record.aspect_ratio,
+          startTime: record.created_at,
+          format: record.input?.output_format || 'webp'
+        }));
+        
+        // Update the UI with pending generations from the database
+        setPendingGenerations(pendingGens);
+        console.log(`Loaded ${pendingGens.length} pending generations from database`);
+      }
+    } catch (err) {
+      console.error('Error in fetchPendingGenerations:', err);
+    }
+  };
+
+  // Track pending generations count for debugging
+  useEffect(() => {
+    if (pendingGenerations.length > 0) {
+      console.debug(`Current pending generations: ${pendingGenerations.length}`);
+    }
+  }, [pendingGenerations]);
+  
+  // Set up a periodic check for stalled generations
+  useEffect(() => {
+    // Only run if we have a user ID
+    if (!userId) return;
+    
+    // Check for stalled generations every 30 seconds
+    const intervalId = setInterval(() => {
+      checkStalledGenerations();
+    }, 30000);
+    
+    // Run an initial check
+    checkStalledGenerations();
+    
+    return () => {
+      clearInterval(intervalId);
+    };
+  }, [userId]);
+  
+  // Check for generations that have been stuck in "starting" status for too long
+  const checkStalledGenerations = async () => {
+    if (!userId) return;
+    
+    try {
+      const supabase = getSupabase();
+      const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+      
+      // Find generations that have been in "starting" status for more than 5 minutes
+      const { data, error } = await supabase
+        .from('predictions')
+        .select('*')
+        .eq('user_id', userId)
+        .eq('status', 'starting')
+        .lt('created_at', fiveMinutesAgo);
+        
+      if (error) {
+        console.error('Error checking for stalled generations:', error);
+        return;
+      }
+      
+      if (data && data.length > 0) {
+        console.log(`Found ${data.length} stalled generations`);
+        
+        // Update their status to "failed" with an error message
+        for (const stalled of data) {
+          await supabase
+            .from('predictions')
+            .update({
+              status: 'failed',
+              error: 'Generation stalled and did not start processing',
+              completed_at: new Date().toISOString()
+            })
+            .eq('id', stalled.id);
+            
+          // Also remove from the UI's pending generations
+          setPendingGenerations(prev => 
+            prev.filter(gen => gen.id !== stalled.id && gen.replicate_id !== stalled.replicate_id)
+          );
+        }
+      }
+    } catch (err) {
+      console.error('Error in checkStalledGenerations:', err);
+    }
+  };
 
   // Clean up Supabase resources when component unmounts
   useEffect(() => {

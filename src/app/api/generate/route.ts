@@ -245,7 +245,7 @@ export async function POST(request: NextRequest) {
         : null;
       
       if (!webhookUrl) {
-        console.warn('No webhook URL available, falling back to synchronous prediction');
+        console.warn('No webhook URL available. Status updates will not work properly. Set NEXT_PUBLIC_APP_URL in your environment.');
       }
       
       // Use predictions.create instead of replicate.run to support webhooks
@@ -253,12 +253,12 @@ export async function POST(request: NextRequest) {
         version: finalModelVersion,
         input: inputParams,
         webhook: webhookUrl || undefined,
-        webhook_events_filter: ["completed"]
+        webhook_events_filter: ["start", "completed"]
       });
       
       predictionId = prediction.id;
       
-      // Log the prediction to Supabase immediately to ensure it's available for tracking
+      // Store the initial prediction with "starting" status in the database
       try {
         const { data: predictionRecord, error: insertError } = await supabase
           .from('predictions')
@@ -266,7 +266,7 @@ export async function POST(request: NextRequest) {
             replicate_id: predictionId,
             prompt: prompt,
             aspect_ratio: aspectRatio || "1:1",
-            status: prediction.status || "processing",
+            status: prediction.status,
             input: inputParams,
             user_id: userId
           })
