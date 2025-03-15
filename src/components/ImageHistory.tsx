@@ -31,7 +31,6 @@ type PendingGeneration = {
   prompt: string
   aspectRatio: string
   startTime?: string // When the generation started
-  potentiallyStalled?: boolean // Flag for generations that might be stalled
   format?: string      // Add format information
   modelName?: string   // Add model name information
 }
@@ -330,25 +329,10 @@ export function ImageHistory({
                     prev.filter(g => g.id !== matchingPending.id)
                   );
                 } else {
-                  // Update potentially stalled flag for ongoing generations
-                  const now = Date.now();
-                  const startTime = matchingPending.startTime ? new Date(matchingPending.startTime).getTime() : 0;
-                  const elapsed = now - startTime;
-                  
-                  if (elapsed > 2 * 60 * 1000) { // 2 minutes threshold
-                    setPendingGenerations(prev => 
-                      prev.map(g => 
-                        g.id === matchingPending.id 
-                          ? { ...g, potentiallyStalled: true } 
-                          : g
-                      )
-                    );
-                  }
-                  
                   // Update elapsed time display
                   setElapsedTimes(prev => ({
                     ...prev,
-                    [matchingPending.id]: Math.floor(elapsed / 1000)
+                    [matchingPending.id]: Math.floor((Date.now() - new Date(matchingPending.startTime || '').getTime()) / 1000)
                   }));
                 }
               } else {
@@ -423,44 +407,6 @@ export function ImageHistory({
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, [loadGenerations]);
-
-  // Check for stalled generations
-  useEffect(() => {
-    if (pendingGenerations.length === 0) return;
-    
-    // Consider a generation stalled if it's been pending for more than 5 minutes
-    const STALL_THRESHOLD = 5 * 60 * 1000; // 5 minutes in milliseconds
-    
-    const checkForStalledGenerations = () => {
-      const now = Date.now();
-      let hasChanges = false;
-      
-      setPendingGenerations(prev => {
-        const updated = prev.map(gen => {
-          // Skip if already marked as stalled
-          if (gen.potentiallyStalled) return gen;
-          
-          // Check if this generation has been pending for too long
-          if (gen.startTime) {
-            const startTime = new Date(gen.startTime).getTime();
-            if (now - startTime > STALL_THRESHOLD) {
-              hasChanges = true;
-              return { ...gen, potentiallyStalled: true };
-            }
-          }
-          
-          return gen;
-        });
-        
-        return hasChanges ? updated : prev;
-      });
-    };
-    
-    // Check immediately and then every minute
-    checkForStalledGenerations();
-    const interval = setInterval(checkForStalledGenerations, 60 * 1000);
-    return () => clearInterval(interval);
-  }, [pendingGenerations, setPendingGenerations]);
 
   // Update UI when generations change
   useEffect(() => {
@@ -764,8 +710,7 @@ export function ImageHistory({
           aspectRatio: pending.aspectRatio,
           format: pending.format,
           modelName: pending.modelName,
-          isPending: true,
-          potentiallyStalled: pending.potentiallyStalled
+          isPending: true
         };
         allGenerations.push(virtualGeneration);
       }
@@ -841,23 +786,14 @@ export function ImageHistory({
                           {/* Status indicators for pending generations */}
                           {isPending && pending && (
                             <div className="flex items-center gap-1 ml-2">
-                              {pending.potentiallyStalled ? (
-                                <>
-                                  <span className="inline-block w-2.5 h-2.5 bg-amber-500 rounded-full animate-pulse"></span>
-                                  <span className="text-sm font-medium text-amber-500">Stalled</span>
-                                </>
-                              ) : (
-                                <>
-                                  <Badge variant="secondary" className="flex items-center gap-1">
-                                    <span className="h-2 w-2 rounded-full bg-blue-400 animate-pulse"></span>
-                                    Generating
-                                  </Badge>
-                                  {elapsedTimes[generation.id] !== undefined && (
-                                    <span className="text-xs text-muted-foreground ml-1">
-                                      ({elapsedTimes[generation.id]}s)
-                                    </span>
-                                  )}
-                                </>
+                              <Badge variant="secondary" className="flex items-center gap-1">
+                                <span className="h-2 w-2 rounded-full bg-blue-400 animate-pulse"></span>
+                                Generating
+                              </Badge>
+                              {elapsedTimes[generation.id] !== undefined && (
+                                <span className="text-xs text-muted-foreground ml-1">
+                                  ({elapsedTimes[generation.id]}s)
+                                </span>
                               )}
                             </div>
                           )}

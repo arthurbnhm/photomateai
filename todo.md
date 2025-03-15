@@ -82,12 +82,14 @@
 - ✅ Better handle the webhooks status from trainings
 - Many fetches happen at once
 - ✅ Add vercel analytics
+- Make all actions button with direct feedback and fallback behaviour
 
 # Bugs
 
 - ✅ Training files not found or already deleted: arthurbnhm/gfddfg-9636a012/images.zip POST /api/webhook 200 in 219ms. When a training is sent, it should not look at deleting files with the webhook. The process should not be handheld by the webhook
 - ✅ Error: Error fetching subscription: {}
-- Once generate button is clicked, if the browser is refreshed, the generation never starts
+- ✅ Once generate button is clicked, if the browser is refreshed, the generation never starts
+- ✅ Remove steeled generation causing infinite pooling
 
 # Caching
 

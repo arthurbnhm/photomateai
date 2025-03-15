@@ -15,7 +15,6 @@ type PendingGeneration = {
   prompt: string
   aspectRatio: string
   startTime?: string
-  potentiallyStalled?: boolean
 }
 
 // Create a client component that uses useSearchParams
