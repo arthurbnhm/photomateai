@@ -78,7 +78,8 @@
 - Beautiful landing page
 - Review all the columns
 - Merge Trainings and Models
-- Better handle the webhooks status
+- ✅ Better handle the webhooks status from predictions
+- ✅ Better handle the webhooks status from trainings
 - Many fetches happen at once
 - ✅ Add vercel analytics
 

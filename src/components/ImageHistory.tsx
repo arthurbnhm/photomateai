@@ -379,7 +379,7 @@ export function ImageHistory({
     };
     
     // Start polling mechanism
-    const pollInterval = 10000; // 10 seconds between polls
+    const pollInterval = 5000; // 5 seconds between polls (changed from 10000)
     
     // Clear any existing intervals/timeouts
     if (intervalRef.current) {
