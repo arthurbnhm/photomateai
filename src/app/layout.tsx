@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
+import { Analytics } from "@vercel/analytics/react";
 import { Toaster } from "@/components/ui/sonner";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { ActionButtons } from "@/components/ActionButtons";
@@ -44,6 +45,7 @@ export default function RootLayout({
               {children}
             </main>
             <Toaster />
+            <Analytics />
           </AuthProvider>
         </ThemeProvider>
       </body>
