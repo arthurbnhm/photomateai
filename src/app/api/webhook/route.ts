@@ -267,7 +267,7 @@ export async function POST(request: Request) {
         id: replicate_id
       });
       
-      // If this is not a "completed" event, we can safely ignore it if the record doesn't exist yet
+      // If this is not a terminal event (succeeded/failed), we can safely ignore it
       if (webhookData.status !== 'succeeded' && webhookData.status !== 'failed') {
         console.log(`Ignoring ${webhookData.status} webhook for non-existent prediction: ${replicate_id}`);
         return NextResponse.json({ message: 'Webhook acknowledged but no action taken' }, { status: 200 });
@@ -277,83 +277,139 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Webhook data not found in database' }, { status: 404 });
     }
 
-    // Handle prediction webhook
+    // Handle prediction webhook based on status
+    const now = new Date();
     
-    // Handle different webhook statuses for predictions
-    if (webhookData.status === 'succeeded') {
-      const urls = webhookData.output;
-      if (!Array.isArray(urls)) {
-        console.error('Invalid output format:', urls);
-        return NextResponse.json({ error: 'Invalid output format' }, { status: 400 });
-      }
+    // Calculate duration and cost if this is a terminal status and we have started_at
+    let duration = null;
+    let cost = null;
+    
+    if (['succeeded', 'failed', 'canceled'].includes(webhookData.status) && prediction.started_at) {
+      const startedAt = new Date(prediction.started_at);
+      // Duration in seconds
+      duration = Math.round((now.getTime() - startedAt.getTime()) / 1000);
+      // Cost calculation: $0.001525 per second
+      cost = duration * 0.001525;
+    }
+    
+    // Handle different webhook statuses
+    switch (webhookData.status) {
+      case 'processing':
+        // Update the prediction with started_at timestamp
+        const { error: processingError } = await supabase
+          .from('predictions')
+          .update({
+            status: webhookData.status,
+            started_at: now.toISOString()
+          })
+          .eq('id', prediction.id);
 
-      // Extract and validate userId
-      const userId = prediction.user_id || 'anonymous';
-      if (!userId || userId === 'undefined') {
-        console.warn('Missing or invalid user_id for prediction:', prediction.id);
-      }
+        if (processingError) {
+          console.error('Error updating prediction with started_at:', processingError);
+          return NextResponse.json({ error: 'Error updating prediction' }, { status: 500 });
+        }
+        
+        return NextResponse.json({ success: true, type: 'prediction_started' });
+        
+      case 'succeeded':
+        const urls = webhookData.output;
+        if (!Array.isArray(urls)) {
+          console.error('Invalid output format:', urls);
+          return NextResponse.json({ error: 'Invalid output format' }, { status: 400 });
+        }
 
-      // Download and store images
-      try {
-        const format = prediction.input?.output_format || 'png';
-        const storageUrls = await Promise.all(
-          urls.map(url => downloadAndStoreImage(url, userId, format))
-        );
+        // Extract and validate userId
+        const userId = prediction.user_id || 'anonymous';
+        if (!userId || userId === 'undefined') {
+          console.warn('Missing or invalid user_id for prediction:', prediction.id);
+        }
 
-        // Filter out any null values from failed uploads
-        const validStorageUrls = storageUrls.filter(url => url !== null) as string[];
+        // Download and store images
+        try {
+          const format = prediction.input?.output_format || 'png';
+          const storageUrls = await Promise.all(
+            urls.map(url => downloadAndStoreImage(url, userId, format))
+          );
 
-        if (validStorageUrls.length === 0) {
-          // If no images were successfully stored, mark the prediction as failed
-          const { error: updateError } = await supabase
+          // Filter out any null values from failed uploads
+          const validStorageUrls = storageUrls.filter(url => url !== null) as string[];
+
+          if (validStorageUrls.length === 0) {
+            // If no images were successfully stored, mark the prediction as failed
+            const { error: failedStorageError } = await supabase
+              .from('predictions')
+              .update({
+                status: 'failed',
+                error: 'Failed to store any images',
+                completed_at: now.toISOString(),
+                duration,
+                cost
+              })
+              .eq('id', prediction.id);
+
+            if (failedStorageError) {
+              console.error('Error updating prediction after storage failure:', failedStorageError);
+            }
+
+            return NextResponse.json({ error: 'Failed to store images' }, { status: 500 });
+          }
+
+          // Update the prediction with storage URLs, status, duration and cost
+          const { error: successError } = await supabase
             .from('predictions')
             .update({
-              status: 'failed',
-              error: 'Failed to store any images',
-              completed_at: new Date().toISOString()
+              status: webhookData.status,
+              storage_urls: validStorageUrls,
+              completed_at: now.toISOString(),
+              duration,
+              cost
             })
             .eq('id', prediction.id);
 
-          if (updateError) {
-            // Continue anyway
+          if (successError) {
+            console.error('Error updating prediction on success:', successError);
+            return NextResponse.json({ error: 'Error updating prediction' }, { status: 500 });
           }
-
-          return NextResponse.json({ error: 'Failed to store images' }, { status: 500 });
+        } catch (error) {
+          console.error('Error storing images:', error);
+          return NextResponse.json({ error: 'Error storing images' }, { status: 500 });
         }
+        break;
+        
+      case 'failed':
+      case 'canceled':
+        // Update the prediction with status, error, duration and cost
+        const { error: failedError } = await supabase
+          .from('predictions')
+          .update({
+            status: webhookData.status,
+            error: webhookData.error,
+            completed_at: now.toISOString(),
+            duration,
+            cost
+          })
+          .eq('id', prediction.id);
 
-        // Update the prediction with storage URLs and status
+        if (failedError) {
+          console.error(`Error updating prediction on ${webhookData.status}:`, failedError);
+          return NextResponse.json({ error: 'Error updating prediction' }, { status: 500 });
+        }
+        break;
+        
+      default:
+        // For other statuses, just update the status
         const { error: updateError } = await supabase
           .from('predictions')
           .update({
             status: webhookData.status,
-            storage_urls: validStorageUrls,
-            completed_at: new Date().toISOString()
+            error: webhookData.error
           })
           .eq('id', prediction.id);
 
         if (updateError) {
-          console.error('Error updating prediction:', updateError);
+          console.error(`Error updating prediction with status ${webhookData.status}:`, updateError);
           return NextResponse.json({ error: 'Error updating prediction' }, { status: 500 });
         }
-      } catch (error) {
-        console.error('Error storing images:', error);
-        return NextResponse.json({ error: 'Error storing images' }, { status: 500 });
-      }
-    } else {
-      // For non-succeeded statuses, just update the status
-      const { error: updateError } = await supabase
-        .from('predictions')
-        .update({
-          status: webhookData.status,
-          error: webhookData.error,
-          completed_at: new Date().toISOString()
-        })
-        .eq('id', prediction.id);
-
-      if (updateError) {
-        console.error('Error updating prediction:', updateError);
-        return NextResponse.json({ error: 'Error updating prediction' }, { status: 500 });
-      }
     }
 
     return NextResponse.json({ success: true, type: 'prediction' });
