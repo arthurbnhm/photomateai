@@ -35,6 +35,7 @@
 - ✅ Change naming of download and storage (merger)
 - ✅ The image should download the actual format selected
 - ✅ Image should be same name as the one in supabase
+- Add pagination
 
 # App
 
@@ -52,7 +53,7 @@
 - ✅ Make sure we dont use supabase admin key anymore
 - ✅ Add payment
 - Find ways to make good use of output and logs from webhooks
-- Use predict_time for calculation instead of current method
+- Use predict_time for calculation instead of current method (done for predictions)
 
 # Authentication
 
@@ -78,7 +79,7 @@
 
 # Improvements
 
-- Stalled and Generations as a same design 
+- ✅ Stalled and Generations as a same design 
 - Beautiful landing page
 - Review all the columns
 - Merge Trainings and Models
