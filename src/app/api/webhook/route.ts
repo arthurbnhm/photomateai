@@ -194,8 +194,7 @@ export async function POST(request: Request) {
         .from('trainings')
         .update({
           status: webhookData.status,
-          error: webhookData.error,
-          updated_at: new Date().toISOString()
+          error: webhookData.error
         })
         .eq('training_id', replicate_id);
 
@@ -221,8 +220,7 @@ export async function POST(request: Request) {
         const { error: modelUpdateError } = await supabase
           .from('models')
           .update({
-            status: 'trained',
-            updated_at: new Date().toISOString()
+            status: 'trained'
           })
           .eq('id', training.model_id);
 
@@ -234,8 +232,7 @@ export async function POST(request: Request) {
         const { error: modelUpdateError } = await supabase
           .from('models')
           .update({
-            status: 'training_failed',
-            updated_at: new Date().toISOString()
+            status: 'training_failed'
           })
           .eq('id', training.model_id);
 

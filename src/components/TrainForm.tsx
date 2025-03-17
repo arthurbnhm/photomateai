@@ -920,11 +920,6 @@ export function TrainForm({ onTrainingStatusChange }: TrainFormProps) {
                   {nameError ? (
                     <p className="text-xs text-red-500 mt-1">{nameError}</p>
                   ) : null}
-                  {actualModelName && !nameError && (
-                    <p className="text-xs text-green-600 mt-1">
-                      Model will be created as: <span className="font-mono">{actualModelName}</span>
-                    </p>
-                  )}
                 </div>
                 
                 <div className="space-y-2">
