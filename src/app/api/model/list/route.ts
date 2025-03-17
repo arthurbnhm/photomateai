@@ -19,8 +19,6 @@ interface Model {
   model_id: string;
   model_owner: string;
   display_name: string;
-  visibility: string;
-  hardware: string;
   status: string;
   created_at: string;
   is_deleted: boolean;

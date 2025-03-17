@@ -97,8 +97,6 @@ async function createModel(modelName: string, owner: string, displayName: string
       .insert({
         model_id: modelName,
         model_owner: model.owner,
-        visibility: 'private',
-        hardware: 'gpu-t4',
         status: 'created',
         display_name: displayName
         // user_id is now handled by Supabase trigger
@@ -117,8 +115,7 @@ async function createModel(modelName: string, owner: string, displayName: string
         id: modelData?.id || null,
         name: model.name,
         owner: model.owner,
-        url: `https://replicate.com/${model.owner}/${model.name}`,
-        visibility: model.visibility,
+        url: `https://replicate.com/${model.owner}/${model.name}`
       }
     });
   } catch (error) {

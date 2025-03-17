@@ -302,8 +302,6 @@ export function TrainForm({ onTrainingStatusChange }: TrainFormProps) {
           action: 'create',
           modelName: actualModelName,
           owner: 'arthurbnhm',
-          visibility: 'private',
-          hardware: 'gpu-t4',
           displayName: displayModelName
         }),
       });
