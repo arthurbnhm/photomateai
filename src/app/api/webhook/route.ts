@@ -203,7 +203,7 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: 'Error updating training' }, { status: 500 });
       }
 
-      // If training is completed, update the model status
+      // If training is completed, update completion timestamp
       if (webhookData.status === 'succeeded') {
         // Update the training with completed_at timestamp
         const { error: trainingCompletedError } = await supabase
@@ -214,29 +214,6 @@ export async function POST(request: Request) {
           .eq('training_id', replicate_id);
 
         if (trainingCompletedError) {
-          // Continue anyway
-        }
-
-        const { error: modelUpdateError } = await supabase
-          .from('models')
-          .update({
-            status: 'trained'
-          })
-          .eq('id', training.model_id);
-
-        if (modelUpdateError) {
-          // Continue anyway
-        }
-      } else if (webhookData.status === 'failed') {
-        // If training failed, update the model status
-        const { error: modelUpdateError } = await supabase
-          .from('models')
-          .update({
-            status: 'training_failed'
-          })
-          .eq('id', training.model_id);
-
-        if (modelUpdateError) {
           // Continue anyway
         }
       }

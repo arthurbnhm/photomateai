@@ -19,12 +19,12 @@ interface Model {
   model_id: string;
   model_owner: string;
   display_name: string;
-  status: string;
   created_at: string;
   is_deleted: boolean;
   user_id?: string;
   trainings: Training[];
   training_id?: string;
+  training_status?: string;
 }
 
 export async function GET(request: NextRequest) {
@@ -99,24 +99,14 @@ export async function GET(request: NextRequest) {
         );
       }
 
-      // If model is in training status but has no active trainings, get the latest training ID
-      if ((model.status === "training" || model.status === "created") && 
-          (!trainings || trainings.length === 0)) {
-        // Get any training for this model (even if cancelled)
-        const { data: anyTraining } = await supabase
-          .from('trainings')
-          .select('training_id')
-          .eq('model_id', modelId)
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .single();
-        
-        if (anyTraining) {
-          model.training_id = anyTraining.training_id;
-        }
-      } else if (trainings && trainings.length > 0) {
-        // Add the latest training ID to the model for convenience
-        model.training_id = trainings[0].training_id;
+      // Add training information to the model
+      if (trainings && trainings.length > 0) {
+        // Use the first training
+        const training = trainings[0];
+        model.training_id = training.training_id;
+        model.training_status = training.status;
+      } else {
+        model.training_status = null;
       }
 
       return NextResponse.json({
@@ -127,16 +117,11 @@ export async function GET(request: NextRequest) {
     }
 
     // Otherwise, fetch a list of models with pagination
-    let query = supabase
+    const query = supabase
       .from('models')
       .select('*, trainings!trainings_model_id_fkey(*)')
       .eq('is_deleted', isDeleted === 'true' ? true : (isDeleted === 'false' ? false : false))
       .eq('user_id', authenticatedUserId); // Always filter by authenticated user
-
-    // Apply status filter if provided
-    if (status) {
-      query = query.eq('status', status);
-    }
 
     // Apply pagination
     const { data: models, error: modelsError } = await query
@@ -152,49 +137,51 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Process models to add training IDs for those in training status
+    // Process models to add training information
     const processedModels = await Promise.all(models.map(async (model) => {
-      // If model is in training status but has no active trainings
-      if ((model.status === "training" || model.status === "created") && 
-          (!model.trainings || model.trainings.length === 0)) {
-        
-        // Get any training for this model (even if cancelled)
-        const { data: anyTraining } = await supabase
+      // First check if trainings are already loaded with the model
+      if (model.trainings && model.trainings.length > 0) {
+        // Use the first (and only) training
+        const training = model.trainings[0];
+        model.training_id = training.training_id;
+        model.is_cancelled = training.is_cancelled;
+        model.training_status = training.status;
+      } else {
+        // If no trainings loaded with model, fetch it separately
+        const { data: trainingData } = await supabase
           .from('trainings')
-          .select('training_id, is_cancelled')
+          .select('training_id, is_cancelled, status')
           .eq('model_id', model.id)
           .order('created_at', { ascending: false })
           .limit(1);
           
-        if (anyTraining && anyTraining.length > 0) {
-          model.training_id = anyTraining[0].training_id;
-          model.is_cancelled = anyTraining[0].is_cancelled;
-        }
-      } else if (model.trainings && model.trainings.length > 0) {
-        // Add the latest training ID to the model for convenience
-        const activeTraining = model.trainings.find((t: Training) => 
-          t.status === "training" || t.status === "starting" || 
-          t.status === "created" || t.status === "queued"
-        );
-        
-        if (activeTraining) {
-          model.training_id = activeTraining.training_id;
-          model.is_cancelled = activeTraining.is_cancelled;
+        if (trainingData && trainingData.length > 0) {
+          const training = trainingData[0];
+          model.training_id = training.training_id;
+          model.is_cancelled = training.is_cancelled;
+          model.training_status = training.status;
         } else {
-          model.training_id = model.trainings[0].training_id;
-          model.is_cancelled = model.trainings[0].is_cancelled;
+          model.training_status = null;
         }
       }
       
       return model;
     }));
 
+    // Filter by status if provided
+    let statusFilteredModels = processedModels;
+    if (status) {
+      statusFilteredModels = processedModels.filter(model => 
+        model.training_status === status
+      );
+    }
+
     // Filter models based on is_cancelled parameter if provided
-    let filteredModels = processedModels;
+    let filteredModels = statusFilteredModels;
     
     if (isCancelled !== null) {
       const isCancelledBool = isCancelled === 'true';
-      filteredModels = processedModels.filter(model => {
+      filteredModels = statusFilteredModels.filter(model => {
         // If is_cancelled is explicitly defined on the model, use that
         if (typeof model.is_cancelled !== 'undefined') {
           return model.is_cancelled === isCancelledBool;
@@ -204,7 +191,7 @@ export async function GET(request: NextRequest) {
       });
     } else {
       // Default behavior: filter out cancelled models
-      filteredModels = processedModels.filter(model => !model.is_cancelled);
+      filteredModels = statusFilteredModels.filter(model => !model.is_cancelled);
     }
     
     // Filter out cancelled trainings from the results
@@ -282,31 +269,6 @@ export async function POST(request: NextRequest) {
     const { action, modelId, trainingId, status } = body;
 
     switch (action) {
-      case 'updateModelStatus':
-        if (!modelId || !status) {
-          return NextResponse.json(
-            { error: 'Model ID and status are required', success: false },
-            { status: 400 }
-          );
-        }
-
-        const { error: updateModelError } = await supabase
-          .from('models')
-          .update({ status })
-          .eq('id', modelId);
-
-        if (updateModelError) {
-          return NextResponse.json(
-            { error: 'Failed to update model status', success: false },
-            { status: 500 }
-          );
-        }
-
-        return NextResponse.json({
-          success: true,
-          message: 'Model status updated successfully'
-        });
-
       case 'updateTrainingStatus':
         if (!trainingId || !status) {
           return NextResponse.json(

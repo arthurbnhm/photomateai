@@ -152,46 +152,24 @@ export async function POST(request: NextRequest) {
     // Only fetch from Supabase if we don't have the model name from the request
     if (requestModelId && !modelName) {
       try {
-        // Fetch the model details from Supabase
-        const { data: model, error } = await supabase
+        // Verify that the model is trained and belongs to the user
+        const { data: trainedModel, error: trainedError } = await supabase
           .from('models')
-          .select('*')
+          .select('*, trainings!inner(*)')
           .eq('id', requestModelId)
-          .eq('status', 'ready')
+          .eq('trainings.status', 'succeeded')
           .eq('user_id', userId)
           .single();
         
-        if (error) {
-          console.error('Error fetching model details:', error);
-          
-          // Try with 'trained' status instead of 'ready'
-          const { data: trainedModel, error: trainedError } = await supabase
-            .from('models')
-            .select('*')
-            .eq('id', requestModelId)
-            .eq('status', 'trained')
-            .eq('user_id', userId)
-            .single();
-            
-          if (trainedError || !trainedModel) {
-            console.error('Error fetching model with trained status:', trainedError);
-            return NextResponse.json(
-              { error: 'Selected model not found or not available' },
-              { status: 404 }
-            );
-          } else {
-            // Use the model's model_id
-            modelName = trainedModel.model_id;
-          }
-        } else if (model) {
-          // Use the model's model_id
-          modelName = model.model_id;
-        } else {
-          console.error('No model found with ID:', requestModelId);
+        if (trainedError || !trainedModel) {
+          console.error('Error fetching model with successful training:', trainedError);
           return NextResponse.json(
-            { error: 'Selected model not found' },
+            { error: 'Selected model not found or not available' },
             { status: 404 }
           );
+        } else {
+          // Use the model's model_id
+          modelName = trainedModel.model_id;
         }
       } catch (err) {
         console.error('Error getting model details:', err);

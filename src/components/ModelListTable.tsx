@@ -46,6 +46,7 @@ interface Model {
   trainings: Training[];
   training_id?: string;
   is_cancelled?: boolean;
+  training_status?: string;
 }
 
 interface ModelListResponse {
@@ -189,40 +190,24 @@ export function ModelListTable({ newTraining, onClearNewTraining }: ModelListTab
     }
   };
 
-  // Get the effective status for a model considering its trainings
+  // Get the effective status for a model
   const getEffectiveStatus = (model: Model) => {
     // Check if model is valid
     if (!model || Object.keys(model).length === 0) {
       return "";
     }
 
-    // Simple approach: if model status is "trained", show as trained
-    if (model.status === "trained") {
-      return "trained";
-    }
-
-    // If any training has succeeded, show as trained
-    if (model.trainings && model.trainings.some(t => t.status === "succeeded")) {
-      return "trained";
-    }
-
-    // If any training is active, show as training
-    if (model.trainings && model.trainings.some(t => 
-      t.status === "training" || 
-      t.status === "starting" || 
-      t.status === "queued" ||
-      t.status === "processing"
-    )) {
-      return "training";
-    }
-
-    // Otherwise, use the model's own status
-    return model.status;
+    // Return the training status if available
+    return model.training_status || "";
   };
 
   // Check if a model has an active training
   const hasActiveTraining = (model: Model) => {
-    return getEffectiveStatus(model) === "training";
+    const status = getEffectiveStatus(model);
+    return status === "training" || 
+           status === "starting" || 
+           status === "queued" || 
+           status === "processing";
   };
 
   // Determine if we should show the cancel button for a model
@@ -332,13 +317,13 @@ export function ModelListTable({ newTraining, onClearNewTraining }: ModelListTab
       case "training":
       case "processing":
       case "starting":
+      case "queued":
         return (
           <Badge variant="secondary" className="flex items-center gap-1">
             <span className="h-2 w-2 rounded-full bg-blue-400 animate-pulse"></span>
-            Training
+            {status.charAt(0).toUpperCase() + status.slice(1)}
           </Badge>
         );
-      case "trained":
       case "succeeded":
         return (
           <Badge variant="secondary" className="flex items-center gap-1">
@@ -346,13 +331,12 @@ export function ModelListTable({ newTraining, onClearNewTraining }: ModelListTab
             Trained
           </Badge>
         );
-      case "training_failed":
       case "failed":
         return <Badge variant="destructive">Failed</Badge>;
       case "canceled":
         return <Badge variant="outline" className="bg-yellow-100 text-yellow-800 hover:bg-yellow-200 border-yellow-300">Canceled</Badge>;
       default:
-        return <Badge variant="outline">{status}</Badge>;
+        return <Badge variant="outline">{status || "New"}</Badge>;
     }
   };
 

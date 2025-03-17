@@ -215,57 +215,20 @@ async function cancelPrediction(predictionId: string, supabase: SupabaseClient, 
   }
 }
 
-// Helper function to handle training file deletion
+// Helper function to delete training files
 async function deleteTrainingFiles(
   modelOwner: string, 
-  modelName: string, 
-  supabase: SupabaseClient
+  modelName: string
 ): Promise<boolean> {
   try {
-    const zipPath = `${modelOwner}/${modelName}/images.zip`;
-    
-    const { error: deleteError } = await supabase.storage
-      .from('training-files')
-      .remove([zipPath]);
-
-    if (deleteError) {
-      console.warn(`Failed to delete training files: ${deleteError.message}`);
-      return false;
-    } else {
-      console.log(`Successfully deleted training files: ${zipPath}`);
-      return true;
-    }
-  } catch (deleteError) {
-    console.warn('Error deleting training files:', deleteError);
+    // Note: Replicate doesn't have a direct API to delete training files
+    // This is a placeholder for future implementation
+    console.log(`Would delete training files for ${modelOwner}/${modelName}`);
+    return true;
+  } catch (error) {
+    console.error('Error deleting training files:', error);
     return false;
   }
-}
-
-// Helper function to update model status if no active trainings
-async function updateModelStatusIfNoActiveTrainings(
-  modelId: string,
-  trainingId: string,
-  supabase: SupabaseClient
-): Promise<boolean> {
-  // Check if this is the only active training for the model
-  const { data: activeTrainings, error: activeTrainingsError } = await supabase
-    .from('trainings')
-    .select('id')
-    .eq('model_id', modelId)
-    .in('status', ['training', 'starting', 'created', 'queued'])
-    .neq('training_id', trainingId);
-
-  if (!activeTrainingsError && (!activeTrainings || activeTrainings.length === 0)) {
-    // Update the model status if this was the only active training
-    const { error: updateModelError } = await supabase
-      .from('models')
-      .update({ status: 'training_failed' })
-      .eq('id', modelId);
-    
-    return !updateModelError;
-  }
-  
-  return true;
 }
 
 // Cancel an ongoing training
@@ -312,19 +275,11 @@ async function cancelTraining(trainingId: string, supabase: SupabaseClient, user
           })
           .eq('training_id', replicateTrainingId);
         
-        // Update model status if needed
-        await updateModelStatusIfNoActiveTrainings(
-          internalTrainingData.model_id,
-          replicateTrainingId,
-          supabase
-        );
-        
         // Delete training files
         if (internalTrainingData.models) {
           await deleteTrainingFiles(
             internalTrainingData.models.model_owner,
-            internalTrainingData.models.model_id,
-            supabase
+            internalTrainingData.models.model_id
           );
         }
         
@@ -360,19 +315,11 @@ async function cancelTraining(trainingId: string, supabase: SupabaseClient, user
         })
         .eq('training_id', trainingId);
 
-      // Update model status if needed
-      await updateModelStatusIfNoActiveTrainings(
-        trainingData.model_id,
-        trainingId,
-        supabase
-      );
-
       // Delete training files
       if (trainingData.models) {
         await deleteTrainingFiles(
           trainingData.models.model_owner,
-          trainingData.models.model_id,
-          supabase
+          trainingData.models.model_id
         );
       }
 

@@ -129,12 +129,6 @@ async function trainModel(modelOwner: string, modelName: string, zipUrl: string,
         // user_id is now handled by Supabase trigger
       });
 
-    // Update the model status to 'training'
-    await supabase
-      .from('models')
-      .update({ status: 'training' })
-      .eq('id', modelData.id);
-
     return NextResponse.json({
       success: true,
       training: {

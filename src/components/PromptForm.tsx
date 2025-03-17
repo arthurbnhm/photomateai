@@ -32,7 +32,7 @@ interface Model {
   model_id: string;
   model_owner: string;
   display_name: string;
-  status: string;
+  training_status?: string;
 }
 
 // Define the type for pending generations
@@ -161,9 +161,8 @@ export function PromptForm({
     const fetchModels = async () => {
       setLoadingModels(true);
       try {
-        // Fetch models that are trained or ready (not cancelled, not deleted)
-        // Note: In the database, models have status 'trained' not 'ready'
-        const response = await fetch('/api/model/list?is_cancelled=false&is_deleted=false');
+        // Fetch only models with succeeded training status
+        const response = await fetch('/api/model/list?is_cancelled=false&is_deleted=false&status=succeeded');
         if (!response.ok) {
           throw new Error('Failed to fetch models');
         }
@@ -171,13 +170,8 @@ export function PromptForm({
         const data = await response.json();
         
         if (data.success && data.models) {
-          // Filter models to only include those with status 'trained'
-          const availableModels = data.models.filter((model: Model) => 
-            model.status === 'trained' || model.status === 'ready'
-          );
-          
           // Sort models by display_name for better user experience
-          const sortedModels = [...availableModels].sort((a, b) => {
+          const sortedModels = [...data.models].sort((a, b) => {
             // Use only display_name without fallback
             const displayNameA = a.display_name || '';
             const displayNameB = b.display_name || '';

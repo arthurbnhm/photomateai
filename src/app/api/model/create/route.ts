@@ -97,7 +97,6 @@ async function createModel(modelName: string, owner: string, displayName: string
       .insert({
         model_id: modelName,
         model_owner: model.owner,
-        status: 'created',
         display_name: displayName
         // user_id is now handled by Supabase trigger
       })
