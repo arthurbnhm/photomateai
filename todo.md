@@ -11,7 +11,8 @@
 - ❌ Add a use model that goes to create page and selects the model
 - ✅ Fullscreen dropzone like vercel
 - Delete training files
-- Find out about using client to upload the zip file
+- Find out about using client to upload the zip file (replicate.files.create)
+- Delete a model and its versions https://replicate.com/docs/reference/http#models.delete
 
 # Create
 
@@ -52,7 +53,7 @@
 - 🟡 A chat that interacts with my api, know the format to use etc
 - ✅ Make sure we dont use supabase admin key anymore
 - ✅ Add payment
-- Find ways to make good use of output and logs from webhooks
+- 🟡 Find ways to make good use of output and logs from webhooks
 - Use predict_time for calculation instead of current method (done for predictions)
 
 # Authentication

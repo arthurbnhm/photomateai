@@ -189,33 +189,46 @@ export async function POST(request: Request) {
 
     // If found in trainings table, handle as a training webhook
     if (training) {
-      // Update the training status
+      // Extract timing information from webhook payload
+      const startedAt = webhookData.started_at || null;
+      const completedAt = webhookData.completed_at || null;
+      const predictTime = webhookData.metrics?.predict_time || null;
+      
+      // Calculate cost based on predict time (if available)
+      // Cost rate is $0.001525 per second (same as predictions)
+      const costPerSecond = 0.001525;
+      const cost = predictTime ? predictTime * costPerSecond : null;
+
+      // Prepare the update data based on status
+      const updateData: {
+        status: string;
+        error?: string | null;
+        started_at?: string | null;
+        completed_at?: string | null;
+        predict_time?: number | null;
+        cost?: number | null;
+      } = {
+        status: webhookData.status,
+        error: webhookData.error
+      };
+
+      // Add timing and cost data if available
+      if (startedAt) updateData.started_at = startedAt;
+      if (completedAt || webhookData.status === 'succeeded' || webhookData.status === 'failed' || webhookData.status === 'canceled') {
+        updateData.completed_at = completedAt || new Date().toISOString();
+      }
+      if (predictTime) updateData.predict_time = predictTime;
+      if (cost) updateData.cost = cost;
+
+      // Update the training with all available information
       const { error: updateError } = await supabase
         .from('trainings')
-        .update({
-          status: webhookData.status,
-          error: webhookData.error
-        })
+        .update(updateData)
         .eq('training_id', replicate_id);
 
       if (updateError) {
         console.error('Error updating training:', updateError);
         return NextResponse.json({ error: 'Error updating training' }, { status: 500 });
-      }
-
-      // If training is completed, update completion timestamp
-      if (webhookData.status === 'succeeded') {
-        // Update the training with completed_at timestamp
-        const { error: trainingCompletedError } = await supabase
-          .from('trainings')
-          .update({
-            completed_at: new Date().toISOString()
-          })
-          .eq('training_id', replicate_id);
-
-        if (trainingCompletedError) {
-          // Continue anyway
-        }
       }
 
       return NextResponse.json({ success: true, type: 'training' });
