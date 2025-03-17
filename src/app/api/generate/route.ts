@@ -267,8 +267,8 @@ export async function POST(request: NextRequest) {
             prompt: prompt,
             aspect_ratio: aspectRatio || "1:1",
             status: prediction.status,
-            input: inputParams,
-            user_id: userId
+            input: inputParams
+            // user_id is now handled by Supabase trigger
           })
           .select()
           .single();

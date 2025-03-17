@@ -53,7 +53,7 @@ export async function POST(request: NextRequest) {
       );
     }
     
-    return await createModel(modelName, owner, displayName, user.id, supabase);
+    return await createModel(modelName, owner, displayName, supabase);
   } catch (error) {
     console.error('Error processing request:', error);
     return NextResponse.json(
@@ -67,7 +67,7 @@ export async function POST(request: NextRequest) {
 }
 
 // Create a model in Replicate
-async function createModel(modelName: string, owner: string, displayName: string, userId: string, supabase: SupabaseClient) {
+async function createModel(modelName: string, owner: string, displayName: string, supabase: SupabaseClient) {
   // Validate model name format
   const validPattern = /^[a-z0-9][a-z0-9_.-]*[a-z0-9]$|^[a-z0-9]$/;
   if (!validPattern.test(modelName)) {
@@ -100,8 +100,8 @@ async function createModel(modelName: string, owner: string, displayName: string
         visibility: 'private',
         hardware: 'gpu-t4',
         status: 'created',
-        display_name: displayName,
-        user_id: userId
+        display_name: displayName
+        // user_id is now handled by Supabase trigger
       })
       .select()
       .single();

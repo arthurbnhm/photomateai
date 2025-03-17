@@ -304,8 +304,7 @@ export function TrainForm({ onTrainingStatusChange }: TrainFormProps) {
           owner: 'arthurbnhm',
           visibility: 'private',
           hardware: 'gpu-t4',
-          displayName: displayModelName,
-          userId: session.user.id
+          displayName: displayModelName
         }),
       });
 
@@ -421,8 +420,7 @@ export function TrainForm({ onTrainingStatusChange }: TrainFormProps) {
             action: 'train',
             modelOwner: modelData.model.owner,
             modelName: modelData.model.name,
-            zipUrl: urlData.signedUrl,
-            userId: session.user.id
+            zipUrl: urlData.signedUrl
           }),
         });
         

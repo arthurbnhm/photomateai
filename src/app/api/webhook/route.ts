@@ -264,6 +264,45 @@ export async function POST(request: Request) {
         id: replicate_id
       });
       
+      // If this is a terminal event (succeeded/failed), create a record for it
+      if (webhookData.status === 'succeeded' || webhookData.status === 'failed') {
+        console.log(`Creating record for webhook with replicate_id: ${replicate_id}`);
+        
+        // Extract timing and cost information from webhook payload
+        const startedAt = webhookData.started_at || null;
+        const completedAt = webhookData.completed_at || null;
+        const predictTime = webhookData.metrics?.predict_time || null;
+        
+        // Calculate cost based on predict time (if available)
+        const costPerSecond = 0.001525;
+        const cost = predictTime ? predictTime * costPerSecond : null;
+        
+        // Create a new prediction record
+        const { error: insertError } = await supabase
+          .from('predictions')
+          .insert({
+            replicate_id: replicate_id,
+            status: webhookData.status,
+            error: webhookData.error,
+            started_at: startedAt,
+            completed_at: completedAt || new Date().toISOString(),
+            predict_time: predictTime,
+            cost: cost,
+            storage_urls: Array.isArray(webhookData.output) ? webhookData.output : null
+          });
+          
+        if (insertError) {
+          console.error('Error creating prediction record from webhook:', insertError);
+          return NextResponse.json({ error: 'Error creating prediction record' }, { status: 500 });
+        }
+        
+        return NextResponse.json({ 
+          success: true, 
+          type: 'prediction_created_from_webhook',
+          message: 'Created prediction record from webhook data'
+        });
+      }
+      
       // If this is not a terminal event (succeeded/failed), we can safely ignore it
       if (webhookData.status !== 'succeeded' && webhookData.status !== 'failed') {
         console.log(`Ignoring ${webhookData.status} webhook for non-existent prediction: ${replicate_id}`);
@@ -277,32 +316,23 @@ export async function POST(request: Request) {
     // Handle prediction webhook based on status
     const now = new Date();
     
-    // Calculate duration and cost if this is a terminal status and we have started_at
-    let duration = null;
-    let cost = null;
-    
-    if (['succeeded', 'failed', 'canceled'].includes(webhookData.status) && prediction.started_at) {
-      const startedAt = new Date(prediction.started_at);
-      // Duration in seconds
-      duration = Math.round((now.getTime() - startedAt.getTime()) / 1000);
-      // Cost calculation: $0.001525 per second
-      cost = duration * 0.001525;
-    }
-    
     // Handle different webhook statuses
     switch (webhookData.status) {
       case 'processing':
-        // Update the prediction with started_at timestamp
+        // Extract started_at from webhook payload
+        const processingStartedAt = webhookData.started_at || null;
+        
+        // Update the prediction status
         const { error: processingError } = await supabase
           .from('predictions')
           .update({
             status: webhookData.status,
-            started_at: now.toISOString()
+            started_at: processingStartedAt
           })
           .eq('id', prediction.id);
 
         if (processingError) {
-          console.error('Error updating prediction with started_at:', processingError);
+          console.error('Error updating prediction status:', processingError);
           return NextResponse.json({ error: 'Error updating prediction' }, { status: 500 });
         }
         
@@ -314,6 +344,16 @@ export async function POST(request: Request) {
           console.error('Invalid output format:', urls);
           return NextResponse.json({ error: 'Invalid output format' }, { status: 400 });
         }
+
+        // Extract timing and cost information from webhook payload
+        const startedAt = webhookData.started_at || null;
+        const completedAt = webhookData.completed_at || null;
+        const predictTime = webhookData.metrics?.predict_time || null;
+        
+        // Calculate cost based on predict time (if available)
+        // Cost rate is $0.001525 per second
+        const costPerSecond = 0.001525;
+        const cost = predictTime ? predictTime * costPerSecond : null;
 
         // Extract and validate userId
         const userId = prediction.user_id || 'anonymous';
@@ -338,9 +378,7 @@ export async function POST(request: Request) {
               .update({
                 status: 'failed',
                 error: 'Failed to store any images',
-                completed_at: now.toISOString(),
-                duration,
-                cost
+                completed_at: completedAt || now.toISOString()
               })
               .eq('id', prediction.id);
 
@@ -351,15 +389,16 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Failed to store images' }, { status: 500 });
           }
 
-          // Update the prediction with storage URLs, status, duration and cost
+          // Update the prediction with storage URLs, status, and timing information
           const { error: successError } = await supabase
             .from('predictions')
             .update({
               status: webhookData.status,
               storage_urls: validStorageUrls,
-              completed_at: now.toISOString(),
-              duration,
-              cost
+              started_at: startedAt,
+              completed_at: completedAt || now.toISOString(),
+              predict_time: predictTime,
+              cost: cost
             })
             .eq('id', prediction.id);
 
@@ -375,15 +414,24 @@ export async function POST(request: Request) {
         
       case 'failed':
       case 'canceled':
-        // Update the prediction with status, error, duration and cost
+        // Extract timing information from webhook payload
+        const failedStartedAt = webhookData.started_at || null;
+        const failedCompletedAt = webhookData.completed_at || null;
+        const failedPredictTime = webhookData.metrics?.predict_time || null;
+        
+        // Calculate cost based on predict time (if available)
+        const failedCost = failedPredictTime ? failedPredictTime * 0.001525 : null;
+        
+        // Update the prediction with status, error, and timing information
         const { error: failedError } = await supabase
           .from('predictions')
           .update({
             status: webhookData.status,
             error: webhookData.error,
-            completed_at: now.toISOString(),
-            duration,
-            cost
+            started_at: failedStartedAt,
+            completed_at: failedCompletedAt || now.toISOString(),
+            predict_time: failedPredictTime,
+            cost: failedCost
           })
           .eq('id', prediction.id);
 

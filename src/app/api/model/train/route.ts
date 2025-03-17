@@ -71,7 +71,7 @@ export async function POST(request: NextRequest) {
       );
     }
     
-    return await trainModel(modelOwner, modelName, zipUrl, user.id, supabase);
+    return await trainModel(modelOwner, modelName, zipUrl, supabase);
   } catch (error) {
     console.error('Error processing request:', error);
     return NextResponse.json(
@@ -85,7 +85,7 @@ export async function POST(request: NextRequest) {
 }
 
 // Train a model using Replicate
-async function trainModel(modelOwner: string, modelName: string, zipUrl: string, userId: string, supabase: SupabaseClient) {
+async function trainModel(modelOwner: string, modelName: string, zipUrl: string, supabase: SupabaseClient) {
   try {
     // Find the model in Supabase
     const { data: modelData, error: modelError } = await supabase
@@ -93,7 +93,6 @@ async function trainModel(modelOwner: string, modelName: string, zipUrl: string,
       .select('*')
       .eq('model_owner', modelOwner)
       .eq('model_id', modelName)
-      .eq('user_id', userId)
       .single();
 
     if (modelError) {
@@ -114,7 +113,7 @@ async function trainModel(modelOwner: string, modelName: string, zipUrl: string,
         destination: `${modelOwner}/${modelName}`,
         input: { ...TRAINING_PARAMS, input_images: zipUrl },
         webhook: webhookUrl,
-        webhook_events_filter: ["start", "output", "logs", "completed"]
+        webhook_events_filter: ["start", "completed"]
       }
     );
 
@@ -126,8 +125,8 @@ async function trainModel(modelOwner: string, modelName: string, zipUrl: string,
         training_id: training.id,
         status: training.status,
         zip_url: zipUrl,
-        input_params: TRAINING_PARAMS,
-        user_id: userId
+        input_params: TRAINING_PARAMS
+        // user_id is now handled by Supabase trigger
       });
 
     // Update the model status to 'training'
