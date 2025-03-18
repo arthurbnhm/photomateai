@@ -98,7 +98,7 @@
 - ✅ Error: Error fetching subscription: {}
 - ✅ Once generate button is clicked, if the browser is refreshed, the generation never starts
 - ✅ Remove steeled generation causing infinite pooling
-- Burger menu and close button are fucked
+- ✅ Burger menu and close button are fucked
 
 # Caching
 

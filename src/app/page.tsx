@@ -220,7 +220,7 @@ export default function Home() {
         }
       `}</style>
       
-      <div className="flex flex-col min-h-screen">
+      <div className="flex flex-col min-h-screen overflow-x-hidden">
         {/* Header */}
         <header className="py-4 px-6 bg-background relative z-30">
           <div className="max-w-6xl mx-auto flex justify-between items-center">
@@ -413,12 +413,12 @@ export default function Home() {
             </div>
             
             {/* Mobile View - Horizontal scroll with images extending beyond edges */}
-            <div className="md:hidden w-[calc(100%+3rem)] overflow-x-auto scrollbar-hide py-4 relative snap-x snap-mandatory min-h-[208px] -mx-6">
-              <div className="flex gap-6">
+            <div className="md:hidden w-full overflow-x-auto scrollbar-hide py-4 relative snap-x snap-mandatory min-h-[208px]">
+              <div className="flex gap-6 pl-4 pr-12">
                 {sampleImages.map((imageSrc, i) => (
                   <div 
                     key={i} 
-                    className={`flex-none w-48 h-48 rounded-xl overflow-hidden relative shadow-md snap-center border-4 border-gray-200 dark:border-gray-800 ${i === 0 ? '-ml-6' : ''}`}
+                    className="flex-none w-48 h-48 rounded-xl overflow-hidden relative shadow-md snap-center border-4 border-gray-200 dark:border-gray-800"
                     style={{ transform: `rotate(${(i % 2 === 0) ? '3deg' : '-3deg'})` }}
                   >
                     <Image 
