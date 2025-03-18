@@ -8,15 +8,15 @@ export default async function PlansPage() {
   const supabase = await createClient();
   const { data: { user }, error: userError } = await supabase.auth.getUser();
 
-  if (!user || userError) {
-    redirect("/auth/login");
+  if (userError) {
+    return <div>Error loading user data</div>;
   }
 
   // Check if user already has an active subscription
   const { data: subscription } = await supabase
     .from('subscriptions')
     .select('*')
-    .eq('user_id', user.id)
+    .eq('user_id', user!.id)
     .eq('is_active', true)
     .single();
 
@@ -31,9 +31,9 @@ export default async function PlansPage() {
   }
 
   return (
-    <div className="pt-16 md:pt-20 flex flex-col min-h-[calc(100vh-80px)] md:justify-center">
+    <div className="flex flex-col min-h-[calc(100vh-72px)] justify-center py-8 md:py-12">
       <div className="max-w-5xl mx-auto p-4 sm:p-8">
-        <div className="flex flex-col items-center space-y-4 text-center mb-16">
+        <div className="flex flex-col items-center space-y-4 text-center mb-12">
           <div className="flex space-x-2">
             <div className="h-2 w-16 rounded bg-green-500"></div>
             <div className="h-2 w-16 rounded bg-green-500"></div>
@@ -46,7 +46,7 @@ export default async function PlansPage() {
           </p>
         </div>
 
-        <div className="grid gap-6 md:grid-cols-3 mb-16">
+        <div className="grid gap-6 md:grid-cols-3 mb-12">
           {/* Basic Plan */}
           <Card className="flex flex-col">
             <CardHeader>

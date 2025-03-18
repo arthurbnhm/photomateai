@@ -37,6 +37,7 @@ export function Navbar({
   const pathname = usePathname();
   const isHomePage = pathname === '/';
   const isCreatePage = pathname?.startsWith('/create');
+  const isPlansPage = pathname === '/plans';
   
   // Handle sign out with redirect
   const handleSignOut = async () => {
@@ -184,7 +185,7 @@ export function Navbar({
       
       <header className="py-4 px-6 bg-background relative z-30">
         <div className="max-w-6xl mx-auto flex justify-between items-center">
-          <Link href={user ? "/create" : "/"} className="flex items-center space-x-2">
+          <Link href="/" className="flex items-center space-x-2">
             <Image 
               src="/logo.svg"
               alt="PhotomateAI Logo"
@@ -258,6 +259,17 @@ export function Navbar({
                         )}
                         <ModeToggle />
                       </div>
+                    ) : isPlansPage ? (
+                      <div className="flex items-center gap-2">
+                        <Button 
+                          variant="outline" 
+                          className="h-9 w-auto px-3"
+                          onClick={handleSignOut}
+                        >
+                          Sign out
+                        </Button>
+                        <ModeToggle />
+                      </div>
                     ) : (
                       <div className="flex items-center gap-2">
                         <Button 
@@ -288,15 +300,18 @@ export function Navbar({
           </nav>
           
           {/* Mobile Menu Button - Only visible on mobile */}
-          <button 
-            className="block md:hidden menu-button p-2"
-            onClick={handleMenuToggle}
-            aria-label="Toggle menu"
-            style={{ zIndex: 60 }}
-            disabled={isMenuButtonDisabled}
-          >
-            <Menu className="h-6 w-6" />
-          </button>
+          <div className="flex items-center gap-2 md:hidden">
+            {!isHomePage && <ModeToggle />}
+            <button 
+              className="menu-button p-2"
+              onClick={handleMenuToggle}
+              aria-label="Toggle menu"
+              style={{ zIndex: 60 }}
+              disabled={isMenuButtonDisabled}
+            >
+              <Menu className="h-6 w-6" />
+            </button>
+          </div>
         </div>
       </header>
       
@@ -311,7 +326,7 @@ export function Navbar({
               className="cursor-pointer"
               onClick={() => {
                 setMobileMenuOpen(false);
-                router.push(user ? "/create" : "/");
+                router.push('/');
               }}
               aria-label="Close menu"
             >
@@ -329,6 +344,7 @@ export function Navbar({
           
           <nav>
             <ul className="space-y-8">
+              {/* Landing page links - same as desktop */}
               {showLandingLinks && (
                 <>
                   <li className="menu-item">
@@ -352,8 +368,10 @@ export function Navbar({
                 </>
               )}
               
+              {/* Auth/Navigation Buttons - exactly matching desktop */}
               {isAuthReady && user ? (
                 <>
+                  {/* Home page shows Go to App */}
                   {isHomePage && (
                     <li className="menu-item">
                       <Link 
@@ -366,6 +384,7 @@ export function Navbar({
                     </li>
                   )}
                   
+                  {/* Create page shows Credits + Billing */}
                   {isCreatePage && (
                     <>
                       <li className="menu-item">
@@ -387,6 +406,7 @@ export function Navbar({
                     </>
                   )}
                   
+                  {/* Sign out button (conditional on home page) */}
                   {(!isHomePage || !hideSignOutOnHomepage) && (
                     <li className="menu-item">
                       <button 
@@ -412,17 +432,10 @@ export function Navbar({
                   </Link>
                 </li>
               )}
-              
-              <li className="menu-item">
-                {!isHomePage && (
-                  <div className="flex justify-center mt-4">
-                    <ModeToggle />
-                  </div>
-                )}
-              </li>
             </ul>
           </nav>
           
+          {/* Start Now button - keep this special CTA for the homepage */}
           {isHomePage && (
             <div className="mt-16 menu-cta">
               <Button 
