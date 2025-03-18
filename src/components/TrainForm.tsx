@@ -315,7 +315,6 @@ export function TrainForm({ onTrainingStatusChange }: TrainFormProps) {
       setUploadProgress(30);
       
       // Step 2: Upload images with chunked processing
-      const zipPath = `${modelData.model.owner}/${modelData.model.name}/images.zip`;
       
       // Initialize JSZip with a lower memory footprint
       const zip = new JSZip();
@@ -372,7 +371,7 @@ export function TrainForm({ onTrainingStatusChange }: TrainFormProps) {
         setUploadProgress(50);
         
         const zipData = await zip.generateAsync({ 
-          type: 'arraybuffer',
+          type: 'blob',
           compression: 'DEFLATE',
           streamFiles: true, // Enable streaming for better memory usage
         }, (metadata) => {
@@ -381,33 +380,35 @@ export function TrainForm({ onTrainingStatusChange }: TrainFormProps) {
           setUploadProgress(generationProgress);
         });
         
-        // Upload the zip file
+        // Upload the zip file using Replicate's files API instead of Supabase
         setUploadProgress(70);
 
-        // Upload with progress tracking
-        const { error: uploadError } = await getSupabase().storage
-          .from('training-files')
-          .upload(zipPath, zipData, {
-            contentType: 'application/zip',
-            upsert: true
-          });
+        // Create FormData for the file upload
+        const formData = new FormData();
+        formData.append('file', zipData, 'images.zip');
+        formData.append('metadata', JSON.stringify({ 
+          modelOwner: modelData.model.owner,
+          modelName: modelData.model.name
+        }));
 
-        if (uploadError) {
-          throw new Error(uploadError.message || 'Failed to upload images');
-        }
+        // Upload with Replicate's files API
+        const uploadResponse = await customFetch('/api/model/upload-replicate', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${session.access_token}`
+          },
+          body: formData
+        });
 
-        // Get the URL for the uploaded file
-        const { data: urlData } = await getSupabase().storage
-          .from('training-files')
-          .createSignedUrl(zipPath, 60 * 60);
+        const uploadData = await uploadResponse.json();
 
-        if (!urlData?.signedUrl) {
-          throw new Error('Failed to generate signed URL');
+        if (!uploadData.success) {
+          throw new Error(uploadData.error || 'Failed to upload images');
         }
 
         setUploadProgress(85);
         
-        // Step 3: Start model training with the zip URL
+        // Step 3: Start model training with the Replicate file URL
         const trainResponse = await customFetch('/api/model', {
           method: 'POST',
           headers: {
@@ -418,7 +419,7 @@ export function TrainForm({ onTrainingStatusChange }: TrainFormProps) {
             action: 'train',
             modelOwner: modelData.model.owner,
             modelName: modelData.model.name,
-            zipUrl: urlData.signedUrl
+            zipUrl: uploadData.fileUrl
           }),
         });
         
