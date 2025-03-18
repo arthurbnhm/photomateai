@@ -105,7 +105,6 @@ async function trainModel(modelOwner: string, modelName: string, zipUrl: string,
     const webhookUrl = process.env.NEXT_PUBLIC_APP_URL && `${process.env.NEXT_PUBLIC_APP_URL}/api/webhook`;
 
     // Create the training in Replicate
-    // Note: zipUrl is now a Replicate file URL, not a Supabase URL
     const training = await replicate.trainings.create(
       "ostris",
       "flux-dev-lora-trainer",
