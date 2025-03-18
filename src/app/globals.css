@@ -145,8 +145,7 @@ body.is-landing-page .fixed.md\:top-4.md\:right-4 {
 
 /* Landing page mobile menu styles */
 .mobile-menu {
-  transition: opacity 0.5s cubic-bezier(0.16, 1, 0.3, 1), 
-              visibility 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: opacity 0.3s ease, visibility 0.3s ease;
   z-index: 50;
   position: fixed;
   top: 0;
@@ -161,6 +160,14 @@ body.is-landing-page .fixed.md\:top-4.md\:right-4 {
   justify-content: center;
   padding-top: env(safe-area-inset-top);
   background-color: rgba(var(--background-rgb), 0.98);
+  will-change: opacity, visibility;
+}
+
+/* Hide mobile menu on desktop regardless of its state */
+@media (min-width: 768px) {
+  .mobile-menu {
+    display: none !important;
+  }
 }
 
 .dark .mobile-menu {
@@ -186,10 +193,26 @@ body.is-landing-page .fixed.md\:top-4.md\:right-4 {
 
 /* Menu button styles */
 .menu-button {
-  transition: all 0.2s ease;
+  transition: background-color 0.2s ease;
   border-radius: 4px;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   position: relative;
-  z-index: 60;
+}
+
+/* Hide menu button on desktop */
+@media (min-width: 768px) {
+  .menu-button {
+    display: none !important;
+  }
+}
+
+.menu-button svg {
+  position: absolute;
+  transition: opacity 0.15s ease, transform 0.15s ease;
 }
 
 .menu-button:hover {
@@ -207,13 +230,14 @@ body.is-landing-page .fixed.md\:top-4.md\:right-4 {
   line-height: 2.5rem;
   opacity: 0;
   transform: translateY(20px);
-  transition: opacity 0.5s ease, transform 0.5s ease;
+  transition: opacity 0.3s ease, transform 0.3s ease;
+  will-change: opacity, transform;
 }
 
 .mobile-menu.open .mobile-menu-items {
   opacity: 1;
   transform: translateY(0);
-  transition-delay: 0.1s;
+  transition-delay: 0.05s;
 }
 
 .mobile-menu-items a {

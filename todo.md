@@ -77,6 +77,8 @@
 - ✅ Remove pooling, only keep realtime subscription or opposite
 - ✅ Rework all the caching system, centralize it?
 - ✅ Stripe portal
+- Buy more coins
+- Change plan / upgrade / downgrade
 
 # Improvements
 
@@ -96,6 +98,7 @@
 - ✅ Error: Error fetching subscription: {}
 - ✅ Once generate button is clicked, if the browser is refreshed, the generation never starts
 - ✅ Remove steeled generation causing infinite pooling
+- Burger menu and close button are fucked
 
 # Caching
 
@@ -103,5 +106,3 @@
 - ✅ Coins
 - Models
 - Form values
-
-trying to fix this shit

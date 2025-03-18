@@ -11,6 +11,22 @@ import { useRouter } from "next/navigation";
 export default function Home() {
   // State for mobile menu
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  // Add debounce state to prevent rapid clicks
+  const [isMenuButtonDisabled, setIsMenuButtonDisabled] = useState(false);
+
+  // Function to handle menu toggle with debounce
+  const handleMenuToggle = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!isMenuButtonDisabled) {
+      setIsMenuButtonDisabled(true);
+      setMobileMenuOpen(!mobileMenuOpen);
+      
+      // Enable the button after a short delay
+      setTimeout(() => {
+        setIsMenuButtonDisabled(false);
+      }, 300); // Match this with transition duration
+    }
+  };
 
   // Define all available landing images
   const availableImages = [
@@ -165,23 +181,24 @@ export default function Home() {
         .menu-item {
           opacity: 0;
           transform: translateY(10px);
-          transition: opacity 0.5s ease, transform 0.5s ease;
+          transition: opacity 0.3s ease, transform 0.3s ease;
+          will-change: opacity, transform;
         }
         
         .mobile-menu.open .menu-item:nth-child(1) {
-          transition-delay: 0.1s;
+          transition-delay: 0.05s;
         }
         
         .mobile-menu.open .menu-item:nth-child(2) {
-          transition-delay: 0.15s;
+          transition-delay: 0.1s;
         }
         
         .mobile-menu.open .menu-item:nth-child(3) {
-          transition-delay: 0.2s;
+          transition-delay: 0.15s;
         }
         
         .mobile-menu.open .menu-item:nth-child(4) {
-          transition-delay: 0.25s;
+          transition-delay: 0.2s;
         }
         
         .mobile-menu.open .menu-item {
@@ -192,8 +209,9 @@ export default function Home() {
         .menu-cta {
           opacity: 0;
           transform: translateY(10px);
-          transition: opacity 0.5s ease, transform 0.5s ease;
-          transition-delay: 0.3s;
+          transition: opacity 0.3s ease, transform 0.3s ease;
+          transition-delay: 0.25s;
+          will-change: opacity, transform;
         }
         
         .mobile-menu.open .menu-cta {
@@ -251,48 +269,47 @@ export default function Home() {
               </ul>
             </nav>
             
-            {/* Mobile Menu Button */}
+            {/* Mobile Menu Button - Only visible on mobile */}
             <button 
-              className={`md:hidden menu-button p-2 ${mobileMenuOpen ? 'menu-button-active' : ''}`}
-              onClick={(e) => {
-                e.stopPropagation();
-                setMobileMenuOpen(!mobileMenuOpen);
-              }}
+              className={`block md:hidden menu-button p-2 ${mobileMenuOpen ? 'menu-button-active' : ''}`}
+              onClick={handleMenuToggle}
               aria-label={mobileMenuOpen ? "Close menu" : "Open menu"}
+              style={{ zIndex: 60 }}
+              disabled={isMenuButtonDisabled}
             >
-              {mobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+              <Menu className={`h-6 w-6 ${mobileMenuOpen ? 'opacity-0 scale-75' : 'opacity-100 scale-100'}`} />
+              <X className={`h-6 w-6 ${mobileMenuOpen ? 'opacity-100 scale-100' : 'opacity-0 scale-75'}`} />
             </button>
           </div>
         </header>
         
-        {/* Mobile Menu */}
+        {/* Mobile Menu - Only visible on mobile */}
         <div 
-          className={`mobile-menu md:hidden ${mobileMenuOpen ? 'open' : 'closed'}`}
+          className={`mobile-menu block md:hidden ${mobileMenuOpen ? 'open' : 'closed'}`}
         >
-          <button 
-            className="absolute top-6 right-6 p-2 rounded-full hover:bg-muted/80 transition-colors"
-            onClick={() => setMobileMenuOpen(false)}
-            aria-label="Close menu"
-          >
-            <X className="h-6 w-6" />
-          </button>
-          
           <div className="mobile-menu-items">
             <div className="mb-12">
-              <svg 
-                width="64" 
-                height="64" 
-                viewBox="0 0 200 200" 
-                preserveAspectRatio="xMidYMid meet"
-                xmlns="http://www.w3.org/2000/svg"
-                className="mx-auto mb-4"
+              {/* Make logo clickable to close menu */}
+              <div 
+                className="cursor-pointer"
+                onClick={() => setMobileMenuOpen(false)}
+                aria-label="Close menu"
               >
-                <rect width="200" height="200" fill="black" rx="50" ry="50" />
-                <circle cx="100" cy="100" r="35" fill="white" />
-                <circle cx="135" cy="65" r="10" fill="#ff3333" className="red-dot" />
-                <circle cx="135" cy="65" r="15" fill="#ff3333" opacity="0.3" className="red-glow" />
-              </svg>
-              <span className="font-bold text-2xl">PhotomateAI</span>
+                <svg 
+                  width="64" 
+                  height="64" 
+                  viewBox="0 0 200 200" 
+                  preserveAspectRatio="xMidYMid meet"
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="mx-auto mb-4"
+                >
+                  <rect width="200" height="200" fill="black" rx="50" ry="50" />
+                  <circle cx="100" cy="100" r="35" fill="white" />
+                  <circle cx="135" cy="65" r="10" fill="#ff3333" className="red-dot" />
+                  <circle cx="135" cy="65" r="15" fill="#ff3333" opacity="0.3" className="red-glow" />
+                </svg>
+                <span className="font-bold text-2xl">PhotomateAI</span>
+              </div>
             </div>
             
             <nav>
@@ -395,13 +412,13 @@ export default function Home() {
               ))}
             </div>
             
-            {/* Mobile View - Horizontal scroll with partial view of first image */}
-            <div className="md:hidden w-full overflow-x-auto scrollbar-hide py-4 relative snap-x snap-mandatory min-h-[208px]">
-              <div className="flex gap-4 pl-[24%] pr-8">
+            {/* Mobile View - Horizontal scroll with images extending beyond edges */}
+            <div className="md:hidden w-[calc(100%+3rem)] overflow-x-auto scrollbar-hide py-4 relative snap-x snap-mandatory min-h-[208px] -mx-6">
+              <div className="flex gap-6">
                 {sampleImages.map((imageSrc, i) => (
                   <div 
                     key={i} 
-                    className={`flex-none w-48 h-48 rounded-xl overflow-hidden relative shadow-md snap-center border-4 border-gray-200 dark:border-gray-800 ${i === 0 ? '-ml-[180px]' : ''}`}
+                    className={`flex-none w-48 h-48 rounded-xl overflow-hidden relative shadow-md snap-center border-4 border-gray-200 dark:border-gray-800 ${i === 0 ? '-ml-6' : ''}`}
                     style={{ transform: `rotate(${(i % 2 === 0) ? '3deg' : '-3deg'})` }}
                   >
                     <Image 
@@ -414,6 +431,8 @@ export default function Home() {
                     />
                   </div>
                 ))}
+                {/* Add an invisible spacer at the end for better scrolling */}
+                <div className="flex-none w-12 h-1"></div>
               </div>
             </div>
           </div>
