@@ -54,7 +54,7 @@
 - ✅ Make sure we dont use supabase admin key anymore
 - ✅ Add payment
 - 🟡 Find ways to make good use of output and logs from webhooks
-- Use predict_time for calculation instead of current method (done for predictions)
+- ✅ Use predict_time for calculation instead of current method (done for predictions)
 
 # Authentication
 
@@ -72,7 +72,7 @@
 
 # Others
 
-- Include costs
+- ✅ Include costs
 - Add media sharing
 - ✅ Remove pooling, only keep realtime subscription or opposite
 - ✅ Rework all the caching system, centralize it?
@@ -81,9 +81,9 @@
 # Improvements
 
 - ✅ Stalled and Generations as a same design 
-- Beautiful landing page
+- ✅ Beautiful landing page
 - Review all the columns
-- Merge Trainings and Models
+- ✅ Merge Trainings and Models
 - ✅ Better handle the webhooks status from predictions
 - ✅ Better handle the webhooks status from trainings
 - Many fetches happen at once

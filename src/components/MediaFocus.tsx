@@ -74,9 +74,6 @@ export function MediaFocus({
         
         // Remove the class
         document.documentElement.classList.remove('media-focus-active')
-        
-        // Restore scroll position
-        window.scrollTo(0, scrollY)
       }
     }
   }, [isOpen])

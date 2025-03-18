@@ -84,6 +84,7 @@ export function ActionButtons({
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [menuPreloaded, setMenuPreloaded] = useState(false)
   const [isDropOverlayOpen, setIsDropOverlayOpen] = useState(false)
+  const [isLandingPage, setIsLandingPage] = useState(false)
   
   // Hooks
   const pathname = usePathname()
@@ -95,6 +96,26 @@ export function ActionButtons({
   const isHomePage = pathname === '/'
   const isPlansPage = pathname === '/plans'
   const showSignOutButton = user && isHomePage && !hideSignOutOnHomepage
+  
+  // Check if we're on the landing page
+  useEffect(() => {
+    if (typeof document !== 'undefined') {
+      const checkIsLandingPage = () => {
+        setIsLandingPage(document.body.classList.contains('is-landing-page'));
+      };
+      
+      // Check initially
+      checkIsLandingPage();
+      
+      // Set up a mutation observer to watch for class changes on the body
+      const observer = new MutationObserver(checkIsLandingPage);
+      observer.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+      
+      return () => {
+        observer.disconnect();
+      };
+    }
+  }, []);
   
   // Scroll and visibility handling
   useEffect(() => {
@@ -159,8 +180,8 @@ export function ActionButtons({
     setMobileMenuOpen(open);
   };
   
-  // Don't render until hydrated or if image viewer is open
-  if (!mounted || isImageViewerOpen || isDropOverlayOpen) {
+  // Don't render until hydrated or if image viewer is open or on landing page
+  if (!mounted || isImageViewerOpen || isDropOverlayOpen || isLandingPage) {
     return null
   }
   

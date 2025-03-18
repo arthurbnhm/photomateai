@@ -29,10 +29,9 @@ import {
 // Define the model interface
 interface Model {
   id: string;
-  model_id: string;
-  model_owner: string;
   display_name: string;
-  training_status?: string;
+  model_id: string;  // Required for generation
+  model_owner: string; // Required for generation
 }
 
 // Define the type for pending generations
@@ -161,17 +160,39 @@ export function PromptForm({
     const fetchModels = async () => {
       setLoadingModels(true);
       try {
-        // Fetch only models with succeeded training status
-        const response = await fetch('/api/model/list?is_cancelled=false&is_deleted=false&status=succeeded');
-        if (!response.ok) {
-          throw new Error('Failed to fetch models');
+        // Fetch models with pagination handling and only necessary fields
+        let allModels: Model[] = [];
+        let currentPage = 1;
+        let hasMorePages = true;
+        
+        while (hasMorePages) {
+          // Fetch one page at a time with fields parameter
+          const response = await fetch(`/api/model/list?is_cancelled=false&is_deleted=false&status=succeeded&page=${currentPage}&fields=id,display_name,model_id,model_owner`);
+          if (!response.ok) {
+            throw new Error('Failed to fetch models');
+          }
+          
+          const data = await response.json();
+          
+          if (data.success) {
+            if (data.models && data.models.length > 0) {
+              allModels = [...allModels, ...data.models];
+            }
+            
+            // Check if there are more pages
+            if (data.pagination && data.pagination.page < data.pagination.pages) {
+              currentPage++;
+            } else {
+              hasMorePages = false;
+            }
+          } else {
+            hasMorePages = false;
+          }
         }
         
-        const data = await response.json();
-        
-        if (data.success && data.models) {
+        if (allModels.length > 0) {
           // Sort models by display_name for better user experience
-          const sortedModels = [...data.models].sort((a, b) => {
+          const sortedModels = [...allModels].sort((a, b) => {
             // Use only display_name without fallback
             const displayNameA = a.display_name || '';
             const displayNameB = b.display_name || '';
@@ -183,6 +204,8 @@ export function PromptForm({
           if (sortedModels.length > 0 && !form.getValues().modelId) {
             form.setValue('modelId', sortedModels[0].id);
           }
+        } else {
+          console.warn('No models found with succeeded status');
         }
       } catch (err) {
         console.error('Error fetching models:', err);

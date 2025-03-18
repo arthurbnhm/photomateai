@@ -41,6 +41,7 @@
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
+  --background-rgb: 255, 255, 255;
 }
 
 .dark {
@@ -76,6 +77,7 @@
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(0.205 0 0);
   --sidebar-ring: oklch(0.556 0 0);
+  --background-rgb: 20, 20, 20;
 }
 
 @theme inline {
@@ -123,5 +125,133 @@
   }
   body {
     @apply bg-background text-foreground;
+  }
+  
+  /* Smooth scrolling for anchor links */
+  html {
+    scroll-behavior: smooth;
+  }
+  
+  /* Adjust anchor scroll position for sticky header */
+  section[id] {
+    scroll-margin-top: 80px;
+  }
+}
+
+/* Landing page: hide ActionButtons */
+body.is-landing-page .fixed.md\:top-4.md\:right-4 {
+  display: none !important;
+}
+
+/* Landing page mobile menu styles */
+.mobile-menu {
+  transition: opacity 0.5s cubic-bezier(0.16, 1, 0.3, 1), 
+              visibility 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+  z-index: 50;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100%;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding-top: env(safe-area-inset-top);
+  background-color: rgba(var(--background-rgb), 0.98);
+}
+
+.dark .mobile-menu {
+  background-color: rgba(15, 15, 15, 0.98);
+}
+
+.mobile-menu.closed {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.mobile-menu.open {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  backdrop-filter: blur(8px);
+}
+
+.dark .mobile-menu.open {
+  backdrop-filter: blur(10px);
+}
+
+/* Menu button styles */
+.menu-button {
+  transition: all 0.2s ease;
+  border-radius: 4px;
+  position: relative;
+  z-index: 60;
+}
+
+.menu-button:hover {
+  background-color: var(--muted);
+}
+
+.menu-button-active {
+  background-color: var(--muted);
+}
+
+/* Mobile menu items */
+.mobile-menu-items {
+  text-align: center;
+  font-size: 1.5rem;
+  line-height: 2.5rem;
+  opacity: 0;
+  transform: translateY(20px);
+  transition: opacity 0.5s ease, transform 0.5s ease;
+}
+
+.mobile-menu.open .mobile-menu-items {
+  opacity: 1;
+  transform: translateY(0);
+  transition-delay: 0.1s;
+}
+
+.mobile-menu-items a {
+  display: block;
+  padding: 0.75rem 1.5rem;
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+.mobile-menu-items a:hover {
+  transform: translateY(-2px);
+  color: var(--primary);
+}
+
+.mobile-menu-items a::after {
+  content: '';
+  position: absolute;
+  bottom: 0.5rem;
+  left: 50%;
+  width: 0;
+  height: 2px;
+  background-color: var(--primary);
+  transition: width 0.3s ease, left 0.3s ease;
+}
+
+.mobile-menu-items a:hover::after {
+  width: 30px;
+  left: calc(50% - 15px);
+}
+
+/* Hide scrollbars but keep functionality */
+@layer utilities {
+  .scrollbar-hide {
+    -ms-overflow-style: none;  /* IE and Edge */
+    scrollbar-width: none;  /* Firefox */
+  }
+  
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none; /* Chrome, Safari and Opera */
   }
 }
