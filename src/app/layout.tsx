@@ -17,7 +17,7 @@ export const metadata: Metadata = {
     description: "Transform your selfies into professional portraits",
     images: [
       {
-        url: "https://tt2qu1wvxjiuahsf.public.blob.vercel-storage.com/social.webp",
+        url: "/social.png",
         width: 1200,
         height: 630,
         alt: "Photomate AI",
