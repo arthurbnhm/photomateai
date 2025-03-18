@@ -396,8 +396,12 @@ export default function Home() {
               {sampleImages.map((imageSrc, i) => (
                 <div 
                   key={i} 
-                  className="group w-48 h-48 rounded-xl overflow-hidden relative shadow-md transform transition-all duration-300 hover:scale-105 hover:shadow-lg border-4 border-gray-200 dark:border-gray-800 hover:border-gray-300 dark:hover:border-gray-700"
-                  style={{ transform: `rotate(${(i % 2 === 0) ? '3deg' : '-3deg'})` }}
+                  className="group w-48 h-48 rounded-xl overflow-hidden relative shadow-md transform transition-all duration-300 hover:scale-105 hover:shadow-lg"
+                  style={{ 
+                    transform: `rotate(${(i % 2 === 0) ? '3deg' : '-3deg'})`,
+                    border: '4px solid #E5E7EB',
+                    boxShadow: '0 0 0 1px rgba(0, 0, 0, 0.1)'
+                  }}
                 >
                   <div className="absolute inset-0 bg-gradient-to-b from-transparent to-black/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
                   <Image 
@@ -418,8 +422,12 @@ export default function Home() {
                 {sampleImages.map((imageSrc, i) => (
                   <div 
                     key={i} 
-                    className="flex-none w-48 h-48 rounded-xl overflow-hidden relative shadow-md snap-center border-4 border-gray-200 dark:border-gray-800"
-                    style={{ transform: `rotate(${(i % 2 === 0) ? '3deg' : '-3deg'})` }}
+                    className="flex-none w-48 h-48 rounded-xl overflow-hidden relative shadow-md snap-center"
+                    style={{ 
+                      transform: `rotate(${(i % 2 === 0) ? '3deg' : '-3deg'})`,
+                      border: '4px solid #E5E7EB',
+                      boxShadow: '0 0 0 1px rgba(0, 0, 0, 0.1)'
+                    }}
                   >
                     <Image 
                       src={imageSrc}
