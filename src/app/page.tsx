@@ -3,31 +3,13 @@
 import Link from "next/link";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
-import { Check, X, Menu } from "lucide-react";
+import { Check, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useRouter } from "next/navigation";
+import { Navbar } from "@/components/Navbar";
 
 export default function Home() {
-  // State for mobile menu
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  // Add debounce state to prevent rapid clicks
-  const [isMenuButtonDisabled, setIsMenuButtonDisabled] = useState(false);
-
-  // Function to handle menu toggle with debounce
-  const handleMenuToggle = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (!isMenuButtonDisabled) {
-      setIsMenuButtonDisabled(true);
-      setMobileMenuOpen(!mobileMenuOpen);
-      
-      // Enable the button after a short delay
-      setTimeout(() => {
-        setIsMenuButtonDisabled(false);
-      }, 300); // Match this with transition duration
-    }
-  };
-
   // Define all available landing images
   const availableImages = [
     "/landing/01.webp",
@@ -74,19 +56,6 @@ export default function Home() {
     };
   }, []);
   
-  // Add effect to prevent scrolling when mobile menu is open
-  useEffect(() => {
-    if (mobileMenuOpen) {
-      document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = '';
-    }
-    
-    return () => {
-      document.body.style.overflow = '';
-    };
-  }, [mobileMenuOpen]);
-  
   // Ensure page starts at the top
   useEffect(() => {
     // Scroll to top on component mount
@@ -99,7 +68,7 @@ export default function Home() {
   }, []);
   
   // Get auth context and router
-  const { user, isAuthReady } = useAuth();
+  const { user } = useAuth();
   const router = useRouter();
   
   // Handle navigation to app or auth
@@ -122,9 +91,6 @@ export default function Home() {
       const targetElement = document.getElementById(targetId);
       
       if (targetElement) {
-        // Close mobile menu first
-        setMobileMenuOpen(false);
-        
         // Scroll to the element
         targetElement.scrollIntoView({ 
           behavior: 'smooth',
@@ -136,241 +102,12 @@ export default function Home() {
       }
     }
   };
-  
-  // Close mobile menu when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      const target = event.target as HTMLElement;
-      // If clicking outside the mobile menu and it's open, close it
-      if (mobileMenuOpen && !target.closest('.mobile-menu-items') && !target.closest('.menu-button')) {
-        setMobileMenuOpen(false);
-      }
-    };
-    
-    document.addEventListener('click', handleClickOutside);
-    return () => {
-      document.removeEventListener('click', handleClickOutside);
-    };
-  }, [mobileMenuOpen]);
 
   return (
     <>
-      {/* Logo animation styles */}
-      <style jsx global>{`
-        @keyframes pulse {
-          0% { opacity: 0.6; r: 10; }
-          50% { opacity: 1; r: 12; }
-          100% { opacity: 0.6; r: 10; }
-        }
-        
-        @keyframes glow {
-          0% { opacity: 0.2; r: 15; }
-          50% { opacity: 0.4; r: 20; }
-          100% { opacity: 0.2; r: 15; }
-        }
-        
-        .red-dot {
-          animation: pulse 2s infinite ease-in-out;
-        }
-        
-        .red-glow {
-          animation: glow 2s infinite ease-in-out;
-        }
-        
-        /* Menu item staggered animation */
-        .menu-item {
-          opacity: 0;
-          transform: translateY(10px);
-          transition: opacity 0.3s ease, transform 0.3s ease;
-          will-change: opacity, transform;
-        }
-        
-        .mobile-menu.open .menu-item:nth-child(1) {
-          transition-delay: 0.05s;
-        }
-        
-        .mobile-menu.open .menu-item:nth-child(2) {
-          transition-delay: 0.1s;
-        }
-        
-        .mobile-menu.open .menu-item:nth-child(3) {
-          transition-delay: 0.15s;
-        }
-        
-        .mobile-menu.open .menu-item:nth-child(4) {
-          transition-delay: 0.2s;
-        }
-        
-        .mobile-menu.open .menu-item {
-          opacity: 1;
-          transform: translateY(0);
-        }
-        
-        .menu-cta {
-          opacity: 0;
-          transform: translateY(10px);
-          transition: opacity 0.3s ease, transform 0.3s ease;
-          transition-delay: 0.25s;
-          will-change: opacity, transform;
-        }
-        
-        .mobile-menu.open .menu-cta {
-          opacity: 1;
-          transform: translateY(0);
-        }
-      `}</style>
-      
       <div className="flex flex-col min-h-screen overflow-x-hidden">
-        {/* Header */}
-        <header className="py-4 px-6 bg-background relative z-30">
-          <div className="max-w-6xl mx-auto flex justify-between items-center">
-            <div className="flex items-center space-x-2">
-              <svg 
-                width="32" 
-                height="32" 
-                viewBox="0 0 200 200" 
-                preserveAspectRatio="xMidYMid meet"
-                xmlns="http://www.w3.org/2000/svg">
-                <rect width="200" height="200" fill="black" rx="50" ry="50" />
-                <circle cx="100" cy="100" r="35" fill="white" />
-                <circle cx="135" cy="65" r="10" fill="#ff3333" className="red-dot" />
-                <circle cx="135" cy="65" r="15" fill="#ff3333" opacity="0.3" className="red-glow" />
-              </svg>
-              <span className="font-bold text-xl">PhotomateAI</span>
-            </div>
-            
-            {/* Desktop Navigation */}
-            <nav className="hidden md:block">
-              <ul className="flex space-x-8">
-                <li>
-                  <a 
-                    href="#features" 
-                    className="hover:text-blue-500"
-                    onClick={(e) => handleAnchorClick(e, '#features')}
-                  >
-                    Features
-                  </a>
-                </li>
-                <li>
-                  <a 
-                    href="#pricing" 
-                    className="hover:text-blue-500"
-                    onClick={(e) => handleAnchorClick(e, '#pricing')}
-                  >
-                    Pricing
-                  </a>
-                </li>
-                {isAuthReady && user && (
-                  <li><Link href="/create" className="hover:text-blue-500">My Account</Link></li>
-                )}
-                {isAuthReady && !user && (
-                  <li><Link href="/auth/login" className="hover:text-blue-500">Sign In</Link></li>
-                )}
-              </ul>
-            </nav>
-            
-            {/* Mobile Menu Button - Only visible on mobile */}
-            <button 
-              className={`block md:hidden menu-button p-2 ${mobileMenuOpen ? 'menu-button-active' : ''}`}
-              onClick={handleMenuToggle}
-              aria-label={mobileMenuOpen ? "Close menu" : "Open menu"}
-              style={{ zIndex: 60 }}
-              disabled={isMenuButtonDisabled}
-            >
-              <Menu className={`h-6 w-6 ${mobileMenuOpen ? 'opacity-0 scale-75' : 'opacity-100 scale-100'}`} />
-              <X className={`h-6 w-6 ${mobileMenuOpen ? 'opacity-100 scale-100' : 'opacity-0 scale-75'}`} />
-            </button>
-          </div>
-        </header>
-        
-        {/* Mobile Menu - Only visible on mobile */}
-        <div 
-          className={`mobile-menu block md:hidden ${mobileMenuOpen ? 'open' : 'closed'}`}
-        >
-          <div className="mobile-menu-items">
-            <div className="mb-12">
-              {/* Make logo clickable to close menu */}
-              <div 
-                className="cursor-pointer"
-                onClick={() => setMobileMenuOpen(false)}
-                aria-label="Close menu"
-              >
-                <svg 
-                  width="64" 
-                  height="64" 
-                  viewBox="0 0 200 200" 
-                  preserveAspectRatio="xMidYMid meet"
-                  xmlns="http://www.w3.org/2000/svg"
-                  className="mx-auto mb-4"
-                >
-                  <rect width="200" height="200" fill="black" rx="50" ry="50" />
-                  <circle cx="100" cy="100" r="35" fill="white" />
-                  <circle cx="135" cy="65" r="10" fill="#ff3333" className="red-dot" />
-                  <circle cx="135" cy="65" r="15" fill="#ff3333" opacity="0.3" className="red-glow" />
-                </svg>
-                <span className="font-bold text-2xl">PhotomateAI</span>
-              </div>
-            </div>
-            
-            <nav>
-              <ul className="space-y-8">
-                <li className="menu-item">
-                  <a 
-                    href="#features" 
-                    className="hover:text-blue-500" 
-                    onClick={(e) => handleAnchorClick(e, '#features')}
-                  >
-                    Features
-                  </a>
-                </li>
-                <li className="menu-item">
-                  <a 
-                    href="#pricing" 
-                    className="hover:text-blue-500" 
-                    onClick={(e) => handleAnchorClick(e, '#pricing')}
-                  >
-                    Pricing
-                  </a>
-                </li>
-                {isAuthReady && user && (
-                  <li className="menu-item">
-                    <Link 
-                      href="/create" 
-                      className="hover:text-blue-500" 
-                      onClick={() => setMobileMenuOpen(false)}
-                    >
-                      My Account
-                    </Link>
-                  </li>
-                )}
-                {isAuthReady && !user && (
-                  <li className="menu-item">
-                    <Link 
-                      href="/auth/login" 
-                      className="hover:text-blue-500" 
-                      onClick={() => setMobileMenuOpen(false)}
-                    >
-                      Sign In
-                    </Link>
-                  </li>
-                )}
-              </ul>
-            </nav>
-            
-            <div className="mt-16 menu-cta">
-              <Button 
-                size="lg" 
-                className="rounded-full px-8 py-6 text-lg"
-                onClick={() => {
-                  setMobileMenuOpen(false);
-                  handleStartNow();
-                }}
-              >
-                Start Now
-              </Button>
-            </div>
-          </div>
-        </div>
+        {/* Navbar */}
+        <Navbar showLandingLinks={true} hideSignOutOnHomepage={true} />
 
         {/* Hero Section */}
         <section id="hero" className="min-h-[calc(100vh-72px)] flex flex-col justify-center items-center py-12 md:py-20 px-4 text-center">
@@ -416,13 +153,13 @@ export default function Home() {
               ))}
             </div>
             
-            {/* Mobile View - Horizontal scroll with images extending beyond edges */}
-            <div className="md:hidden w-full overflow-x-auto scrollbar-hide py-4 relative snap-x snap-mandatory min-h-[208px]">
-              <div className="flex gap-6 pl-4 pr-12">
+            {/* Mobile View - Horizontal scroll with partially visible first image */}
+            <div className="md:hidden w-screen -mx-4 overflow-x-auto scrollbar-hide py-4 relative snap-x snap-mandatory min-h-[208px]">
+              <div className="flex gap-6 pr-8" style={{ paddingLeft: '4px' }}>
                 {sampleImages.map((imageSrc, i) => (
                   <div 
                     key={i} 
-                    className="flex-none w-48 h-48 rounded-xl overflow-hidden relative shadow-md snap-center"
+                    className={`flex-none w-48 h-48 rounded-xl overflow-hidden relative shadow-md snap-center ${i === 0 ? 'ml-[-100px]' : ''}`}
                     style={{ 
                       transform: `rotate(${(i % 2 === 0) ? '3deg' : '-3deg'})`,
                       border: '4px solid #E5E7EB',
@@ -671,19 +408,17 @@ export default function Home() {
         <footer className="py-12 px-4 bg-background border-t">
           <div className="max-w-6xl mx-auto">
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-8">
-              <div className="col-span-1 sm:col-span-2 md:col-span-1 flex items-center space-x-2 mb-4 md:mb-0">
-                <svg 
-                  width="24" 
-                  height="24" 
-                  viewBox="0 0 200 200" 
-                  preserveAspectRatio="xMidYMid meet"
-                  xmlns="http://www.w3.org/2000/svg">
-                  <rect width="200" height="200" fill="black" rx="50" ry="50" />
-                  <circle cx="100" cy="100" r="35" fill="white" />
-                  <circle cx="135" cy="65" r="10" fill="#ff3333" className="red-dot" />
-                  <circle cx="135" cy="65" r="15" fill="#ff3333" opacity="0.3" className="red-glow" />
-                </svg>
-                <span className="font-bold text-xl">PhotomateAI</span>
+              <div>
+                <div className="font-medium mb-4 flex items-center space-x-2">
+                  <Image 
+                    src="/logo.svg"
+                    alt="PhotomateAI Logo"
+                    width={24}
+                    height={24}
+                    priority
+                  />
+                  <span>PhotomateAI</span>
+                </div>
               </div>
               
               <div>

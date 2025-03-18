@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="200" height="200" viewBox="0 0 200 200" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg">
+  <style>
+    @keyframes pulse {
+      0% { opacity: 0.6; r: 10; }
+      50% { opacity: 1; r: 12; }
+      100% { opacity: 0.6; r: 10; }
+    }
+    
+    @keyframes glow {
+      0% { opacity: 0.2; r: 15; }
+      50% { opacity: 0.4; r: 20; }
+      100% { opacity: 0.2; r: 15; }
+    }
+    
+    .red-dot {
+      animation: pulse 2s infinite ease-in-out;
+    }
+    
+    .red-glow {
+      animation: glow 2s infinite ease-in-out;
+    }
+  </style>
+  <rect width="200" height="200" fill="black" rx="50" ry="50" />
+  <circle cx="100" cy="100" r="35" fill="white" />
+  <circle cx="150" cy="50" r="10" fill="#ff3333" class="red-dot" />
+  <circle cx="150" cy="50" r="15" fill="#ff3333" opacity="0.3" class="red-glow" />
+</svg> 

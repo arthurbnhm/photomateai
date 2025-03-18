@@ -158,7 +158,7 @@ export function CreditCounter() {
   }
 
   // Common container styles for consistent appearance
-  const containerClasses = "flex items-center gap-1.5 h-9 px-3 rounded-md border border-input bg-background transition-all duration-300"
+  const containerClasses = "flex items-center gap-1.5 h-9 px-1.5"
 
   // If loading or error, return appropriate UI
   if (loading && credits === null) {
@@ -182,24 +182,16 @@ export function CreditCounter() {
           <div 
             className={cn(
               containerClasses,
-              "hover:bg-accent/50 hover:border-accent-foreground/20 cursor-pointer",
-              isDecrementing 
-                ? "border-amber-500/30 bg-amber-500/5 shadow-[0_0_0_1px_rgba(245,158,11,0.1)]" 
-                : ""
+              isDecrementing ? "text-amber-500" : ""
             )}
           >
             <Coins 
               className={cn(
-                "h-4 w-4 transition-colors duration-300",
-                isDecrementing 
-                  ? "text-amber-500 animate-[pulse_1s_ease-in-out]" 
-                  : "text-amber-500/80"
+                "h-4 w-4 text-amber-500/80",
+                isDecrementing ? "text-amber-500 animate-[pulse_1s_ease-in-out]" : ""
               )} 
             />
-            <span className={cn(
-              "text-sm font-medium flex items-center",
-              isDecrementing ? "text-foreground" : "text-foreground"
-            )}>
+            <span className="text-sm font-medium flex items-center text-foreground">
               <AnimatedCounter 
                 value={credits} 
                 color="inherit" 

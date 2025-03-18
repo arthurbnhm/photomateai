@@ -4,7 +4,6 @@ import "./globals.css";
 import { Analytics } from "@vercel/analytics/react";
 import { Toaster } from "@/components/ui/sonner";
 import { ThemeProvider } from "@/components/ThemeProvider";
-import { ActionButtons } from "@/components/ActionButtons";
 import { AuthProvider } from "@/contexts/AuthContext";
 
 const inter = Inter({ subsets: ["latin"] });
@@ -40,7 +39,6 @@ export default function RootLayout({
           enableSystem
         >
           <AuthProvider>
-            <ActionButtons hideSignOutOnHomepage={true} />
             <main className="min-h-screen">
               {children}
             </main>
