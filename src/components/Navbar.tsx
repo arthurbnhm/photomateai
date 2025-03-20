@@ -227,7 +227,7 @@ export function Navbar({
                 {user ? (
                   <>
                     {isHomePage ? (
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-4">
                         <Button 
                           variant="outline" 
                           className="h-9 w-auto px-3"
@@ -237,7 +237,7 @@ export function Navbar({
                         </Button>
                       </div>
                     ) : isCreatePage ? (
-                      <div className="flex gap-2 items-center">
+                      <div className="flex gap-4 items-center">
                         <CreditCounter />
                         <Button 
                           variant="outline" 
@@ -260,7 +260,7 @@ export function Navbar({
                         <ModeToggle />
                       </div>
                     ) : isPlansPage ? (
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-4">
                         <Button 
                           variant="outline" 
                           className="h-9 w-auto px-3"
@@ -271,7 +271,7 @@ export function Navbar({
                         <ModeToggle />
                       </div>
                     ) : (
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-4">
                         <Button 
                           variant="outline" 
                           className="h-9 w-auto px-3"
@@ -284,7 +284,7 @@ export function Navbar({
                     )}
                   </>
                 ) : (
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-4">
                     <Button 
                       variant="outline" 
                       className="h-9 w-auto px-3"
@@ -300,7 +300,7 @@ export function Navbar({
           </nav>
           
           {/* Mobile Menu Button - Only visible on mobile */}
-          <div className="flex items-center gap-2 md:hidden">
+          <div className="flex items-center gap-4 md:hidden">
             {!isHomePage && <ModeToggle />}
             <button 
               className="menu-button p-2"

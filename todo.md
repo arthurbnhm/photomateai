@@ -13,6 +13,9 @@
 - Delete training files
 - Find out about using client to upload the zip file (replicate.files.create)
 - Delete a model and its versions https://replicate.com/docs/reference/http#models.delete
+- Validation model after a training starts and until terminal state
+- Add model version in the table
+- Model bages do not update with pooling anymore
 
 # Create
 
@@ -37,6 +40,7 @@
 - ✅ The image should download the actual format selected
 - ✅ Image should be same name as the one in supabase
 - Add pagination
+- Instead of calling for version latest, use the one returned by version column in models table
 
 # App
 
@@ -55,6 +59,7 @@
 - ✅ Add payment
 - 🟡 Find ways to make good use of output and logs from webhooks
 - ✅ Use predict_time for calculation instead of current method (done for predictions)
+- ✅ Unify the navigation bar
 
 # Authentication
 
@@ -79,6 +84,8 @@
 - ✅ Stripe portal
 - Buy more coins
 - Change plan / upgrade / downgrade
+- Add feedback form
+- Migrate all model versions
 
 # Improvements
 
@@ -99,10 +106,21 @@
 - ✅ Once generate button is clicked, if the browser is refreshed, the generation never starts
 - ✅ Remove steeled generation causing infinite pooling
 - ✅ Burger menu and close button are fucked
+- ✅ Images are no more deleted from supabase when marked as this
+- Many shit happen probably due to this: Remove the getUserId effect that calls this function
+- Model is not stored in local storage
 
 # Caching
 
 - ✅ Images
 - ✅ Coins
-- Models
-- Form values
+- ✅ Models
+- ✅ Form values
+
+
+# Advanced 
+
+- Lightning (warm, cold, sunset, blue hour)
+- Camera (closeup shot, portrait, bokeh, depth)
+- Background (Solid color, INPUT (color palette), red, blue)
+- Facial expressions (smile, sad, choked)

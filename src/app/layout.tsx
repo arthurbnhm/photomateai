@@ -11,6 +11,7 @@ const inter = Inter({ subsets: ["latin"] });
 export const metadata: Metadata = {
   title: "Photomate AI",
   description: "Transform your selfies into professional portraits",
+  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL!),
   openGraph: {
     title: "Photomate AI",
     description: "Transform your selfies into professional portraits",
