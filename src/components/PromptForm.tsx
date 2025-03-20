@@ -32,6 +32,7 @@ interface Model {
   display_name: string;
   model_id: string;  // Required for generation
   model_owner: string; // Required for generation
+  version?: string;
 }
 
 // Define the type for pending generations
@@ -167,7 +168,7 @@ export function PromptForm({
         
         while (hasMorePages) {
           // Fetch one page at a time with fields parameter
-          const response = await fetch(`/api/model/list?is_cancelled=false&is_deleted=false&status=succeeded&page=${currentPage}&fields=id,display_name,model_id,model_owner`);
+          const response = await fetch(`/api/model/list?is_cancelled=false&is_deleted=false&status=succeeded&page=${currentPage}&fields=id,display_name,model_id,model_owner,version`);
           if (!response.ok) {
             throw new Error('Failed to fetch models');
           }
@@ -224,35 +225,6 @@ export function PromptForm({
     }
   }, [models, form]);
   
-  // Function to fetch the latest model version
-  const fetchLatestModelVersion = async (owner: string, name: string): Promise<string | null> => {
-    try {
-      const response = await fetch(`/api/model/version?owner=${encodeURIComponent(owner)}&name=${encodeURIComponent(name)}`);
-      
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error(`Failed to fetch model version: ${response.status} ${response.statusText}`, errorText);
-        throw new Error(`Failed to fetch model version: ${response.status} ${response.statusText}`);
-      }
-      
-      const data = await response.json();
-      
-      if (data.success && data.version) {
-        return data.version;
-      } else {
-        console.error('No model version found in response:', data);
-        if (data.error) {
-          throw new Error(data.error);
-        }
-        return null;
-      }
-    } catch (error) {
-      console.error('Error fetching model version:', error);
-      setError(`Error fetching model version: ${error instanceof Error ? error.message : 'Unknown error'}`);
-      return null;
-    }
-  };
-
   // Add a pending generation
   const addPendingGeneration = (generation: PendingGeneration) => {
     // Add start time if not provided
@@ -363,12 +335,10 @@ export function PromptForm({
               );
             }
             
-            // Fetch the latest version for this model at generation time
-            if (modelName) {
-              modelVersion = await fetchLatestModelVersion(selectedModel.model_owner, modelName);
-              if (!modelVersion) {
-                console.warn('Could not fetch latest version, will use default');
-              }
+            // Use the version stored in the model record
+            modelVersion = selectedModel.version || null;
+            if (!modelVersion) {
+              console.warn('No version found in model record, server will use default');
             }
           }
         }

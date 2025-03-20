@@ -13,8 +13,8 @@
 - Delete training files
 - Find out about using client to upload the zip file (replicate.files.create)
 - Delete a model and its versions https://replicate.com/docs/reference/http#models.delete
-- Validation model after a training starts and until terminal state
-- Add model version in the table
+- Validation modal after a training starts and until terminal state
+- ✅ Add model version in the table
 - Model bages do not update with pooling anymore
 
 # Create
@@ -40,7 +40,7 @@
 - ✅ The image should download the actual format selected
 - ✅ Image should be same name as the one in supabase
 - Add pagination
-- Instead of calling for version latest, use the one returned by version column in models table
+- ✅ Instead of calling for version latest, use the one returned by version column in models table
 
 # App
 
@@ -85,7 +85,7 @@
 - Buy more coins
 - Change plan / upgrade / downgrade
 - Add feedback form
-- Migrate all model versions
+- ✅ Migrate all model versions
 
 # Improvements
 
@@ -124,3 +124,8 @@
 - Camera (closeup shot, portrait, bokeh, depth)
 - Background (Solid color, INPUT (color palette), red, blue)
 - Facial expressions (smile, sad, choked)
+
+
+# Have a look
+
+- It orders them with newest first and limits to 50 images (to keep things fast)

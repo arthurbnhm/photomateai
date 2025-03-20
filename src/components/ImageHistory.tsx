@@ -52,8 +52,12 @@ type PredictionData = {
   input?: {
     output_format?: string
   }
-  model_name?: string
+  model_name?: string // This will be deprecated
   model_id?: string
+  // New field to store the joined display_name from models table
+  models?: {
+    display_name: string
+  } | null
 }
 
 // Add new type for image with status
@@ -147,7 +151,12 @@ export function ImageHistory({
       // Build the query with user_id filter if user is authenticated
       let query = supabaseClient.current
         .from('predictions')
-        .select('*')
+        .select(`
+          *,
+          models:model_id (
+            display_name
+          )
+        `)
         .eq('is_deleted', false);
       
       // Add user_id filter if user is authenticated
@@ -170,16 +179,21 @@ export function ImageHistory({
         // Process the data
         const processedData: ImageGeneration[] = data
           .filter((item: PredictionData) => item.status === 'succeeded' && item.storage_urls)
-          .map((item: PredictionData) => ({
-            id: item.id,
-            replicate_id: item.replicate_id,
-            prompt: item.prompt,
-            timestamp: item.created_at,
-            images: processOutput(item.storage_urls),
-            aspectRatio: item.aspect_ratio,
-            format: item.input?.output_format || 'png',
-            modelName: item.model_name || 'Default Model'
-          }));
+          .map((item: PredictionData) => {
+            // Get the display name directly from the joined models table
+            const modelDisplayName = item.models?.display_name || 'Default Model';
+            
+            return {
+              id: item.id,
+              replicate_id: item.replicate_id,
+              prompt: item.prompt,
+              timestamp: item.created_at,
+              images: processOutput(item.storage_urls),
+              aspectRatio: item.aspect_ratio,
+              format: item.input?.output_format || 'png',
+              modelName: modelDisplayName
+            };
+          });
         
         // Update state immediately without checking for changes
         setGenerations(processedData);
@@ -258,9 +272,15 @@ export function ImageHistory({
         
         try {
           // Fetch all predictions with these replicate_ids in a single query
+          // Include a join with the models table
           const { data, error } = await supabaseClient.current
             .from('predictions')
-            .select('*')
+            .select(`
+              *,
+              models:model_id (
+                display_name
+              )
+            `)
             .in('replicate_id', replicateIds);
             
           clearTimeout(timeoutId);
@@ -284,6 +304,9 @@ export function ImageHistory({
                   // Process the new image data
                   const processedImages = processOutput(prediction.storage_urls);
                   
+                  // Get the model display name directly from the joined models table
+                  const modelDisplayName = prediction.models?.display_name || 'Default Model';
+                  
                   // Update generations state
                   setGenerations(prev => {
                     const existingIndex = prev.findIndex(g => g.id === matchingPending.id);
@@ -293,7 +316,8 @@ export function ImageHistory({
                       // Update existing generation
                       updatedGenerations[existingIndex] = {
                         ...updatedGenerations[existingIndex],
-                        images: processedImages
+                        images: processedImages,
+                        modelName: modelDisplayName
                       };
                     } else {
                       // Add as new generation
@@ -305,7 +329,7 @@ export function ImageHistory({
                         images: processedImages,
                         aspectRatio: matchingPending.aspectRatio,
                         format: matchingPending.format || prediction.input?.output_format || 'png',
-                        modelName: matchingPending.modelName || prediction.model_name || 'Default Model'
+                        modelName: modelDisplayName
                       };
                       // Add to the beginning of the array
                       updatedGenerations.unshift(newGeneration);

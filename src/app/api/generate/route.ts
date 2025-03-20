@@ -2,18 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import Replicate from 'replicate';
 import { createServerClient } from '@/lib/supabase-server';
 
-// Define the expected response type based on the documentation
-interface ModelVersionResponse {
-  previous: string | null;
-  next: string | null;
-  results: Array<{
-    id: string;
-    created_at: string;
-    cog_version: string;
-    openapi_schema: Record<string, unknown>;
-  }>;
-}
-
 // Initialize Replicate with API token
 const replicate = new Replicate({
   auth: process.env.REPLICATE_API_TOKEN,
@@ -23,30 +11,6 @@ const replicate = new Replicate({
 replicate.fetch = (url, options) => {
   return fetch(url, { ...options, cache: "no-store" });
 };
-
-// Hardcoded model owner
-const MODEL_OWNER = "arthurbnhm";
-
-// Helper function to get the latest model version
-async function getLatestModelVersion(owner: string, name: string): Promise<string | null> {
-  try {
-    // Get the list of versions from Replicate
-    const versionsResponse = await replicate.models.versions.list(owner, name) as unknown as ModelVersionResponse;
-    
-    // According to the documentation, the response should have a 'results' array
-    if (versionsResponse && 
-        'results' in versionsResponse && 
-        Array.isArray(versionsResponse.results) && 
-        versionsResponse.results.length > 0) {
-      return versionsResponse.results[0].id;
-    }
-    
-    return null;
-  } catch (_) {
-    void _; // Explicitly indicate we're ignoring this variable
-    return null;
-  }
-}
 
 export async function POST(request: NextRequest) {
   try {
@@ -170,6 +134,11 @@ export async function POST(request: NextRequest) {
         } else {
           // Use the model's model_id
           modelName = trainedModel.model_id;
+          
+          // Use the model's version if available and not already set
+          if (trainedModel.version && !finalModelVersion) {
+            finalModelVersion = trainedModel.version;
+          }
         }
       } catch (err) {
         console.error('Error getting model details:', err);
@@ -188,15 +157,12 @@ export async function POST(request: NextRequest) {
       );
     }
     
-    // If we don't have a version yet, fetch the latest
+    // If we don't have a version yet, return an error
     if (!finalModelVersion) {
-      finalModelVersion = await getLatestModelVersion(MODEL_OWNER, modelName);
-      if (!finalModelVersion) {
-        return NextResponse.json(
-          { error: `No versions found for model ${MODEL_OWNER}/${modelName}` },
-          { status: 404 }
-        );
-      }
+      return NextResponse.json(
+        { error: `No version available for model ${modelName}. Please ensure the model has a version specified.` },
+        { status: 400 }
+      );
     }
     
     const inputParams = {
@@ -245,7 +211,8 @@ export async function POST(request: NextRequest) {
             prompt: prompt,
             aspect_ratio: aspectRatio || "1:1",
             status: prediction.status,
-            input: inputParams
+            input: inputParams,
+            model_id: modelName
             // user_id is now handled by Supabase trigger
           })
           .select()

@@ -199,6 +199,9 @@ export async function POST(request: Request) {
       const costPerSecond = 0.001525;
       const cost = predictTime ? predictTime * costPerSecond : null;
 
+      // Extract version from webhook data if available
+      const version = webhookData.version || null;
+
       // Prepare the update data based on status
       const updateData: {
         status: string;
@@ -229,6 +232,19 @@ export async function POST(request: Request) {
       if (updateError) {
         console.error('Error updating training:', updateError);
         return NextResponse.json({ error: 'Error updating training' }, { status: 500 });
+      }
+
+      // If training succeeded and we have a version, update the models table
+      if (webhookData.status === 'succeeded' && version && training.model_id) {
+        const { error: modelUpdateError } = await supabase
+          .from('models')
+          .update({ version })
+          .eq('id', training.model_id);
+
+        if (modelUpdateError) {
+          console.error('Error updating model version:', modelUpdateError);
+          // Continue even if model update fails
+        }
       }
 
       return NextResponse.json({ success: true, type: 'training' });
