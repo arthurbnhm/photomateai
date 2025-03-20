@@ -53,27 +53,14 @@ export function MediaFocus({
   // Lock body scroll when viewer is open
   useEffect(() => {
     if (isOpen) {
-      // Save the current scroll position and disable scrolling
-      const scrollY = window.scrollY
-      
-      // Freeze the body
-      document.body.style.position = 'fixed'
-      document.body.style.top = `-${scrollY}px`
-      document.body.style.width = '100%'
+      // Simply prevent scrolling without changing document position
       document.body.style.overflow = 'hidden'
-      
-      // Adding a class to html to prevent any scrolling
-      document.documentElement.classList.add('media-focus-active')
+      document.documentElement.style.overflow = 'hidden' // Also lock html element
       
       return () => {
-        // Restore body scrolling when the component unmounts or closes
-        document.body.style.position = ''
-        document.body.style.top = ''
-        document.body.style.width = ''
+        // Just restore scrolling when done
         document.body.style.overflow = ''
-        
-        // Remove the class
-        document.documentElement.classList.remove('media-focus-active')
+        document.documentElement.style.overflow = ''
       }
     }
   }, [isOpen])
