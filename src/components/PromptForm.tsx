@@ -122,14 +122,14 @@ export function PromptForm({
   const [creditDeducting, setCreditDeducting] = useState(false);
 
   const placeholderExamples = useMemo(() => [
-    "A serene landscape with mountains at sunset",
-    "A cyberpunk cityscape with neon lights",
-    "A photorealistic portrait of a fantasy character",
-    "An astronaut riding a horse in a meadow",
-    "A cozy cabin in the woods with snow falling",
-    "A futuristic spaceship orbiting a distant planet",
-    "A magical forest with glowing mushrooms",
-    "A steampunk-inspired mechanical creature"
+    "A woman portrait on studio grey background",
+    "A closeup shot of a man at sunset",
+    "A professional headshot with soft lighting",
+    "A black and white street photography in NYC",
+    "A minimalist product photo on white background",
+    "A fashion editorial with dramatic lighting",
+    "A landscape with golden hour lighting",
+    "A architectural interior with natural light"
   ], []);
 
   // Animation state
