@@ -7,7 +7,9 @@ import { Menu } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePathname, useRouter } from "next/navigation";
+/* Credit counter temporarily hidden
 import { CreditCounter } from "@/components/CreditCounter";
+*/
 import { ModeToggle } from "@/components/ModeToggle";
 
 type NavbarProps = {
@@ -37,6 +39,7 @@ export function Navbar({
   const pathname = usePathname();
   const isHomePage = pathname === '/';
   const isCreatePage = pathname?.startsWith('/create');
+  const isTrainPage = pathname?.startsWith('/train');
   const isPlansPage = pathname === '/plans';
   
   // Handle sign out with redirect
@@ -238,9 +241,18 @@ export function Navbar({
                       </div>
                     ) : isCreatePage ? (
                       <div className="flex gap-4 items-center">
+                        {/* Credit counter temporarily hidden
                         <CreditCounter />
+                        */}
                         <Button 
-                          variant="outline" 
+                          variant="ghost" 
+                          className="h-9 w-auto px-3"
+                          asChild
+                        >
+                          <Link href="/train">Train Model</Link>
+                        </Button>
+                        <Button 
+                          variant="ghost" 
                           className="h-9 w-auto px-3"
                           asChild
                         >
@@ -250,11 +262,43 @@ export function Navbar({
                         </Button>
                         {(!isHomePage || !hideSignOutOnHomepage) && (
                           <Button 
-                            variant="outline" 
+                            variant="ghost" 
                             className="h-9 w-auto px-3"
                             onClick={handleSignOut}
                           >
-                            Sign out
+                            Sign Out
+                          </Button>
+                        )}
+                        <ModeToggle />
+                      </div>
+                    ) : isTrainPage ? (
+                      <div className="flex gap-4 items-center">
+                        {/* Credit counter temporarily hidden
+                        <CreditCounter />
+                        */}
+                        <Button 
+                          variant="ghost" 
+                          className="h-9 w-auto px-3"
+                          asChild
+                        >
+                          <Link href="/create">Generate Images</Link>
+                        </Button>
+                        <Button 
+                          variant="ghost" 
+                          className="h-9 w-auto px-3"
+                          asChild
+                        >
+                          <Link href="https://billing.stripe.com/p/login/6oE14c04k7BpeFGfYY" target="_blank" rel="noopener noreferrer">
+                            Billing
+                          </Link>
+                        </Button>
+                        {(!isHomePage || !hideSignOutOnHomepage) && (
+                          <Button 
+                            variant="ghost" 
+                            className="h-9 w-auto px-3"
+                            onClick={handleSignOut}
+                          >
+                            Sign Out
                           </Button>
                         )}
                         <ModeToggle />
@@ -372,7 +416,7 @@ export function Navbar({
               {isAuthReady && user ? (
                 <>
                   {/* Home page shows Go to App */}
-                  {isHomePage && (
+                  {isHomePage ? (
                     <li className="menu-item">
                       <Link 
                         href="/create" 
@@ -382,29 +426,67 @@ export function Navbar({
                         Go to App
                       </Link>
                     </li>
-                  )}
-                  
-                  {/* Create page shows Credits + Billing */}
-                  {isCreatePage && (
+                  ) : isCreatePage ? (
                     <>
                       <li className="menu-item">
                         <div className="flex justify-center mb-2">
+                          {/* Credit counter temporarily hidden
                           <CreditCounter />
+                          */}
                         </div>
+                      </li>
+                      <li className="menu-item">
+                        <Link 
+                          href="/train" 
+                          className="hover:text-blue-500" 
+                          onClick={() => setMobileMenuOpen(false)}
+                        >
+                          Train Model
+                        </Link>
                       </li>
                       <li className="menu-item">
                         <Link 
                           href="https://billing.stripe.com/p/login/6oE14c04k7BpeFGfYY" 
                           target="_blank" 
                           rel="noopener noreferrer" 
-                          className="hover:text-blue-500"
+                          className="hover:text-blue-500" 
                           onClick={() => setMobileMenuOpen(false)}
                         >
                           Billing
                         </Link>
                       </li>
                     </>
-                  )}
+                  ) : isTrainPage ? (
+                    <>
+                      <li className="menu-item">
+                        <div className="flex justify-center mb-2">
+                          {/* Credit counter temporarily hidden
+                          <CreditCounter />
+                          */}
+                        </div>
+                      </li>
+                      <li className="menu-item">
+                        <Link 
+                          href="/create" 
+                          className="hover:text-blue-500" 
+                          onClick={() => setMobileMenuOpen(false)}
+                        >
+                          Generate Images
+                        </Link>
+                      </li>
+                      <li className="menu-item">
+                        <Link 
+                          href="https://billing.stripe.com/p/login/6oE14c04k7BpeFGfYY" 
+                          target="_blank" 
+                          rel="noopener noreferrer" 
+                          className="hover:text-blue-500" 
+                          onClick={() => setMobileMenuOpen(false)}
+                        >
+                          Billing
+                        </Link>
+                      </li>
+                    </>
+                  ) : null}
                   
                   {/* Sign out button (conditional on home page) */}
                   {(!isHomePage || !hideSignOutOnHomepage) && (

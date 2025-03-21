@@ -2,12 +2,12 @@ import { createClient } from "@/lib/supabase-server";
 import { redirect } from "next/navigation";
 import { Navbar } from "@/components/Navbar";
 
-export default async function CreateLayout({
+export default async function AppLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  // Server-side protection for the create page
+  // Server-side protection for app pages
   const supabase = await createClient();
   const { data: { user }, error: userError } = await supabase.auth.getUser();
 
@@ -48,7 +48,9 @@ export default async function CreateLayout({
   return (
     <>
       <Navbar />
-      {children}
+      <div className="pt-16 md:pt-20">
+        {children}
+      </div>
     </>
   );
 } 
