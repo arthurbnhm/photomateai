@@ -43,7 +43,7 @@ export async function GET(request: Request) {
       success: true,
       status: data.status
     });
-  } catch (error) {
+  } catch {
     return NextResponse.json({ 
       success: false, 
       error: 'Server error' 

@@ -11,19 +11,19 @@ import { Navbar } from "@/components/Navbar";
 import { motion } from "framer-motion";
 
 export default function Home() {
-  // Define all available landing images
-  const availableImages = [
-    "/landing/01.webp",
-    "/landing/02.png",
-    "/landing/03.webp",
-    "/landing/04.webp",
-  ];
-  
   // Create a shuffled array of 5 images from the available ones
   const [sampleImages, setSampleImages] = useState<string[]>([]);
   
   // Shuffle images on component mount
   useEffect(() => {
+    // Define all available landing images
+    const availableImages = [
+      "/landing/01.webp",
+      "/landing/02.png",
+      "/landing/03.webp",
+      "/landing/04.webp",
+    ];
+    
     // Fisher-Yates shuffle algorithm
     const shuffleArray = (array: string[]) => {
       const newArray = [...array];

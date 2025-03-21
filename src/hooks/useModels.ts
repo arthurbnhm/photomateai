@@ -180,7 +180,7 @@ export function useModels(newTraining: NewTraining | null = null) {
     }, 5000); // Poll every 5 seconds until training appears
     
     return () => clearInterval(pollingInterval);
-  }, [newTraining?.id, fetchModels, page, isNewTrainingInModels]);
+  }, [newTraining, fetchModels, page, isNewTrainingInModels]);
 
   // Functions to remove models from the list and cache
   const removeModelFromState = useCallback((modelId: string) => {

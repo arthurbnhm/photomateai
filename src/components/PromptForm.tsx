@@ -539,12 +539,64 @@ export function PromptForm({
         cancelAnimationFrame(rafId);
       }
       
-      const timeoutRef = animationState.current.timeoutRef;
+      // Store a reference to the current animation state to avoid the React Hook warning
+      const currentAnimationState = animationState.current;
+      const timeoutRef = currentAnimationState.timeoutRef;
       if (timeoutRef) {
         clearTimeout(timeoutRef);
       }
     };
   }, [isAnimating, placeholderExamples, stopAnimation]);
+
+  // Fetch pending generations from the database
+  const fetchPendingGenerations = async (userId: string) => {
+    try {
+      const supabase = getSupabase();
+      
+      // Fetch predictions with status "starting" or "processing"
+      const { data, error } = await supabase
+        .from('predictions')
+        .select('*')
+        .eq('user_id', userId)
+        .in('status', ['starting', 'processing']);
+        
+      // Add any pending generations to state
+      if (data && data.length > 0) {
+        // Map the data to our PendingGeneration type
+        const pendingGens = data.map((pred: {
+          id: string;
+          replicate_id?: string;
+          prompt: string;
+          aspect_ratio?: string;
+          created_at?: string;
+          format?: string;
+          model_name?: string;
+        }) => ({
+          id: pred.id,
+          replicate_id: pred.replicate_id,
+          prompt: pred.prompt,
+          aspectRatio: pred.aspect_ratio || '1:1',
+          startTime: pred.created_at,
+          format: pred.format,
+          modelName: pred.model_name
+        }));
+        
+        // Update the pendingGenerations state
+        setPendingGenerations(prev => {
+          // Filter out any duplicates
+          const currentIds = prev.map(p => p.id);
+          const newGens = pendingGens.filter(p => !currentIds.includes(p.id));
+          return [...prev, ...newGens];
+        });
+      }
+      
+      if (error) {
+        console.error('Error fetching pending generations:', error);
+      }
+    } catch (error) {
+      console.error('Error in fetchPendingGenerations:', error);
+    }
+  };
 
   // Get the user ID from the session when the component mounts
   useEffect(() => {
@@ -565,46 +617,9 @@ export function PromptForm({
     };
 
     getUserId();
-  }, [supabaseRef]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   
-  // Fetch pending generations from the database
-  const fetchPendingGenerations = async (userId: string) => {
-    try {
-      const supabase = getSupabase();
-      
-      // Fetch predictions with status "starting" or "processing"
-      const { data, error } = await supabase
-        .from('predictions')
-        .select('*')
-        .eq('user_id', userId)
-        .in('status', ['starting', 'processing'])
-        .order('created_at', { ascending: false });
-        
-      if (error) {
-        console.error('Error fetching pending generations:', error);
-        return;
-      }
-      
-      if (data && data.length > 0) {
-        // Convert database records to PendingGeneration format
-        const pendingGens = data.map(record => ({
-          id: record.id,
-          replicate_id: record.replicate_id,
-          prompt: record.prompt,
-          aspectRatio: record.aspect_ratio,
-          startTime: record.created_at,
-          format: record.input?.output_format || 'webp'
-        }));
-        
-        // Update the UI with pending generations from the database
-        setPendingGenerations(pendingGens);
-        console.log(`Loaded ${pendingGens.length} pending generations from database`);
-      }
-    } catch (err) {
-      console.error('Error in fetchPendingGenerations:', err);
-    }
-  };
-
   // Track pending generations count for debugging
   useEffect(() => {
     if (pendingGenerations.length > 0) {
