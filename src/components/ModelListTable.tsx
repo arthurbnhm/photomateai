@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Table,
   TableBody,
@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Trash2, XCircle } from "lucide-react";
 import { createBrowserSupabaseClient } from "@/lib/supabase";
-import { useAuth } from "@/contexts/AuthContext";
+import { useModels } from "@/hooks/useModels";
 
 // Initialize Supabase client
 const supabase = createBrowserSupabaseClient();
@@ -49,18 +49,6 @@ interface Model {
   training_status?: string;
 }
 
-interface ModelListResponse {
-  success: boolean;
-  models: Model[];
-  error?: string;
-  pagination: {
-    total: number;
-    page: number;
-    limit: number;
-    pages: number;
-  };
-}
-
 interface NewTraining {
   id: string;
   status: string;
@@ -77,118 +65,66 @@ interface ModelListTableProps {
 }
 
 export function ModelListTable({ newTraining, onClearNewTraining }: ModelListTableProps = {}) {
-  const [models, setModels] = useState<Model[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
   const [modelToDelete, setModelToDelete] = useState<Model | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
   const [trainingToCancel, setTrainingToCancel] = useState<{id: string, modelId: string} | null>(null);
-  const { user } = useAuth();
   
-  // Check if newTraining is already in models list
-  const isNewTrainingInModels = useCallback(() => {
-    if (!newTraining || !models.length) return false;
-    
-    return models.some(model => {
-      // Check for model ID match
-      if (newTraining.modelId && model.id === newTraining.modelId) return true;
-      
-      // Check for name/owner match if modelId isn't available
-      if (newTraining.modelName && newTraining.modelOwner) {
-        return model.model_id === newTraining.modelName && 
-               model.model_owner === newTraining.modelOwner;
-      }
-      
-      // Check for training ID match in any model's trainings
-      return model.trainings.some(training => 
-        training.id === newTraining.id || 
-        training.training_id === newTraining.id
-      );
-    });
-  }, [newTraining, models]);
-
-  // Memoize the fetch function to prevent it from changing on every render
-  const fetchModels = useCallback(async (pageNum = 1) => {
-    setLoading(true);
-    try {
-      const startTime = Date.now();
-      void startTime; // Explicitly indicate we're ignoring this variable
-      
-      // Include user_id in the API request if user is authenticated
-      const userId = user?.id;
-      const url = userId 
-        ? `/api/model/list?page=${pageNum}&user_id=${userId}` 
-        : `/api/model/list?page=${pageNum}`;
-      
-      const response = await fetch(url);
-      
-      if (!response.ok) {
-        throw new Error(`Failed to fetch models: ${response.status} ${response.statusText}`);
-      }
-      
-      const data: ModelListResponse = await response.json();
-      
-      if (data.success) {
-        setModels(data.models);
-        setTotalPages(data.pagination.pages);
-      } else {
-        setError(data.error || "Failed to fetch models");
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "An error occurred");
-    } finally {
-      setLoading(false);
-    }
-  }, [user?.id]);
-
-  // Initial fetch only once on mount
-  useEffect(() => {
-    fetchModels(1);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  // Refs for buttons that triggered the dialogs
+  const deleteButtonRef = useRef<HTMLButtonElement | null>(null);
+  const cancelButtonRef = useRef<HTMLButtonElement | null>(null);
   
-  // Handle page changes
+  // Use our custom hook for models
+  const {
+    models,
+    loading,
+    error,
+    page,
+    totalPages,
+    handlePageChange,
+    fetchModels,
+    isNewTrainingInModels,
+    removeModelFromState
+  } = useModels(newTraining);
+  
+  // Use useEffect to clear the new training instead of calling directly during render
   useEffect(() => {
-    if (page > 1) {
-      fetchModels(page);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page]);
-
-  // Check if newTraining is in models and clear it if needed
-  useEffect(() => {
-    // Skip if no newTraining or no onClearNewTraining callback
-    if (!newTraining || !onClearNewTraining) return;
-    
-    // Check if the training is in the models list
-    const trainingInModels = isNewTrainingInModels();
-    if (trainingInModels) {
+    if (newTraining && onClearNewTraining && isNewTrainingInModels()) {
       onClearNewTraining();
     }
-    
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [models, newTraining?.id]);
-  
-  // Manual refresh when newTraining changes (with debounce)
-  useEffect(() => {
-    if (!newTraining) return;
-    
-    const timer = setTimeout(() => {
-      fetchModels(page);
-    }, 2000);
-    
-    return () => clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [newTraining?.id, newTraining?.status]);
+  }, [newTraining, onClearNewTraining, isNewTrainingInModels, models]);
 
-  const handlePageChange = (newPage: number) => {
-    if (newPage >= 1 && newPage <= totalPages) {
-      setPage(newPage);
+  // Focus management for dialogs
+  useEffect(() => {
+    // Track previous focus state when dialog opens
+    if (modelToDelete) {
+      // Dialog is opening, save current focused element
+      deleteButtonRef.current = document.activeElement as HTMLButtonElement;
+    } else if (deleteButtonRef.current) {
+      // Focus the button that opened the dialog if it exists
+      setTimeout(() => {
+        if (deleteButtonRef.current) {
+          deleteButtonRef.current.focus();
+          deleteButtonRef.current = null;
+        }
+      }, 0);
     }
-  };
+  }, [modelToDelete]);
+
+  useEffect(() => {
+    if (trainingToCancel) {
+      // Dialog is opening, save current focused element
+      cancelButtonRef.current = document.activeElement as HTMLButtonElement;
+    } else if (cancelButtonRef.current) {
+      // Focus the button that opened the dialog if it exists
+      setTimeout(() => {
+        if (cancelButtonRef.current) {
+          cancelButtonRef.current.focus();
+          cancelButtonRef.current = null;
+        }
+      }, 0);
+    }
+  }, [trainingToCancel]);
 
   // Get the effective status for a model
   const getEffectiveStatus = (model: Model) => {
@@ -388,14 +324,14 @@ export function ModelListTable({ newTraining, onClearNewTraining }: ModelListTab
         throw new Error(data.error || 'Failed to cancel training');
       }
       
-      // Instead of updating the model status, just remove the model from the list
-      setModels(models.filter(model => model.id !== trainingToCancel.modelId));
+      // Remove the model from the list
+      removeModelFromState(trainingToCancel.modelId);
       
       toast.success("Training cancelled successfully");
       
       // Force a refresh of the models after a short delay
       setTimeout(() => {
-        fetchModels(page);
+        fetchModels(page, true);
       }, 1000);
     } catch (err) {
       toast.error(`Error: ${err instanceof Error ? err.message : 'Failed to cancel training'}`);
@@ -430,8 +366,9 @@ export function ModelListTable({ newTraining, onClearNewTraining }: ModelListTab
         throw new Error(data.error || 'Failed to delete model');
       }
       
-      // Remove the model from the local state
-      setModels(models.filter(model => model.id !== modelToDelete.id));
+      // Remove the model from the state
+      removeModelFromState(modelToDelete.id);
+      
       toast.success("Model marked as deleted successfully");
     } catch (err) {
       toast.error(`Error: ${err instanceof Error ? err.message : 'Failed to delete model'}`);
@@ -497,14 +434,16 @@ export function ModelListTable({ newTraining, onClearNewTraining }: ModelListTab
                 throw new Error(data.error || 'Failed to cancel training');
               }
               
-              // Instead of updating the model status, just remove the model from the list
-              setModels(models.filter(model => model.id !== newTraining.modelId));
+              // Remove the model from the list
+              if (newTraining.modelId) {
+                removeModelFromState(newTraining.modelId);
+              }
               
               toast.success("Training cancelled successfully");
               
               // Force a refresh of the models after a short delay
               setTimeout(() => {
-                fetchModels(page);
+                fetchModels(page, true);
               }, 1000);
             } catch (error) {
               toast.error(`Error: ${error instanceof Error ? error.message : 'Failed to cancel training'}`);
@@ -611,7 +550,15 @@ export function ModelListTable({ newTraining, onClearNewTraining }: ModelListTab
       )}
 
       {/* Alert dialog for cancelling training */}
-      <AlertDialog open={!!trainingToCancel} onOpenChange={(open) => !open && setTrainingToCancel(null)}>
+      <AlertDialog 
+        open={!!trainingToCancel} 
+        onOpenChange={(open) => {
+          if (!open) {
+            // Use setTimeout to ensure we're not updating state during render
+            setTimeout(() => setTrainingToCancel(null), 0);
+          }
+        }}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Are you sure you want to cancel this training?</AlertDialogTitle>
@@ -634,7 +581,15 @@ export function ModelListTable({ newTraining, onClearNewTraining }: ModelListTab
       </AlertDialog>
       
       {/* Alert dialog for deleting model */}
-      <AlertDialog open={!!modelToDelete} onOpenChange={(open) => !open && setModelToDelete(null)}>
+      <AlertDialog 
+        open={!!modelToDelete} 
+        onOpenChange={(open) => {
+          if (!open) {
+            // Use setTimeout to ensure we're not updating state during render
+            setTimeout(() => setModelToDelete(null), 0);
+          }
+        }}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Are you sure you want to delete this model?</AlertDialogTitle>

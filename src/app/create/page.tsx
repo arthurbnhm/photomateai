@@ -5,7 +5,6 @@ import { useSearchParams } from "next/navigation";
 import { PromptForm } from "@/components/PromptForm";
 import { ImageHistory } from "@/components/ImageHistory";
 import { TrainForm, TrainingStatus } from "@/components/TrainForm";
-import { ModelListTable } from "@/components/ModelListTable";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 // Define the PendingGeneration type
@@ -70,12 +69,6 @@ function CreatePageContent() {
             onTrainingStatusChange={setTrainingStatus}
             trainingStatus={trainingStatus}
           />
-          <div className="mt-8 pt-8">
-            <ModelListTable 
-              newTraining={trainingStatus} 
-              onClearNewTraining={() => setTrainingStatus(null)}
-            />
-          </div>
         </TabsContent>
       </Tabs>
     </div>

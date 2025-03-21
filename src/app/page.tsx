@@ -8,6 +8,7 @@ import { useEffect, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useRouter } from "next/navigation";
 import { Navbar } from "@/components/Navbar";
+import { motion } from "framer-motion";
 
 export default function Home() {
   // Define all available landing images
@@ -103,6 +104,38 @@ export default function Home() {
     }
   };
 
+  // Animation variants
+  const fadeIn = {
+    hidden: { opacity: 0 },
+    visible: { opacity: 1, transition: { duration: 0.8 } }
+  };
+
+  const fadeUp = {
+    hidden: { opacity: 0, y: 20 },
+    visible: { opacity: 1, y: 0, transition: { duration: 0.8 } }
+  };
+
+  const staggerContainer = {
+    hidden: { opacity: 0 },
+    visible: {
+      opacity: 1,
+      transition: {
+        staggerChildren: 0.2,
+        delayChildren: 0.3
+      }
+    }
+  };
+
+  const imageVariant = {
+    hidden: { opacity: 0, scale: 0.8, rotate: 0 },
+    visible: ({ index }: { index: number }) => ({
+      opacity: 1,
+      scale: 1,
+      rotate: (index % 2 === 0) ? 3 : -3,
+      transition: { duration: 0.5, delay: 0.2 + index * 0.1 }
+    })
+  };
+
   return (
     <>
       <div className="flex flex-col min-h-screen overflow-x-hidden">
@@ -111,31 +144,51 @@ export default function Home() {
 
         {/* Hero Section */}
         <section id="hero" className="min-h-[calc(100vh-72px)] flex flex-col justify-center items-center py-12 md:py-20 px-4 text-center">
-          <div className="max-w-4xl mx-auto">
-            <h1 className="text-3xl sm:text-4xl md:text-6xl font-bold mb-4">
+          <motion.div 
+            className="max-w-4xl mx-auto"
+            initial="hidden"
+            animate="visible"
+            variants={staggerContainer}
+          >
+            <motion.h1 
+              className="text-3xl sm:text-4xl md:text-6xl font-bold mb-4"
+              variants={fadeUp}
+            >
               Professional portraits, created instantly with AI
-            </h1>
-            <p className="text-lg sm:text-xl md:text-2xl text-muted-foreground mb-8">
+            </motion.h1>
+            <motion.p 
+              className="text-lg sm:text-xl md:text-2xl text-muted-foreground mb-8"
+              variants={fadeUp}
+            >
               Look professional online without the professional photoshoot
-            </p>
-            <div className="flex flex-wrap justify-center gap-4">
+            </motion.p>
+            <motion.div 
+              className="flex flex-wrap justify-center gap-4"
+              variants={fadeIn}
+            >
               <Button size="lg" className="rounded-full px-6" onClick={handleStartNow}>
                 Start Now
               </Button>
               <Button size="lg" variant="outline" className="rounded-full px-6">Demo (soon)</Button>
-            </div>
-          </div>
+            </motion.div>
+          </motion.div>
           
           {/* Sample Images */}
           <div className="mt-12 w-full max-w-4xl mx-auto">
             {/* Desktop View - Flex wrap */}
-            <div className="hidden md:flex md:flex-wrap md:justify-center md:gap-6 min-h-[208px]">
+            <motion.div 
+              className="hidden md:flex md:flex-wrap md:justify-center md:gap-6 min-h-[208px]"
+              initial="hidden"
+              animate="visible"
+              variants={staggerContainer}
+            >
               {sampleImages.map((imageSrc, i) => (
-                <div 
+                <motion.div 
                   key={i} 
-                  className="group w-48 h-48 rounded-xl overflow-hidden relative shadow-md transform transition-all duration-300 hover:scale-105 hover:shadow-lg"
+                  className="group w-48 h-48 rounded-xl overflow-hidden relative shadow-md transform hover:scale-105 hover:shadow-lg"
+                  custom={{ index: i }}
+                  variants={imageVariant}
                   style={{ 
-                    transform: `rotate(${(i % 2 === 0) ? '3deg' : '-3deg'})`,
                     border: '4px solid #E5E7EB',
                     boxShadow: '0 0 0 1px rgba(0, 0, 0, 0.1)'
                   }}
@@ -149,19 +202,26 @@ export default function Home() {
                     sizes="(max-width: 768px) 100vw, 192px"
                     priority={true}
                   />
-                </div>
+                </motion.div>
               ))}
-            </div>
+            </motion.div>
             
             {/* Mobile View - Horizontal scroll with partially visible first image */}
-            <div className="md:hidden w-screen -mx-4 overflow-x-auto scrollbar-hide py-4 relative snap-x snap-mandatory min-h-[208px]">
-              <div className="flex gap-6 pr-8" style={{ paddingLeft: '4px' }}>
+            <motion.div 
+              className="md:hidden w-screen -mx-4 overflow-x-auto scrollbar-hide py-4 relative snap-x snap-mandatory min-h-[208px]"
+              initial="hidden"
+              animate="visible"
+              variants={staggerContainer}
+              style={{ paddingLeft: '4px' }}
+            >
+              <div className="flex gap-6 pr-8">
                 {sampleImages.map((imageSrc, i) => (
-                  <div 
+                  <motion.div 
                     key={i} 
                     className={`flex-none w-48 h-48 rounded-xl overflow-hidden relative shadow-md snap-center ${i === 0 ? 'ml-[-100px]' : ''}`}
+                    custom={{ index: i }}
+                    variants={imageVariant}
                     style={{ 
-                      transform: `rotate(${(i % 2 === 0) ? '3deg' : '-3deg'})`,
                       border: '4px solid #E5E7EB',
                       boxShadow: '0 0 0 1px rgba(0, 0, 0, 0.1)'
                     }}
@@ -174,19 +234,21 @@ export default function Home() {
                       sizes="192px"
                       priority={true}
                     />
-                  </div>
+                  </motion.div>
                 ))}
                 {/* Add an invisible spacer at the end for better scrolling */}
                 <div className="flex-none w-12 h-1"></div>
               </div>
-            </div>
+            </motion.div>
           </div>
         </section>
 
         {/* Features Section */}
         <section id="features" className="py-16 md:py-20 px-4 bg-background">
           <div className="max-w-6xl mx-auto">
-            <h2 className="text-3xl md:text-4xl font-bold text-center mb-8 md:mb-12">Features</h2>
+            <h2 className="text-3xl md:text-4xl font-bold text-center mb-8 md:mb-12">
+              Features
+            </h2>
             
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6 md:gap-8">
               {/* Feature 1 */}
@@ -250,7 +312,9 @@ export default function Home() {
         {/* Pricing Section */}
         <section id="pricing" className="py-16 md:py-20 px-4 bg-background">
           <div className="max-w-6xl mx-auto">
-            <h2 className="text-3xl md:text-4xl font-bold text-center mb-8 md:mb-12">Choose your plan</h2>
+            <h2 className="text-3xl md:text-4xl font-bold text-center mb-8 md:mb-12">
+              Choose your plan
+            </h2>
             
             <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
               {/* Basic Plan */}
@@ -371,7 +435,9 @@ export default function Home() {
         {/* Comparison Section */}
         <section className="py-16 md:py-20 px-4 bg-background">
           <div className="max-w-6xl mx-auto">
-            <h2 className="text-3xl md:text-4xl font-bold text-center mb-8 md:mb-12">Alternatives are expensive.</h2>
+            <h2 className="text-3xl md:text-4xl font-bold text-center mb-8 md:mb-12">
+              Alternatives are expensive.
+            </h2>
             
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6 md:gap-8">
               {/* Professional Photographers */}

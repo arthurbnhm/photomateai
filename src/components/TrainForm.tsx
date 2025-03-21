@@ -13,6 +13,16 @@ import { Loader2 } from "lucide-react";
 import { createBrowserSupabaseClient } from "@/lib/supabase";
 import { useTheme } from "next-themes";
 import JSZip from 'jszip';
+import { ModelListTable } from "@/components/ModelListTable";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  DialogDescription
+} from "@/components/ui/dialog";
+import { useModels } from "@/hooks/useModels";
 
 // Reusable upload icon component
 const UploadIcon = ({ 
@@ -176,7 +186,7 @@ const createThumbnail = async (file: File, maxWidth = 500, maxHeight = 500): Pro
   });
 };
 
-export function TrainForm({ onTrainingStatusChange }: TrainFormProps) {
+export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormProps) {
   // Initialize Supabase client
   const supabaseRef = useRef(createBrowserSupabaseClient());
   const getSupabase = useCallback(() => supabaseRef.current, []);
@@ -192,6 +202,11 @@ export function TrainForm({ onTrainingStatusChange }: TrainFormProps) {
   const [nameError, setNameError] = useState<string | null>(null);
   const [thumbnails, setThumbnails] = useState<string[]>([]);
   const { resolvedTheme } = useTheme();
+  // State for the models dialog
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  
+  // Get the invalidateCache function from useModels
+  const { invalidateCache } = useModels();
 
   // Format model name to meet Replicate's requirements
   const formatModelName = (name: string): string => {
@@ -438,6 +453,9 @@ export function TrainForm({ onTrainingStatusChange }: TrainFormProps) {
           modelOwner: modelData.model.owner,
           displayName: displayModelName
         };
+        
+        // Invalidate the models cache
+        invalidateCache();
         
         onTrainingStatusChange(newTrainingStatus);
         
@@ -890,6 +908,27 @@ export function TrainForm({ onTrainingStatusChange }: TrainFormProps) {
             </p>
           </div>
         )}
+        
+        <div className="flex justify-between items-center mb-4">
+          <div></div>
+          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+            <DialogTrigger asChild>
+              <Button variant="outline">View Your Models</Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-4xl">
+              <DialogHeader>
+                <DialogTitle>Your Models</DialogTitle>
+                <DialogDescription>
+                  Manage your trained models and ongoing trainings.
+                </DialogDescription>
+              </DialogHeader>
+              <ModelListTable 
+                newTraining={trainingStatus} 
+                onClearNewTraining={() => onTrainingStatusChange(null)}
+              />
+            </DialogContent>
+          </Dialog>
+        </div>
         
         <div 
           className="w-full bg-card border border-border rounded-xl overflow-hidden shadow-lg"

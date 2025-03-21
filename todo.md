@@ -15,7 +15,7 @@
 - Delete a model and its versions https://replicate.com/docs/reference/http#models.delete
 - Validation modal after a training starts and until terminal state
 - ✅ Add model version in the table
-- Model bages do not update with pooling anymore
+- ✅ Model bages do not update with pooling anymore
 
 # Create
 
