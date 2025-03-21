@@ -249,7 +249,7 @@ export function Navbar({
                           className="h-9 w-auto px-3"
                           asChild
                         >
-                          <Link href="/train">Train Model</Link>
+                          <Link href="/train">Train</Link>
                         </Button>
                         <Button 
                           variant="ghost" 
@@ -281,7 +281,7 @@ export function Navbar({
                           className="h-9 w-auto px-3"
                           asChild
                         >
-                          <Link href="/create">Generate Images</Link>
+                          <Link href="/create">Create</Link>
                         </Button>
                         <Button 
                           variant="ghost" 
@@ -441,7 +441,7 @@ export function Navbar({
                           className="hover:text-blue-500" 
                           onClick={() => setMobileMenuOpen(false)}
                         >
-                          Train Model
+                          Train
                         </Link>
                       </li>
                       <li className="menu-item">
@@ -471,7 +471,7 @@ export function Navbar({
                           className="hover:text-blue-500" 
                           onClick={() => setMobileMenuOpen(false)}
                         >
-                          Generate Images
+                          Create
                         </Link>
                       </li>
                       <li className="menu-item">
