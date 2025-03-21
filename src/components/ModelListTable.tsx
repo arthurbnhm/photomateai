@@ -87,7 +87,7 @@ export function ModelListTable({ newTraining, onClearNewTraining }: ModelListTab
     removeModelFromState
   } = useModels(newTraining);
   
-  // Use useEffect to clear the new training instead of calling directly during render
+  // Clear new training if it's found in models
   useEffect(() => {
     if (newTraining && onClearNewTraining && isNewTrainingInModels()) {
       onClearNewTraining();
@@ -329,10 +329,8 @@ export function ModelListTable({ newTraining, onClearNewTraining }: ModelListTab
       
       toast.success("Training cancelled successfully");
       
-      // Force a refresh of the models after a short delay
-      setTimeout(() => {
-        fetchModels(page, true);
-      }, 1000);
+      // Force a refresh of the models 
+      fetchModels(page, true);
     } catch (err) {
       toast.error(`Error: ${err instanceof Error ? err.message : 'Failed to cancel training'}`);
     } finally {
@@ -441,10 +439,8 @@ export function ModelListTable({ newTraining, onClearNewTraining }: ModelListTab
               
               toast.success("Training cancelled successfully");
               
-              // Force a refresh of the models after a short delay
-              setTimeout(() => {
-                fetchModels(page, true);
-              }, 1000);
+              // Force a refresh of the models
+              fetchModels(page, true);
             } catch (error) {
               toast.error(`Error: ${error instanceof Error ? error.message : 'Failed to cancel training'}`);
             }

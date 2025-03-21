@@ -162,25 +162,14 @@ export function useModels(newTraining: NewTraining | null = null) {
     });
   }, [newTraining, models]);
 
-  // Update for new training
+  // Update for new training - removing polling
   useEffect(() => {
     if (!newTraining) return;
     
     // A new training was created, so invalidate the cache by forcing a refresh
     fetchModels(page, true);
     
-    // Set up a polling interval to check for updates
-    const pollingInterval = setInterval(() => {
-      if (!isNewTrainingInModels()) {
-        fetchModels(page, true);
-      } else {
-        // If training is now in models, we can stop polling
-        clearInterval(pollingInterval);
-      }
-    }, 5000); // Poll every 5 seconds until training appears
-    
-    return () => clearInterval(pollingInterval);
-  }, [newTraining, fetchModels, page, isNewTrainingInModels]);
+  }, [newTraining, fetchModels, page]);
 
   // Functions to remove models from the list and cache
   const removeModelFromState = useCallback((modelId: string) => {
