@@ -222,23 +222,23 @@ export function MediaFocus({
           
           {/* Main content container */}
           <div 
-            className="relative flex flex-col items-center justify-between w-full h-full z-10 px-2 sm:px-[3vw] md:px-[4vw] lg:px-[5vw] py-2 sm:py-[2vh] md:py-[3vh]"
+            className="relative flex flex-col items-center justify-between w-full h-full z-10 px-[5vw] py-[3vh]"
           >
             {/* Top bar with counter and controls */}
             <div 
-              className="w-full flex items-center justify-between z-20 px-2 sm:px-[2vw] md:px-[3vw]"
+              className="w-full flex items-center justify-between z-20 px-[3vw]"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="bg-muted py-1 sm:py-[1vh] px-2 sm:px-4 rounded-full text-xs sm:text-sm font-medium text-foreground">
+              <div className="bg-muted py-[1vh] px-4 rounded-full text-sm font-medium text-foreground">
                 {currentImageIndex + 1} / {currentGeneration.images.length}
               </div>
               
-              <div className="flex gap-2 sm:gap-[2vw]">
+              <div className="flex gap-[2vw]">
                 <Button 
                   onClick={downloadImage}
                   variant="outline"
                   size="icon"
-                  className="h-10 w-10 sm:h-[5vh] sm:w-[5vh] sm:min-h-[2.5rem] sm:min-w-[2.5rem]"
+                  className="h-[5vh] w-[5vh] min-h-[2.5rem] min-w-[2.5rem]"
                 >
                   <Download className="h-[40%] w-[40%]" />
                 </Button>
@@ -247,7 +247,7 @@ export function MediaFocus({
                   onClick={(e) => { e.stopPropagation(); onClose(); }}
                   variant="outline"
                   size="icon"
-                  className="h-10 w-10 sm:h-[5vh] sm:w-[5vh] sm:min-h-[2.5rem] sm:min-w-[2.5rem]"
+                  className="h-[5vh] w-[5vh] min-h-[2.5rem] min-w-[2.5rem]"
                 >
                   <X className="h-[40%] w-[40%]" />
                 </Button>
@@ -256,35 +256,32 @@ export function MediaFocus({
             
             {/* Middle section with image and navigation */}
             <div 
-              className="flex-1 w-full flex items-center justify-center relative my-2 sm:my-[3vh] md:my-[4vh] lg:my-[5vh]"
+              className="flex-1 w-full flex items-center justify-center relative my-[3vh]"
             >
               {/* Main image */}
               <motion.div
                 key={currentImageIndex}
-                className="relative rounded-md overflow-hidden lg:max-h-[75vh] xl:max-h-[80vh]"
+                className="relative rounded-md overflow-hidden"
                 initial={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ duration: 0.2 }}
                 style={{
-                  maxWidth: '95vw',
-                  maxHeight: '60vh',
-                  width: '100%',
-                  height: '100%'
+                  maxWidth: '90vw',
+                  maxHeight: '50vh',
                 }}
                 onClick={(e) => e.stopPropagation()}
               >
                 <NextImage
                   src={currentGeneration.images[currentImageIndex].url}
                   alt={`Generated image for "${currentGeneration.prompt}"`}
-                  className="object-contain rounded-md lg:max-h-[75vh] xl:max-h-[80vh]"
+                  className="object-contain rounded-md"
                   width={1024}
                   height={1024}
                   style={{ 
-                    maxWidth: '100%',
-                    maxHeight: '60vh',
+                    maxWidth: '90vw',
+                    maxHeight: '50vh',
                     width: 'auto', 
-                    height: 'auto',
-                    margin: '0 auto'
+                    height: 'auto' 
                   }}
                   onError={(e) => {
                     console.error("Image failed to load:", e);
@@ -296,12 +293,12 @@ export function MediaFocus({
               </motion.div>
               
               {/* Left/Right arrows */}
-              <div className="absolute inset-x-0 w-full flex items-center justify-between px-1 sm:px-[1vw] md:px-[2vw] lg:px-[3vw]">
+              <div className="absolute inset-x-0 w-full flex items-center justify-between px-[3vw]">
                 <Button 
                   onClick={(e) => { e.stopPropagation(); prevImage(); }}
                   variant="outline"
                   size="icon"
-                  className="h-10 w-10 sm:h-[5vh] sm:w-[5vh] sm:min-h-[2.5rem] sm:min-w-[2.5rem] z-30"
+                  className="h-[5vh] w-[5vh] min-h-[2.5rem] min-w-[2.5rem] z-30"
                   aria-label="Previous image"
                 >
                   <ChevronLeft className="h-[40%] w-[40%]" />
@@ -311,7 +308,7 @@ export function MediaFocus({
                   onClick={(e) => { e.stopPropagation(); nextImage(); }}
                   variant="outline"
                   size="icon"
-                  className="h-10 w-10 sm:h-[5vh] sm:w-[5vh] sm:min-h-[2.5rem] sm:min-w-[2.5rem] z-30"
+                  className="h-[5vh] w-[5vh] min-h-[2.5rem] min-w-[2.5rem] z-30"
                   aria-label="Next image"
                 >
                   <ChevronRight className="h-[40%] w-[40%]" />
@@ -321,16 +318,16 @@ export function MediaFocus({
             
             {/* Bottom section with thumbnails - no background */}
             <div 
-              className="w-full z-20 px-2 sm:px-[2vw] md:px-[3vw]"
+              className="w-full z-20 px-[3vw]"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="mx-auto py-2 sm:py-[2vh] rounded-lg overflow-x-auto">
-                <div className="flex items-center gap-2 sm:gap-[1vw] md:gap-[2vw] justify-center">
+              <div className="mx-auto py-[2vh] rounded-lg overflow-x-auto">
+                <div className="flex items-center gap-[2vw] justify-center">
                   {currentGeneration.images.map((image, index) => (
                     <button
                       key={index}
                       onClick={() => onNavigate(index)}
-                      className={`w-12 h-12 sm:w-[15vw] sm:h-[15vw] max-w-16 max-h-16 sm:max-w-[5rem] sm:max-h-[5rem] min-w-[3rem] min-h-[3rem] 
+                      className={`w-[15vw] h-[15vw] max-w-[5rem] max-h-[5rem] min-w-[3rem] min-h-[3rem] 
                                   rounded-md overflow-hidden border border-input bg-background 
                                   flex-shrink-0 transition relative ${
                         index === currentImageIndex ? 'ring-2 ring-ring/50 scale-110' : 'opacity-70 hover:opacity-100'
@@ -344,7 +341,7 @@ export function MediaFocus({
                           alt={`Thumbnail ${index + 1}`}
                           className="object-cover"
                           fill
-                          sizes="(max-width: 640px) 12vw, 15vw"
+                          sizes="15vw"
                           priority={true}
                           loading="eager"
                           unoptimized={true}
