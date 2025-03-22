@@ -783,24 +783,24 @@ export function ImageHistory({
                   {/* Header section with badges and buttons */}
                   <div className="flex items-center justify-between gap-3">
                     {/* Left side - Tags */}
-                    <div className="flex items-center gap-2 flex-wrap">
+                    <div className={isPending ? 'hidden sm:flex items-center gap-2' : 'flex items-center gap-2'}>
                       {/* Badges */}
                       <div className={isPending ? 'hidden sm:flex items-center gap-2' : 'flex items-center gap-2'}>
                         {/* Aspect ratio badge */}
-                        <Badge variant="outline" className="bg-blue-100 text-blue-800 hover:bg-blue-200 border-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:hover:bg-blue-900/40 dark:border-blue-800/30">
+                        <Badge variant="outline" className="!bg-blue-200 !text-blue-800 hover:!bg-blue-300 !border-blue-300 dark:bg-blue-900/30 dark:text-blue-300 dark:hover:bg-blue-900/40 dark:border-blue-800/30">
                           {generation.aspectRatio}
                         </Badge>
                         
                         {/* Format badge */}
                         {generation.format && (
-                          <Badge variant="outline" className="bg-green-100 text-green-800 hover:bg-green-200 border-green-200 dark:bg-green-900/30 dark:text-green-300 dark:hover:bg-green-900/40 dark:border-green-800/30">
+                          <Badge variant="outline" className="!bg-green-200 !text-green-800 hover:!bg-green-300 !border-green-300 dark:bg-green-900/30 dark:text-green-300 dark:hover:bg-green-900/40 dark:border-green-800/30">
                             {generation.format.toUpperCase()}
                           </Badge>
                         )}
                         
                         {/* Model badge */}
                         {generation.modelName && (
-                          <Badge variant="outline" className="bg-purple-100 text-purple-800 hover:bg-purple-200 border-purple-200 max-w-[150px] truncate dark:bg-purple-900/30 dark:text-purple-300 dark:hover:bg-purple-900/40 dark:border-purple-800/30">
+                          <Badge variant="outline" className="!bg-purple-200 !text-purple-800 hover:!bg-purple-300 !border-purple-300 max-w-[150px] truncate dark:bg-purple-900/30 dark:text-purple-300 dark:hover:bg-purple-900/40 dark:border-purple-800/30">
                             {generation.modelName}
                           </Badge>
                         )}
@@ -809,7 +809,7 @@ export function ImageHistory({
                       {/* Status indicators for pending generations */}
                       {isPending && pending && (
                         <div className="flex items-center gap-1 ml-2">
-                          <Badge variant="secondary" className="flex items-center gap-1">
+                          <Badge variant="secondary" className="flex items-center gap-1 !bg-blue-200 !text-blue-800 !border !border-blue-300 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-800/30">
                             <span className="h-2 w-2 rounded-full bg-blue-400 animate-pulse"></span>
                             Generating
                           </Badge>
