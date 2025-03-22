@@ -230,7 +230,7 @@ export function Navbar({
                 {user ? (
                   <>
                     {isHomePage ? (
-                      <div className="flex items-center gap-4">
+                      <div className="flex items-center gap-2">
                         <Button 
                           variant="outline" 
                           className="h-9 w-auto px-3"
@@ -240,7 +240,7 @@ export function Navbar({
                         </Button>
                       </div>
                     ) : isCreatePage ? (
-                      <div className="flex gap-4 items-center">
+                      <div className="flex gap-2 items-center">
                         {/* Credit counter temporarily hidden
                         <CreditCounter />
                         */}
@@ -272,7 +272,7 @@ export function Navbar({
                         <ModeToggle />
                       </div>
                     ) : isTrainPage ? (
-                      <div className="flex gap-4 items-center">
+                      <div className="flex gap-2 items-center">
                         {/* Credit counter temporarily hidden
                         <CreditCounter />
                         */}
@@ -304,7 +304,7 @@ export function Navbar({
                         <ModeToggle />
                       </div>
                     ) : isPlansPage ? (
-                      <div className="flex items-center gap-4">
+                      <div className="flex items-center gap-2">
                         <Button 
                           variant="outline" 
                           className="h-9 w-auto px-3"
@@ -315,7 +315,7 @@ export function Navbar({
                         <ModeToggle />
                       </div>
                     ) : (
-                      <div className="flex items-center gap-4">
+                      <div className="flex items-center gap-2">
                         <Button 
                           variant="outline" 
                           className="h-9 w-auto px-3"
@@ -328,7 +328,7 @@ export function Navbar({
                     )}
                   </>
                 ) : (
-                  <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-2">
                     <Button 
                       variant="outline" 
                       className="h-9 w-auto px-3"

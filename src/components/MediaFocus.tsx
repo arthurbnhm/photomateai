@@ -328,8 +328,9 @@ export function MediaFocus({
                       key={index}
                       onClick={() => onNavigate(index)}
                       className={`w-[15vw] h-[15vw] max-w-[5rem] max-h-[5rem] min-w-[3rem] min-h-[3rem] 
-                                  rounded-md overflow-hidden border-2 flex-shrink-0 transition relative ${
-                        index === currentImageIndex ? 'border-primary scale-110' : 'border-transparent opacity-70 hover:opacity-100'
+                                  rounded-md overflow-hidden border border-input bg-background 
+                                  flex-shrink-0 transition relative ${
+                        index === currentImageIndex ? 'ring-2 ring-ring/50 scale-110' : 'opacity-70 hover:opacity-100'
                       }`}
                       aria-label={`View image ${index + 1}`}
                       aria-current={index === currentImageIndex ? 'true' : 'false'}
