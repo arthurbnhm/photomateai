@@ -25,24 +25,25 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 
-// Define the model interface
+// Define the model interface to match database structure
 interface Model {
-  id: string;
-  display_name: string;
-  model_id: string;  // Required for generation
-  model_owner: string; // Required for generation
-  version?: string;
+  id: string;              // Database ID (primary key)
+  model_id: string;        // Actual model identifier for API calls
+  model_owner: string;     // Owner of the model
+  display_name: string;    // Human-readable name chosen by the user
+  version?: string;        // Optional version information
+  // Other fields like created_at, is_deleted, user_id exist in DB but not needed in UI
 }
 
 // Define the type for pending generations
 type PendingGeneration = {
   id: string
-  replicate_id?: string // Store the actual Replicate ID when available
+  replicate_id?: string    // Store the actual Replicate ID when available
   prompt: string
   aspectRatio: string
-  startTime?: string // When the generation started
+  startTime?: string       // When the generation started
   format?: string
-  modelName?: string
+  modelDisplayName?: string // Human-readable display name
 }
 
 // Aspect Ratio Frame component
@@ -193,7 +194,7 @@ export function PromptForm({
         if (allModels.length > 0) {
           // Sort models by display_name for better user experience
           const sortedModels = [...allModels].sort((a, b) => {
-            // Use only display_name without fallback
+            // Use display_name consistently
             const displayNameA = a.display_name || '';
             const displayNameB = b.display_name || '';
             return displayNameA.localeCompare(displayNameB);
@@ -268,13 +269,30 @@ export function PromptForm({
         modelId: currentModelId, // Preserve the model selection
       });
       
+      // Find the selected model to get details for API call and UI display
+      let modelApiId: string | null = null;
+      let modelVersion: string | null = null;
+      let modelDisplayName = '';
+      
+      if (values.modelId) {
+        const selectedModel = models.find(model => model.id === values.modelId);
+        if (selectedModel) {
+          modelApiId = selectedModel.model_id; // API identifier
+          modelDisplayName = selectedModel.display_name || selectedModel.model_id || '';
+          
+          // Use the version stored in the model record
+          modelVersion = selectedModel.version || null;
+        }
+      }
+      
       // Add to pending generations with start time
       addPendingGeneration({
         id: tempId,
         prompt: currentPrompt,
         aspectRatio: currentAspectRatio,
         startTime: new Date().toISOString(),
-        format: currentOutputFormat
+        format: currentOutputFormat,
+        modelDisplayName: modelDisplayName // Use consistent naming for UI display
       });
       
       // Get current credits before generation for UI feedback
@@ -312,40 +330,21 @@ export function PromptForm({
       }
       
       try {
-        // Find the selected model to get the name
-        let modelName: string | null = null;
-        let modelVersion: string | null = null;
-        let modelDisplayName = '';
-        
-        if (values.modelId) {
-          const selectedModel = models.find(model => model.id === values.modelId);
-          if (selectedModel) {
-            modelName = selectedModel.model_id;
-            modelDisplayName = selectedModel.display_name || selectedModel.model_id || '';
-            
-            // Update the pending generation with model information
-            if (modelDisplayName) {
-              setPendingGenerations(prev => 
-                prev.map(gen => 
-                  gen.id === tempId 
-                    ? { ...gen, modelName: modelDisplayName } 
-                    : gen
-                )
-              );
-            }
-            
-            // Use the version stored in the model record
-            modelVersion = selectedModel.version || null;
-            if (!modelVersion) {
-              console.warn('No version found in model record, server will use default');
-            }
-          }
-        }
-        
-        if (!modelName) {
+        if (!modelApiId) {
           setError("Please select a valid model");
           removePendingGeneration(tempId);
           return;
+        }
+        
+        // Update the pending generation with model information
+        if (modelDisplayName) {
+          setPendingGenerations(prev => 
+            prev.map(gen => 
+              gen.id === tempId 
+                ? { ...gen, modelDisplayName: modelDisplayName }
+                : gen
+            )
+          );
         }
         
         // Call the API to generate the image with a timeout
@@ -370,6 +369,7 @@ export function PromptForm({
           }
         }
         
+        // Call the API using the correct parameter names based on the API's expectations
         const response = await fetch('/api/generate', {
           method: 'POST',
           headers: {
@@ -382,7 +382,7 @@ export function PromptForm({
             outputFormat: currentOutputFormat,
             generationId: tempId,
             modelVersion: modelVersion,
-            modelName: modelName,
+            modelName: modelApiId, // API expects modelName parameter but stores as model_id
             userId: userId
           }),
           signal: abortController.signal
@@ -553,31 +553,29 @@ export function PromptForm({
       const supabase = getSupabase();
       
       // Fetch predictions with status "starting" or "processing"
+      // Join with models table to get display_name
       const { data, error } = await supabase
         .from('predictions')
-        .select('*')
+        .select(`
+          *,
+          models:model_id (
+            display_name
+          )
+        `)
         .eq('user_id', userId)
         .in('status', ['starting', 'processing']);
         
       // Add any pending generations to state
       if (data && data.length > 0) {
         // Map the data to our PendingGeneration type
-        const pendingGens = data.map((pred: {
-          id: string;
-          replicate_id?: string;
-          prompt: string;
-          aspect_ratio?: string;
-          created_at?: string;
-          format?: string;
-          model_name?: string;
-        }) => ({
+        const pendingGens = data.map((pred) => ({
           id: pred.id,
           replicate_id: pred.replicate_id,
           prompt: pred.prompt,
           aspectRatio: pred.aspect_ratio || '1:1',
           startTime: pred.created_at,
-          format: pred.format,
-          modelName: pred.model_name
+          format: pred.format || pred.input?.output_format || 'webp',
+          modelDisplayName: pred.models?.display_name || pred.model_name || 'Default Model'
         }));
         
         // Update the pendingGenerations state

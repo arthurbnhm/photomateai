@@ -210,6 +210,7 @@ export async function POST(request: NextRequest) {
             replicate_id: predictionId,
             prompt: prompt,
             aspect_ratio: aspectRatio || "1:1",
+            format: outputFormat || "webp",
             status: prediction.status,
             input: inputParams,
             model_id: modelName

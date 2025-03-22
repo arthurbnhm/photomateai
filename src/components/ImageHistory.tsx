@@ -14,24 +14,24 @@ import { useAuth } from "@/contexts/AuthContext"
 // Define the type for image generation
 type ImageGeneration = {
   id: string
-  replicate_id: string  // Add replicate_id to the type
+  replicate_id: string
   prompt: string
   timestamp: string
   images: ImageWithStatus[]
   aspectRatio: string
-  format?: string      // Add format information
-  modelName?: string   // Add model name information
+  format?: string
+  modelDisplayName?: string  // Renamed for consistency
 }
 
 // Define the type for pending generations with potential stall status
 type PendingGeneration = {
   id: string
-  replicate_id?: string // Store the actual Replicate ID when available
+  replicate_id?: string
   prompt: string
   aspectRatio: string
-  startTime?: string // When the generation started
-  format?: string      // Add format information
-  modelName?: string   // Add model name information
+  startTime?: string
+  format?: string
+  modelDisplayName?: string  // Renamed for consistency
 }
 
 // Define a type for prediction data from Supabase
@@ -48,14 +48,14 @@ type PredictionData = {
   completed_at: string | null
   is_deleted: boolean
   is_cancelled: boolean
+  format?: string
   input?: {
     output_format?: string
   }
-  model_name?: string // This will be deprecated
-  model_id?: string
-  // New field to store the joined display_name from models table
+  model_id: string  // Reference to the model's model_id (not database id)
+  // Joined data from models table
   models?: {
-    display_name: string
+    display_name: string  // Human-readable model name
   } | null
 }
 
@@ -189,8 +189,8 @@ export function ImageHistory({
               timestamp: item.created_at,
               images: processOutput(item.storage_urls),
               aspectRatio: item.aspect_ratio,
-              format: item.input?.output_format || 'png',
-              modelName: modelDisplayName
+              format: item.format || item.input?.output_format || 'webp',
+              modelDisplayName: modelDisplayName  // Consistent property naming
             };
           });
         
@@ -316,7 +316,7 @@ export function ImageHistory({
                       updatedGenerations[existingIndex] = {
                         ...updatedGenerations[existingIndex],
                         images: processedImages,
-                        modelName: modelDisplayName
+                        modelDisplayName: modelDisplayName  // Consistent naming
                       };
                     } else {
                       // Add as new generation
@@ -327,8 +327,8 @@ export function ImageHistory({
                         timestamp: new Date().toISOString(),
                         images: processedImages,
                         aspectRatio: matchingPending.aspectRatio,
-                        format: matchingPending.format || prediction.input?.output_format || 'png',
-                        modelName: modelDisplayName
+                        format: prediction.format || matchingPending.format || prediction.input?.output_format || 'webp',
+                        modelDisplayName: modelDisplayName  // Consistent naming
                       };
                       // Add to the beginning of the array
                       updatedGenerations.unshift(newGeneration);
@@ -732,7 +732,7 @@ export function ImageHistory({
           images: [],
           aspectRatio: pending.aspectRatio,
           format: pending.format,
-          modelName: pending.modelName,
+          modelDisplayName: pending.modelDisplayName,
           isPending: true
         };
         allGenerations.push(virtualGeneration);
@@ -799,9 +799,9 @@ export function ImageHistory({
                         )}
                         
                         {/* Model badge */}
-                        {generation.modelName && (
+                        {generation.modelDisplayName && (
                           <Badge variant="outline" className="!bg-purple-200 !text-purple-800 hover:!bg-purple-300 !border-purple-300 max-w-[150px] truncate dark:bg-purple-900/30 dark:text-purple-300 dark:hover:bg-purple-900/40 dark:border-purple-800/30">
-                            {generation.modelName}
+                            {generation.modelDisplayName}
                           </Badge>
                         )}
                       </div>
@@ -809,10 +809,10 @@ export function ImageHistory({
                       {/* Status indicators for pending generations */}
                       {isPending && pending && (
                         <div className="flex items-center gap-1 ml-2">
-                          <Badge variant="secondary" className="flex items-center gap-1 !bg-blue-200 !text-blue-800 !border !border-blue-300 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-800/30">
+                          <div className="flex items-center gap-1.5 text-muted-foreground text-sm">
                             <span className="h-2 w-2 rounded-full bg-blue-400 animate-pulse"></span>
                             Generating
-                          </Badge>
+                          </div>
                           {elapsedTimes[generation.id] !== undefined && (
                             <span className="text-xs text-muted-foreground ml-1">
                               ({elapsedTimes[generation.id]}s)
