@@ -14,7 +14,7 @@ export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL!),
   themeColor: [
     { media: "(prefers-color-scheme: light)", color: "white" },
-    { media: "(prefers-color-scheme: dark)", color: "#181818" }, // Approximating oklch(0.145 0 0) as hex
+    { media: "(prefers-color-scheme: dark)", color: "#121212" }, // More accurate approximation of oklch(0.145 0 0)
   ],
   openGraph: {
     title: "Photomate AI",
