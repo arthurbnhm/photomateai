@@ -12,6 +12,10 @@ export const metadata: Metadata = {
   title: "Photomate AI",
   description: "Transform your selfies into professional portraits",
   metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL!),
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "white" },
+    { media: "(prefers-color-scheme: dark)", color: "#181818" }, // Approximating oklch(0.145 0 0) as hex
+  ],
   openGraph: {
     title: "Photomate AI",
     description: "Transform your selfies into professional portraits",
