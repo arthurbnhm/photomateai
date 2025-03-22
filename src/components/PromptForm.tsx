@@ -14,7 +14,6 @@ import {
   FormControl,
   FormField,
   FormItem,
-  FormLabel,
   FormMessage,
 } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
@@ -640,33 +639,32 @@ export function PromptForm({
         <div className="p-5">
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-              <FormField
-                control={form.control}
-                name="prompt"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="text-foreground">Prompt</FormLabel>
-                    <FormControl>
-                      <Input 
-                        placeholder={placeholderText}
-                        className="bg-background border-input" 
-                        onFocus={stopAnimation}
-                        onClick={stopAnimation}
-                        {...field} 
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              
               <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
+                <FormField
+                  control={form.control}
+                  name="prompt"
+                  render={({ field }) => (
+                    <FormItem className="md:col-span-12">
+                      <FormControl>
+                        <Input 
+                          placeholder={placeholderText}
+                          className="bg-background" 
+                          variant="plain"
+                          onFocus={stopAnimation}
+                          onClick={stopAnimation}
+                          {...field} 
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                
                 <FormField
                   control={form.control}
                   name="aspectRatio"
                   render={({ field }) => (
                     <FormItem className="md:col-span-4">
-                      <FormLabel>Aspect Ratio</FormLabel>
                       <Select 
                         onValueChange={field.onChange} 
                         defaultValue={field.value}
@@ -732,7 +730,6 @@ export function PromptForm({
                   name="outputFormat"
                   render={({ field }) => (
                     <FormItem className="md:col-span-3">
-                      <FormLabel>Format</FormLabel>
                       <Select 
                         onValueChange={field.onChange} 
                         defaultValue={field.value}
@@ -758,7 +755,6 @@ export function PromptForm({
                   name="modelId"
                   render={({ field }) => (
                     <FormItem className="md:col-span-3">
-                      <FormLabel>Model</FormLabel>
                       <Select 
                         onValueChange={field.onChange} 
                         defaultValue={field.value}
