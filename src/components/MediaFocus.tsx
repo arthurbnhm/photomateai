@@ -53,23 +53,38 @@ export function MediaFocus({
   // Lock body scroll when viewer is open
   useEffect(() => {
     if (isOpen) {
-      // Simply prevent scrolling without changing document position
+      // Prevent scrolling and fix position
       document.body.style.overflow = 'hidden'
-      document.documentElement.style.overflow = 'hidden' // Also lock html element
+      document.documentElement.style.overflow = 'hidden'
+      document.body.style.position = 'fixed'
+      document.body.style.width = '100%'
+      document.body.style.top = `-${window.scrollY}px`
       
       return () => {
-        // Just restore scrolling when done
+        // Restore scrolling when done
+        const scrollY = document.body.style.top
         document.body.style.overflow = ''
         document.documentElement.style.overflow = ''
+        document.body.style.position = ''
+        document.body.style.width = ''
+        document.body.style.top = ''
+        window.scrollTo(0, parseInt(scrollY || '0') * -1)
       }
     }
   }, [isOpen])
   
   // Touch swipe handling
   const touchStartXRef = useRef<number | null>(null)
+  const touchStartYRef = useRef<number | null>(null)
   
   const handleTouchStart = (e: React.TouchEvent) => {
     touchStartXRef.current = e.touches[0].clientX
+    touchStartYRef.current = e.touches[0].clientY
+  }
+  
+  const handleTouchMove = (e: React.TouchEvent) => {
+    // Prevent default to stop scrolling
+    e.preventDefault()
   }
   
   const handleTouchEnd = (e: React.TouchEvent) => {
@@ -84,6 +99,7 @@ export function MediaFocus({
     }
     
     touchStartXRef.current = null
+    touchStartYRef.current = null
   }
   
   // Navigation
@@ -212,6 +228,7 @@ export function MediaFocus({
           className="fixed inset-0 flex flex-col items-center justify-center z-[99999]"
           onClick={onClose}
           onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
           onTouchEnd={handleTouchEnd}
         >
           {/* Theme-aware backdrop overlay */}
