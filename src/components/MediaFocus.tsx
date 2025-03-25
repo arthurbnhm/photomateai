@@ -53,22 +53,12 @@ export function MediaFocus({
   // Lock body scroll when viewer is open
   useEffect(() => {
     if (isOpen) {
-      // Prevent scrolling and fix position
+      // Just prevent scrolling without changing position
       document.body.style.overflow = 'hidden'
-      document.documentElement.style.overflow = 'hidden'
-      document.body.style.position = 'fixed'
-      document.body.style.width = '100%'
-      document.body.style.top = `-${window.scrollY}px`
       
       return () => {
         // Restore scrolling when done
-        const scrollY = document.body.style.top
         document.body.style.overflow = ''
-        document.documentElement.style.overflow = ''
-        document.body.style.position = ''
-        document.body.style.width = ''
-        document.body.style.top = ''
-        window.scrollTo(0, parseInt(scrollY || '0') * -1)
       }
     }
   }, [isOpen])

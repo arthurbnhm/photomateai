@@ -7,6 +7,7 @@ import * as z from "zod"
 import { createBrowserSupabaseClient } from "@/lib/supabase"
 import { creditEvents } from "./CreditCounter"
 import { cn } from "@/lib/utils"
+import TextareaAutosize from 'react-textarea-autosize'
 
 import { Button } from "@/components/ui/button"
 import {
@@ -16,7 +17,6 @@ import {
   FormItem,
   FormMessage,
 } from "@/components/ui/form"
-import { Input } from "@/components/ui/input"
 import {
   Select,
   SelectContent,
@@ -24,6 +24,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+
+// Import the AdvancedSettings component
+import { AdvancedSettings, AdvancedSettingsRefType } from "@/components/AdvancedSettings"
 
 // Define the model interface to match database structure
 interface Model {
@@ -100,6 +103,19 @@ const formSchema = z.object({
   }),
 })
 
+// Add type for animation state
+interface AnimationState {
+  currentExampleIndex: number;
+  currentText: string;
+  isDeleting: boolean;
+  typingSpeed: number;
+  deletingSpeed: number;
+  pauseBeforeDelete: number;
+  pauseBeforeNewExample: number;
+  timeoutRef: number | NodeJS.Timeout | null;
+  lastAnimationTime: number;
+}
+
 export function PromptForm({
   pendingGenerations, // Required prop for parent component integration, used in addPendingGeneration and removePendingGeneration
   setPendingGenerations
@@ -111,6 +127,9 @@ export function PromptForm({
   const supabaseRef = useRef(createBrowserSupabaseClient());
   const getSupabase = useCallback(() => supabaseRef.current, []);
   
+  // Create ref for AdvancedSettings component
+  const advancedSettingsRef = useRef<AdvancedSettingsRefType>(null);
+  
   // State variables
   const [models, setModels] = useState<Model[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -120,6 +139,7 @@ export function PromptForm({
   const [placeholderText, setPlaceholderText] = useState("Describe your image...");
   const [isAnimating, setIsAnimating] = useState(true);
   const [creditDeducting, setCreditDeducting] = useState(false);
+  const [isInputFocused, setIsInputFocused] = useState(false);
 
   const placeholderExamples = useMemo(() => [
     "A woman portrait on studio grey background",
@@ -133,17 +153,16 @@ export function PromptForm({
   ], []);
 
   // Animation state
-  const animationState = useRef({
+  const animationState = useRef<AnimationState>({
     currentExampleIndex: 0,
-    currentCharIndex: 0,
+    currentText: "Describe your image...",
     isDeleting: false,
     typingSpeed: 80,
     deletingSpeed: 40,
     pauseBeforeDelete: 2000,
     pauseBeforeNewExample: 500,
-    timeoutRef: null as NodeJS.Timeout | null,
-    lastAnimationTime: 0,
-    currentText: "Describe your image..."
+    timeoutRef: null,
+    lastAnimationTime: 0
   });
   
   const form = useForm<z.infer<typeof formSchema>>({
@@ -268,6 +287,11 @@ export function PromptForm({
         outputFormat: currentOutputFormat,
         modelId: currentModelId, // Preserve the model selection
       });
+      
+      // Reset advanced settings selections
+      if (advancedSettingsRef.current) {
+        advancedSettingsRef.current.resetSelections();
+      }
       
       // Find the selected model to get details for API call and UI display
       let modelApiId: string | null = null;
@@ -454,98 +478,98 @@ export function PromptForm({
     }
   };
 
-  // Function to stop the animation
+  // Stop animation function
   const stopAnimation = useCallback(() => {
     setIsAnimating(false);
-    if (animationState.current.timeoutRef) {
-      clearTimeout(animationState.current.timeoutRef);
-      animationState.current.timeoutRef = null;
-    }
-    setPlaceholderText("Describe your image...");
   }, []);
   
-  // Typing animation effect - optimized version
+  // Handle input focus
+  const handleInputFocus = useCallback(() => {
+    stopAnimation();
+    // Only allow expansion if there's content with newlines or the content is long enough
+    if (form.getValues().prompt && (form.getValues().prompt.includes("\n") || form.getValues().prompt.length > 60)) {
+      setIsInputFocused(true);
+    }
+  }, [stopAnimation, form]);
+  
+  // Handle input blur
+  const handleInputBlur = useCallback(() => {
+    setIsInputFocused(false);
+  }, []);
+  
+  // Handle input click - only allow expand if there's meaningful content
+  const handleInputClick = useCallback(() => {
+    stopAnimation();
+    const content = form.getValues().prompt;
+    // Only unfold if there are newlines or the content is long enough to need expansion
+    if (content && (content.includes("\n") || content.length > 60)) {
+      setIsInputFocused(true);
+    }
+  }, [stopAnimation, form]);
+  
+  // Animation effect
   useEffect(() => {
     if (!isAnimating) return;
-    
-    let rafId: number | null = null;
-    
-    const animatePlaceholder = (timestamp: number) => {
-      if (!isAnimating) return;
+
+    const currentRef = animationState.current;
+    const animate = () => {
+      const now = Date.now();
+      const timeSinceLastAnimation = now - currentRef.lastAnimationTime;
       
-      const state = animationState.current;
-      const currentExample = placeholderExamples[state.currentExampleIndex];
-      const elapsed = timestamp - state.lastAnimationTime;
-      
-      // Check if enough time has passed for the next animation frame
-      const speedToUse = state.isDeleting ? state.deletingSpeed : state.typingSpeed;
-      
-      if (elapsed < speedToUse) {
-        rafId = requestAnimationFrame(animatePlaceholder);
-        return;
-      }
-      
-      // Update the last animation time
-      state.lastAnimationTime = timestamp;
-      
-      if (state.isDeleting) {
-        // Deleting text
-        if (state.currentCharIndex > 0) {
-          state.currentCharIndex -= 1;
-          state.currentText = currentExample.substring(0, state.currentCharIndex);
-          setPlaceholderText(state.currentText);
-          rafId = requestAnimationFrame(animatePlaceholder);
-        } else {
-          // Finished deleting
-          state.isDeleting = false;
-          state.currentExampleIndex = (state.currentExampleIndex + 1) % placeholderExamples.length;
-          
-          // If we've gone through all examples, stop the animation
-          if (state.currentExampleIndex === 0) {
-            stopAnimation();
+      if (currentRef.isDeleting) {
+        // Handle deletion animation
+        if (timeSinceLastAnimation >= currentRef.deletingSpeed) {
+          const text = currentRef.currentText;
+          if (text.length > 0) {
+            currentRef.currentText = text.slice(0, -1);
+            setPlaceholderText(currentRef.currentText);
+            currentRef.lastAnimationTime = now;
+          } else {
+            currentRef.isDeleting = false;
+            currentRef.currentExampleIndex = (currentRef.currentExampleIndex + 1) % placeholderExamples.length;
+            currentRef.timeoutRef = window.setTimeout(() => {
+              currentRef.lastAnimationTime = Date.now();
+              requestAnimationFrame(animate);
+            }, currentRef.pauseBeforeNewExample);
             return;
           }
-          
-          state.timeoutRef = setTimeout(() => {
-            state.lastAnimationTime = performance.now();
-            rafId = requestAnimationFrame(animatePlaceholder);
-          }, state.pauseBeforeNewExample);
         }
       } else {
-        // Typing text
-        if (state.currentCharIndex < currentExample.length) {
-          state.currentCharIndex += 1;
-          state.currentText = currentExample.substring(0, state.currentCharIndex);
-          setPlaceholderText(state.currentText);
-          rafId = requestAnimationFrame(animatePlaceholder);
+        // Handle typing animation
+        if (timeSinceLastAnimation >= currentRef.typingSpeed) {
+          const example = placeholderExamples[currentRef.currentExampleIndex];
+          const text = currentRef.currentText;
+          
+          if (text.length < example.length) {
+            currentRef.currentText = example.slice(0, text.length + 1);
+            setPlaceholderText(currentRef.currentText);
+            currentRef.lastAnimationTime = now;
+          } else {
+            currentRef.timeoutRef = window.setTimeout(() => {
+              currentRef.isDeleting = true;
+              currentRef.lastAnimationTime = Date.now();
+              requestAnimationFrame(animate);
+            }, currentRef.pauseBeforeDelete);
+            return;
+          }
+        }
+      }
+      
+      currentRef.timeoutRef = requestAnimationFrame(animate);
+    };
+    
+    currentRef.timeoutRef = requestAnimationFrame(animate);
+    
+    return () => {
+      if (currentRef.timeoutRef) {
+        if (typeof currentRef.timeoutRef === 'number') {
+          cancelAnimationFrame(currentRef.timeoutRef);
         } else {
-          // Finished typing
-          state.isDeleting = true;
-          state.timeoutRef = setTimeout(() => {
-            state.lastAnimationTime = performance.now();
-            rafId = requestAnimationFrame(animatePlaceholder);
-          }, state.pauseBeforeDelete);
+          clearTimeout(currentRef.timeoutRef);
         }
       }
     };
-    
-    // Start the animation
-    animationState.current.lastAnimationTime = performance.now();
-    rafId = requestAnimationFrame(animatePlaceholder);
-    
-    return () => {
-      if (rafId) {
-        cancelAnimationFrame(rafId);
-      }
-      
-      // Store a reference to the current animation state to avoid the React Hook warning
-      const currentAnimationState = animationState.current;
-      const timeoutRef = currentAnimationState.timeoutRef;
-      if (timeoutRef) {
-        clearTimeout(timeoutRef);
-      }
-    };
-  }, [isAnimating, placeholderExamples, stopAnimation]);
+  }, [isAnimating, placeholderExamples]);
 
   // Fetch pending generations from the database
   const fetchPendingGenerations = async (userId: string) => {
@@ -644,14 +668,27 @@ export function PromptForm({
                   render={({ field }) => (
                     <FormItem className="md:col-span-12">
                       <FormControl>
-                        <Input 
-                          placeholder={placeholderText}
-                          className="bg-background" 
-                          variant="plain"
-                          onFocus={stopAnimation}
-                          onClick={stopAnimation}
-                          {...field} 
-                        />
+                        <div 
+                          className={cn(
+                            "transition-all duration-300 ease-in-out overflow-hidden",
+                            !isInputFocused && field.value && field.value.includes("\n") ? "max-h-[38px]" : "",
+                            isInputFocused && (field.value.includes("\n") || field.value.length > 60) ? "max-h-[150px]" : "max-h-[38px]"
+                          )}
+                        >
+                          <TextareaAutosize
+                            {...field}
+                            placeholder={placeholderText}
+                            className={cn(
+                              "w-full bg-transparent text-base resize-none focus:outline-none px-3 py-2 transition-all duration-200",
+                              !isInputFocused && field.value ? "truncate hover:bg-primary/5" : ""
+                            )}
+                            minRows={isInputFocused ? 2 : 1}
+                            maxRows={isInputFocused ? 5 : 1}
+                            onFocus={handleInputFocus}
+                            onBlur={handleInputBlur}
+                            onClick={handleInputClick}
+                          />
+                        </div>
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -755,7 +792,7 @@ export function PromptForm({
                     <FormItem className="md:col-span-3">
                       <Select 
                         onValueChange={field.onChange} 
-                        defaultValue={field.value}
+                        value={field.value}
                         disabled={loadingModels || models.length === 0}
                       >
                         <FormControl>
@@ -792,6 +829,9 @@ export function PromptForm({
                   </Button>
                 </div>
               </div>
+              
+              {/* Use the AdvancedSettings component with ref */}
+              <AdvancedSettings ref={advancedSettingsRef} form={form} />
             </form>
           </Form>
         </div>
