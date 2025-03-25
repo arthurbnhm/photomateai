@@ -325,7 +325,7 @@ export type AdvancedSettingsRefType = {
   resetSelections: () => void;
   closePanel: () => void;
   isOpen: boolean;
-  handleGenderSelect: (genderValue: string) => void;
+  handleGenderSelect: (gender: string) => void;
 };
 
 export const AdvancedSettings = forwardRef<AdvancedSettingsRefType, AdvancedSettingsProps>(
@@ -373,7 +373,11 @@ export const AdvancedSettings = forwardRef<AdvancedSettingsRefType, AdvancedSett
         // Find and remove the bg color text from the prompt
         const bgColorToRemove = backgroundColors.find(bg => bg.value === currentBgColor);
         if (bgColorToRemove) {
-          const updatedPrompt = currentPrompt.replace(bgColorToRemove.promptText, '').trim();
+          let updatedPrompt = currentPrompt.replace(bgColorToRemove.promptText, '').trim();
+          // Clean up any duplicate commas or comma+space patterns that might be left behind
+          updatedPrompt = updatedPrompt.replace(/,\s*,\s*/g, ', ');
+          // Clean up any starting or trailing commas
+          updatedPrompt = updatedPrompt.replace(/^,\s*/, '').replace(/,\s*$/, '');
           form.setValue("prompt", updatedPrompt);
         }
         return;
@@ -385,6 +389,10 @@ export const AdvancedSettings = forwardRef<AdvancedSettingsRefType, AdvancedSett
         const previousBgColor = backgroundColors.find(bg => bg.value === currentBgColor);
         if (previousBgColor) {
           updatedPrompt = updatedPrompt.replace(previousBgColor.promptText, '').trim();
+          // Clean up any duplicate commas or comma+space patterns 
+          updatedPrompt = updatedPrompt.replace(/,\s*,\s*/g, ', ');
+          // Clean up any starting or trailing commas
+          updatedPrompt = updatedPrompt.replace(/^,\s*/, '').replace(/,\s*$/, '');
         }
       }
       
@@ -417,7 +425,11 @@ export const AdvancedSettings = forwardRef<AdvancedSettingsRefType, AdvancedSett
         // Find and remove the expression text from the prompt
         const expressionToRemove = facialExpressions.find(expr => expr.value === currentExpression);
         if (expressionToRemove) {
-          const updatedPrompt = currentPrompt.replace(expressionToRemove.promptText, '').trim();
+          let updatedPrompt = currentPrompt.replace(expressionToRemove.promptText, '').trim();
+          // Clean up any duplicate commas or comma+space patterns
+          updatedPrompt = updatedPrompt.replace(/,\s*,\s*/g, ', ');
+          // Clean up any starting or trailing commas
+          updatedPrompt = updatedPrompt.replace(/^,\s*/, '').replace(/,\s*$/, '');
           form.setValue("prompt", updatedPrompt);
         }
         return;
@@ -429,6 +441,10 @@ export const AdvancedSettings = forwardRef<AdvancedSettingsRefType, AdvancedSett
         const previousExpression = facialExpressions.find(expr => expr.value === currentExpression);
         if (previousExpression) {
           updatedPrompt = updatedPrompt.replace(previousExpression.promptText, '').trim();
+          // Clean up any duplicate commas or comma+space patterns
+          updatedPrompt = updatedPrompt.replace(/,\s*,\s*/g, ', ');
+          // Clean up any starting or trailing commas
+          updatedPrompt = updatedPrompt.replace(/^,\s*/, '').replace(/,\s*$/, '');
         }
       }
       
@@ -461,7 +477,11 @@ export const AdvancedSettings = forwardRef<AdvancedSettingsRefType, AdvancedSett
         // Find and remove the accessory text from the prompt
         const accessoryToRemove = accessories.find(acc => acc.value === accessoryValue);
         if (accessoryToRemove) {
-          const updatedPrompt = currentPrompt.replace(accessoryToRemove.promptText, '').trim();
+          let updatedPrompt = currentPrompt.replace(accessoryToRemove.promptText, '').trim();
+          // Clean up any duplicate commas or comma+space patterns that might be left behind
+          updatedPrompt = updatedPrompt.replace(/,\s*,\s*/g, ', ');
+          // Clean up any starting or trailing commas
+          updatedPrompt = updatedPrompt.replace(/^,\s*/, '').replace(/,\s*$/, '');
           form.setValue("prompt", updatedPrompt);
         }
         return;
@@ -497,9 +517,12 @@ export const AdvancedSettings = forwardRef<AdvancedSettingsRefType, AdvancedSett
         // Find and remove the shot text from the prompt
         const shotToRemove = cameraShots.find(shot => shot.value === currentShot);
         if (shotToRemove) {
-          const updatedPrompt = currentPrompt.replace(shotToRemove.promptText, '').trim();
-          // Remove any leading commas or spaces after removing the shot text
-          form.setValue("prompt", updatedPrompt.replace(/^,\s*/, ''));
+          let updatedPrompt = currentPrompt.replace(shotToRemove.promptText, '').trim();
+          // Clean up any duplicate commas or comma+space patterns
+          updatedPrompt = updatedPrompt.replace(/,\s*,\s*/g, ', ');
+          // Clean up any starting or trailing commas
+          updatedPrompt = updatedPrompt.replace(/^,\s*/, '').replace(/,\s*$/, '');
+          form.setValue("prompt", updatedPrompt);
         }
         return;
       }
@@ -510,8 +533,10 @@ export const AdvancedSettings = forwardRef<AdvancedSettingsRefType, AdvancedSett
         const previousShot = cameraShots.find(shot => shot.value === currentShot);
         if (previousShot) {
           updatedPrompt = updatedPrompt.replace(previousShot.promptText, '').trim();
-          // Clean up leading commas or spaces after removing the shot text
-          updatedPrompt = updatedPrompt.replace(/^,\s*/, '');
+          // Clean up any duplicate commas or comma+space patterns
+          updatedPrompt = updatedPrompt.replace(/,\s*,\s*/g, ', ');
+          // Clean up any starting or trailing commas 
+          updatedPrompt = updatedPrompt.replace(/^,\s*/, '').replace(/,\s*$/, '');
         }
       }
       
@@ -547,9 +572,12 @@ export const AdvancedSettings = forwardRef<AdvancedSettingsRefType, AdvancedSett
         // Find and remove the gender text from the prompt
         const genderToRemove = genders.find(g => g.value === currentGender);
         if (genderToRemove) {
-          const updatedPrompt = currentPrompt.replace(genderToRemove.promptText, '').trim();
-          // Clean up any trailing commas or spaces
-          form.setValue("prompt", updatedPrompt.replace(/,\s*$/, ''));
+          let updatedPrompt = currentPrompt.replace(genderToRemove.promptText, '').trim();
+          // Clean up any duplicate commas or comma+space patterns
+          updatedPrompt = updatedPrompt.replace(/,\s*,\s*/g, ', ');
+          // Clean up any starting or trailing commas
+          updatedPrompt = updatedPrompt.replace(/^,\s*/, '').replace(/,\s*$/, '');
+          form.setValue("prompt", updatedPrompt);
         }
         return;
       }
@@ -560,8 +588,10 @@ export const AdvancedSettings = forwardRef<AdvancedSettingsRefType, AdvancedSett
         const previousGender = genders.find(g => g.value === currentGender);
         if (previousGender) {
           updatedPrompt = updatedPrompt.replace(previousGender.promptText, '').trim();
-          // Clean up any trailing commas or spaces
-          updatedPrompt = updatedPrompt.replace(/,\s*$/, '');
+          // Clean up any duplicate commas or comma+space patterns
+          updatedPrompt = updatedPrompt.replace(/,\s*,\s*/g, ', ');
+          // Clean up any starting or trailing commas
+          updatedPrompt = updatedPrompt.replace(/^,\s*/, '').replace(/,\s*$/, '');
         }
       }
       
@@ -807,6 +837,10 @@ export const AdvancedSettings = forwardRef<AdvancedSettingsRefType, AdvancedSett
                               updatedPrompt = updatedPrompt.replace(acc.promptText, '').trim();
                             }
                           });
+                          // Clean up any duplicate commas or comma+space patterns that might be left behind
+                          updatedPrompt = updatedPrompt.replace(/,\s*,\s*/g, ', ');
+                          // Clean up any starting or trailing commas
+                          updatedPrompt = updatedPrompt.replace(/^,\s*/, '').replace(/,\s*$/, '');
                           form.setValue("prompt", updatedPrompt);
                           setSelectedAccessory([]);
                         }}
