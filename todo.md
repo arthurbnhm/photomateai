@@ -60,7 +60,6 @@
 - 🟡 Find ways to make good use of output and logs from webhooks
 - ✅ Use predict_time for calculation instead of current method (done for predictions)
 - ✅ Unify the navigation bar
-- Add model pricing
 
 # Authentication
 
