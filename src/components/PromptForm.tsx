@@ -690,7 +690,7 @@ export function PromptForm({
                             placeholder={placeholderText}
                             className={cn(
                               "w-full bg-transparent text-base resize-none focus:outline-none px-3 py-2 transition-all duration-200",
-                              !isInputFocused && field.value ? "truncate hover:bg-primary/5" : ""
+                              !isInputFocused && field.value ? "truncate" : ""
                             )}
                             minRows={isInputFocused ? 2 : 1}
                             maxRows={isInputFocused ? 5 : 1}
