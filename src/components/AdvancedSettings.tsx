@@ -294,15 +294,17 @@ interface FormFields {
 
 interface AdvancedSettingsProps {
   form: UseFormReturn<FormFields>;
+  onOpenChange?: (isOpen: boolean) => void;
 }
 
 export type AdvancedSettingsRefType = {
   resetSelections: () => void;
   closePanel: () => void;
+  isOpen: boolean;
 };
 
 export const AdvancedSettings = forwardRef<AdvancedSettingsRefType, AdvancedSettingsProps>(
-  ({ form }, ref) => {
+  ({ form, onOpenChange }, ref) => {
     // State variables
     const [showAdvancedSettings, setShowAdvancedSettings] = useState(false);
     const [selectedBgColor, setSelectedBgColor] = useState<string | null>(null);
@@ -321,12 +323,14 @@ export const AdvancedSettings = forwardRef<AdvancedSettingsRefType, AdvancedSett
     // Close the panel
     const closePanel = () => {
       setShowAdvancedSettings(false);
+      if (onOpenChange) onOpenChange(false);
     };
 
     // Expose the methods to parent components
     useImperativeHandle(ref, () => ({
       resetSelections,
-      closePanel
+      closePanel,
+      isOpen: showAdvancedSettings
     }));
 
     // Function to handle background color selection
@@ -501,7 +505,11 @@ export const AdvancedSettings = forwardRef<AdvancedSettingsRefType, AdvancedSett
     return (
       <Collapsible
         open={showAdvancedSettings}
-        onOpenChange={setShowAdvancedSettings}
+        onOpenChange={(open) => {
+          setShowAdvancedSettings(open);
+          // Notify parent component
+          if (onOpenChange) onOpenChange(open);
+        }}
         className="border-t border-border pt-4 mt-4"
       >
         <div className="flex items-center justify-between">

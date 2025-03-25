@@ -140,6 +140,7 @@ export function PromptForm({
   const [isAnimating, setIsAnimating] = useState(true);
   const [creditDeducting, setCreditDeducting] = useState(false);
   const [isInputFocused, setIsInputFocused] = useState(false);
+  const [isAdvancedSettingsOpen, setIsAdvancedSettingsOpen] = useState(false);
 
   const placeholderExamples = useMemo(() => [
     "A woman portrait on studio grey background",
@@ -571,7 +572,7 @@ export function PromptForm({
       }
     };
   }, [isAnimating, placeholderExamples]);
-
+  
   // Fetch pending generations from the database
   const fetchPendingGenerations = async (userId: string) => {
     try {
@@ -814,14 +815,42 @@ export function PromptForm({
                   )}
                 />
                 
-                <div className="md:col-span-2 flex justify-end">
+                {!isAdvancedSettingsOpen && (
+                  <div className="md:col-span-2 flex justify-end">
+                    <Button 
+                      type="submit" 
+                      className={cn(
+                        "w-full font-medium transition-all duration-300",
+                        creditDeducting 
+                          ? "bg-primary border-amber-500/30 shadow-[0_0_0_1px_rgba(245,158,11,0.1)]" 
+                          : "bg-primary hover:bg-primary/90 text-primary-foreground"
+                      )}
+                      disabled={loadingModels}
+                      aria-label="Generate image"
+                    >
+                      Generate
+                    </Button>
+                  </div>
+                )}
+              </div>
+              
+              {/* Use the AdvancedSettings component with ref */}
+              <AdvancedSettings 
+                ref={advancedSettingsRef} 
+                form={form} 
+                onOpenChange={setIsAdvancedSettingsOpen}
+              />
+
+              {/* Render Generate button at the bottom when Advanced Settings is open */}
+              {isAdvancedSettingsOpen && (
+                <div className="flex justify-end mt-6">
                   <Button 
                     type="submit" 
                     className={cn(
-                      "w-full font-medium transition-all duration-300",
+                      "w-full md:w-auto px-8 py-2.5 font-medium text-base transition-all duration-300",
                       creditDeducting 
                         ? "bg-primary border-amber-500/30 shadow-[0_0_0_1px_rgba(245,158,11,0.1)]" 
-                        : "bg-primary hover:bg-primary/90 text-primary-foreground"
+                        : "bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm"
                     )}
                     disabled={loadingModels}
                     aria-label="Generate image"
@@ -829,10 +858,7 @@ export function PromptForm({
                     Generate
                   </Button>
                 </div>
-              </div>
-              
-              {/* Use the AdvancedSettings component with ref */}
-              <AdvancedSettings ref={advancedSettingsRef} form={form} />
+              )}
             </form>
           </Form>
         </div>
