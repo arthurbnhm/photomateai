@@ -40,6 +40,13 @@ interface CameraShot {
   promptText: string;
 }
 
+interface Gender {
+  value: string;
+  label: string;
+  icon: string;
+  promptText: string;
+}
+
 // Define background colors
 const backgroundColors: BackgroundColor[] = [
   {
@@ -284,6 +291,22 @@ const cameraShots: CameraShot[] = [
   }
 ];
 
+// Define genders
+const genders: Gender[] = [
+  {
+    value: "male",
+    label: "Male",
+    icon: "M",
+    promptText: "the subject is a male"
+  },
+  {
+    value: "female",
+    label: "Female",
+    icon: "F",
+    promptText: "the subject is a female"
+  }
+];
+
 // Update the interface to match the form structure
 interface FormFields {
   prompt: string;
@@ -295,22 +318,25 @@ interface FormFields {
 interface AdvancedSettingsProps {
   form: UseFormReturn<FormFields>;
   onOpenChange?: (isOpen: boolean) => void;
+  onGenderChange?: (gender: string | null) => void;
 }
 
 export type AdvancedSettingsRefType = {
   resetSelections: () => void;
   closePanel: () => void;
   isOpen: boolean;
+  handleGenderSelect: (genderValue: string) => void;
 };
 
 export const AdvancedSettings = forwardRef<AdvancedSettingsRefType, AdvancedSettingsProps>(
-  ({ form, onOpenChange }, ref) => {
+  ({ form, onOpenChange, onGenderChange }, ref) => {
     // State variables
     const [showAdvancedSettings, setShowAdvancedSettings] = useState(false);
     const [selectedBgColor, setSelectedBgColor] = useState<string | null>(null);
     const [selectedExpression, setSelectedExpression] = useState<string | null>(null);
     const [selectedAccessory, setSelectedAccessory] = useState<string[]>([]);
     const [selectedCameraShot, setSelectedCameraShot] = useState<string | null>(null);
+    const [selectedGender, setSelectedGender] = useState<string | null>(null);
 
     // Reset all selections
     const resetSelections = () => {
@@ -318,6 +344,7 @@ export const AdvancedSettings = forwardRef<AdvancedSettingsRefType, AdvancedSett
       setSelectedExpression(null);
       setSelectedAccessory([]);
       setSelectedCameraShot(null);
+      setSelectedGender(null);
     };
 
     // Close the panel
@@ -330,7 +357,8 @@ export const AdvancedSettings = forwardRef<AdvancedSettingsRefType, AdvancedSett
     useImperativeHandle(ref, () => ({
       resetSelections,
       closePanel,
-      isOpen: showAdvancedSettings
+      isOpen: showAdvancedSettings,
+      handleGenderSelect
     }));
 
     // Function to handle background color selection
@@ -502,6 +530,61 @@ export const AdvancedSettings = forwardRef<AdvancedSettingsRefType, AdvancedSett
       }
     };
 
+    // Function to handle gender selection
+    const handleGenderSelect = (genderValue: string) => {
+      const currentGender = selectedGender;
+      const currentPrompt = form.getValues().prompt;
+      
+      // If deselecting the current gender
+      if (currentGender === genderValue) {
+        setSelectedGender(null);
+        
+        // Notify parent component if callback exists
+        if (onGenderChange) {
+          onGenderChange(null);
+        }
+        
+        // Find and remove the gender text from the prompt
+        const genderToRemove = genders.find(g => g.value === currentGender);
+        if (genderToRemove) {
+          const updatedPrompt = currentPrompt.replace(genderToRemove.promptText, '').trim();
+          // Clean up any trailing commas or spaces
+          form.setValue("prompt", updatedPrompt.replace(/,\s*$/, ''));
+        }
+        return;
+      }
+      
+      // Remove previous gender from prompt if there was one
+      let updatedPrompt = currentPrompt;
+      if (currentGender) {
+        const previousGender = genders.find(g => g.value === currentGender);
+        if (previousGender) {
+          updatedPrompt = updatedPrompt.replace(previousGender.promptText, '').trim();
+          // Clean up any trailing commas or spaces
+          updatedPrompt = updatedPrompt.replace(/,\s*$/, '');
+        }
+      }
+      
+      // Add new gender at the end
+      const newGender = genders.find(g => g.value === genderValue);
+      if (newGender) {
+        // If there's existing prompt text, add the gender text after it with a comma
+        if (updatedPrompt) {
+          updatedPrompt = `${updatedPrompt}, ${newGender.promptText}`;
+        } else {
+          updatedPrompt = newGender.promptText;
+        }
+        
+        form.setValue("prompt", updatedPrompt);
+        setSelectedGender(genderValue);
+        
+        // Notify parent component if callback exists
+        if (onGenderChange) {
+          onGenderChange(genderValue);
+        }
+      }
+    };
+
     return (
       <Collapsible
         open={showAdvancedSettings}
@@ -523,6 +606,30 @@ export const AdvancedSettings = forwardRef<AdvancedSettingsRefType, AdvancedSett
               )}
             </Button>
           </CollapsibleTrigger>
+
+          {/* Gender Selection Icons - moved to the far right */}
+          <div className="flex space-x-1">
+            <div
+              className={cn(
+                "w-12 h-8 flex items-center justify-center rounded-md cursor-pointer border border-input transition-all duration-200 hover:bg-accent/10",
+                selectedGender === "male" ? "ring-2 ring-inset ring-ring/50 bg-accent/20" : "opacity-90 hover:opacity-100"
+              )}
+              onClick={() => handleGenderSelect("male")}
+              title="Male"
+            >
+              <div className="text-sm font-medium">Male</div>
+            </div>
+            <div
+              className={cn(
+                "w-16 h-8 flex items-center justify-center rounded-md cursor-pointer border border-input transition-all duration-200 hover:bg-accent/10",
+                selectedGender === "female" ? "ring-2 ring-inset ring-ring/50 bg-accent/20" : "opacity-90 hover:opacity-100"
+              )}
+              onClick={() => handleGenderSelect("female")}
+              title="Female"
+            >
+              <div className="text-sm font-medium">Female</div>
+            </div>
+          </div>
         </div>
         <div 
           className={cn(

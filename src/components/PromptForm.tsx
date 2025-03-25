@@ -141,6 +141,11 @@ export function PromptForm({
   const [creditDeducting, setCreditDeducting] = useState(false);
   const [isInputFocused, setIsInputFocused] = useState(false);
   const [isAdvancedSettingsOpen, setIsAdvancedSettingsOpen] = useState(false);
+  
+  // This state tracks the gender selection in the AdvancedSettings component
+  // and is used with the onGenderChange prop for synchronization
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [selectedGender, setSelectedGender] = useState<string | null>(null);
 
   const placeholderExamples = useMemo(() => [
     "A woman portrait on studio grey background",
@@ -288,6 +293,9 @@ export function PromptForm({
         outputFormat: currentOutputFormat,
         modelId: currentModelId, // Preserve the model selection
       });
+      
+      // Reset gender selection
+      setSelectedGender(null);
       
       // Reset advanced settings selections and close the panel
       if (advancedSettingsRef.current) {
@@ -839,6 +847,7 @@ export function PromptForm({
                 ref={advancedSettingsRef} 
                 form={form} 
                 onOpenChange={setIsAdvancedSettingsOpen}
+                onGenderChange={setSelectedGender}
               />
 
               {/* Render Generate button at the bottom when Advanced Settings is open */}
