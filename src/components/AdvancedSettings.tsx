@@ -633,18 +633,9 @@ export const AdvancedSettings = forwardRef<AdvancedSettingsRefType, AdvancedSett
         </div>
         <div 
           className={cn(
-            "overflow-hidden transition-opacity duration-300",
-            showAdvancedSettings 
-              ? "animate-accordion-down opacity-100" 
-              : "animate-accordion-up opacity-0"
+            "overflow-hidden transition-all duration-300 ease-in-out",
+            showAdvancedSettings ? "max-h-[2000px] opacity-100 transform-none" : "max-h-0 opacity-0 transform translate-y-[-8px]"
           )}
-          style={{
-            // Fix the transform transition to avoid conflict with height animation
-            transform: showAdvancedSettings ? "translateY(0)" : "translateY(-4px)",
-            transition: "transform 300ms cubic-bezier(0.4, 0, 0.2, 1), opacity 300ms cubic-bezier(0.4, 0, 0.2, 1)",
-            // Add will-change for better performance on mobile
-            willChange: "transform, opacity, height"
-          }}
         >
           <div className="pt-4">
             <div className="space-y-6">
