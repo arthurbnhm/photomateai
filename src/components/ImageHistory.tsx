@@ -783,7 +783,7 @@ export function ImageHistory({
                   {/* Header section with badges and buttons */}
                   <div className="flex items-center justify-between gap-3">
                     {/* Left side - Tags */}
-                    <div className={isPending ? 'hidden sm:flex items-center gap-2' : 'flex items-center gap-2'}>
+                    <div className="flex items-center gap-2">
                       {/* Badges */}
                       <div className={isPending ? 'hidden sm:flex items-center gap-2' : 'flex items-center gap-2'}>
                         {/* Aspect ratio badge */}
@@ -806,9 +806,9 @@ export function ImageHistory({
                         )}
                       </div>
                       
-                      {/* Status indicators for pending generations */}
+                      {/* Status indicators for pending generations - Now in a separate div outside the badge container */}
                       {isPending && pending && (
-                        <div className="flex items-center gap-1 ml-2">
+                        <div className="flex items-center gap-1">
                           <div className="flex items-center gap-1.5 text-muted-foreground text-sm">
                             <span className="h-2 w-2 rounded-full bg-blue-400 animate-pulse"></span>
                             Generating
@@ -823,7 +823,7 @@ export function ImageHistory({
                     </div>
                     
                     {/* Right side - Actions */}
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 ml-auto">
                       <Button 
                         variant="outline" 
                         size="icon"
