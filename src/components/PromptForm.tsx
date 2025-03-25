@@ -288,9 +288,10 @@ export function PromptForm({
         modelId: currentModelId, // Preserve the model selection
       });
       
-      // Reset advanced settings selections
+      // Reset advanced settings selections and close the panel
       if (advancedSettingsRef.current) {
         advancedSettingsRef.current.resetSelections();
+        advancedSettingsRef.current.closePanel();
       }
       
       // Find the selected model to get details for API call and UI display

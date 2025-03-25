@@ -298,6 +298,7 @@ interface AdvancedSettingsProps {
 
 export type AdvancedSettingsRefType = {
   resetSelections: () => void;
+  closePanel: () => void;
 };
 
 export const AdvancedSettings = forwardRef<AdvancedSettingsRefType, AdvancedSettingsProps>(
@@ -317,9 +318,15 @@ export const AdvancedSettings = forwardRef<AdvancedSettingsRefType, AdvancedSett
       setSelectedCameraShot(null);
     };
 
-    // Expose the resetSelections method to parent components
+    // Close the panel
+    const closePanel = () => {
+      setShowAdvancedSettings(false);
+    };
+
+    // Expose the methods to parent components
     useImperativeHandle(ref, () => ({
-      resetSelections
+      resetSelections,
+      closePanel
     }));
 
     // Function to handle background color selection
