@@ -12,37 +12,21 @@ import { motion } from "framer-motion";
 import { useTheme } from "next-themes";
 
 export default function Home() {
-  // Create a shuffled array of 5 images from the available ones
+  // Create a fixed array of 4 images from the available ones
   const [sampleImages, setSampleImages] = useState<string[]>([]);
   
-  // Shuffle images on component mount
+  // Set fixed images on component mount
   useEffect(() => {
     // Define all available landing images
     const availableImages = [
       "/landing/01.webp",
-      "/landing/02.png",
+      "/landing/02.webp",
       "/landing/03.webp",
       "/landing/04.webp",
     ];
     
-    // Fisher-Yates shuffle algorithm
-    const shuffleArray = (array: string[]) => {
-      const newArray = [...array];
-      for (let i = newArray.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [newArray[i], newArray[j]] = [newArray[j], newArray[i]];
-      }
-      return newArray;
-    };
-    
-    // Shuffle the available images
-    const shuffled = shuffleArray(availableImages);
-    
-    // Pick 4 images - this may include duplicates if needed
-    const selected = [];
-    for (let i = 0; i < 4; i++) {
-      selected.push(shuffled[i % shuffled.length]);
-    }
+    // Pick the first 4 images in their original order
+    const selected = availableImages.slice(0, 4);
     
     setSampleImages(selected);
   }, []);
@@ -233,7 +217,7 @@ export default function Home() {
                 {sampleImages.map((imageSrc, i) => (
                   <motion.div 
                     key={i} 
-                    className={`flex-none w-48 h-48 rounded-xl overflow-hidden relative shadow-md snap-center ${i === 0 ? 'ml-[-100px]' : ''}`}
+                    className={`flex-none w-48 h-48 rounded-xl overflow-hidden relative shadow-md snap-center ${i === 0 ? 'ml-[-96px]' : ''}`}
                     custom={{ index: i }}
                     variants={imageVariant}
                     style={{ 
