@@ -10,6 +10,14 @@ import {
   Collapsible,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible"
+import { Label } from "@/components/ui/label"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 
 // Interface definitions
 interface BackgroundColor {
@@ -45,6 +53,20 @@ interface Gender {
   label: string;
   icon: string;
   promptText: string;
+}
+
+// Added Preset interface and data
+interface Preset {
+  value: string;
+  label: string;
+  description?: string;
+  settings: {
+    cameraShot?: string;
+    bgColor?: string;
+    expression?: string;
+    accessories?: string[];
+    gender?: string; // Allow presets to suggest gender
+  };
 }
 
 // Define background colors
@@ -307,6 +329,52 @@ const genders: Gender[] = [
   }
 ];
 
+// Added Preset data
+const presets: Preset[] = [
+  {
+    value: "linkedin-profile",
+    label: "LinkedIn Profile",
+    description: "Professional headshot for LinkedIn.",
+    settings: {
+      cameraShot: "portrait",
+      bgColor: "white",
+      expression: "smile",
+      accessories: [], // Start with no accessories
+    }
+  },
+  {
+    value: "team-headshot",
+    label: "Team Headshot",
+    description: "Consistent look for team photos.",
+    settings: {
+      cameraShot: "medium",
+      bgColor: "gray",
+      expression: "smile",
+    }
+  },
+  {
+    value: "casual-avatar",
+    label: "Casual Avatar",
+    description: "Relaxed style for social media.",
+    settings: {
+      cameraShot: "closeup",
+      expression: "laugh",
+      accessories: ["beanie"],
+    }
+  },
+   {
+    value: "formal-portrait",
+    label: "Formal Portrait",
+    description: "Classic formal portrait style.",
+    settings: {
+      cameraShot: "portrait",
+      bgColor: "black",
+      expression: "serious",
+      accessories: ["suit"], // Suggests suit, user can add tie/bowtie
+    }
+  }
+];
+
 // Update the interface to match the form structure
 interface FormFields {
   prompt: string;
@@ -337,6 +405,7 @@ export const AdvancedSettings = forwardRef<AdvancedSettingsRefType, AdvancedSett
     const [selectedAccessory, setSelectedAccessory] = useState<string[]>([]);
     const [selectedCameraShot, setSelectedCameraShot] = useState<string | null>(null);
     const [selectedGender, setSelectedGender] = useState<string | null>(null);
+    const [selectedPreset, setSelectedPreset] = useState<string | null>(null);
 
     // Reset all selections
     const resetSelections = () => {
@@ -345,6 +414,7 @@ export const AdvancedSettings = forwardRef<AdvancedSettingsRefType, AdvancedSett
       setSelectedAccessory([]);
       setSelectedCameraShot(null);
       setSelectedGender(null);
+      setSelectedPreset(null);
     };
 
     // Close the panel
@@ -615,6 +685,85 @@ export const AdvancedSettings = forwardRef<AdvancedSettingsRefType, AdvancedSett
       }
     };
 
+    // Added: Function to handle preset selection
+    const handlePresetSelect = (presetValue: string) => {
+      const preset = presets.find(p => p.value === presetValue);
+
+      if (preset) {
+        // Reset individual selections but keep prompt base? No, let's clear state fully first.
+        // The subsequent handler calls will rebuild the prompt based *only* on the preset.
+        // Let's clear the prompt entirely before applying, to avoid conflicts if user had prior text.
+        // Or maybe better: Reset selections state *only*, then let handlers modify existing prompt.
+        // const currentPrompt = form.getValues().prompt; // Keep existing non-managed parts of the prompt - REMOVED as unused
+
+        // Reset selections states without clearing the prompt text initially
+        setSelectedBgColor(null);
+        setSelectedExpression(null);
+        setSelectedAccessory([]);
+        setSelectedCameraShot(null);
+        setSelectedGender(null);
+
+        // Apply preset settings sequentially, letting each handler manage its part of the prompt
+        // Camera shot often goes first stylistically
+        // --- Refactored logic below handles all cases ---
+          // 1. Store current values
+          const prevBgColor = selectedBgColor;
+          const prevExpression = selectedExpression;
+          const prevAccessories = [...selectedAccessory];
+          const prevCameraShot = selectedCameraShot;
+          const prevGender = selectedGender;
+
+          // 2. Clear state *after* storing previous values
+          setSelectedBgColor(null);
+          setSelectedExpression(null);
+          setSelectedAccessory([]);
+          setSelectedCameraShot(null);
+          setSelectedGender(null);
+
+          // 3. Remove previous values from prompt (call handlers with current value to trigger removal)
+          //    Check if value existed before attempting removal
+          if (prevCameraShot) handleCameraShotSelect(prevCameraShot);
+          if (prevBgColor) handleBgColorSelect(prevBgColor);
+          if (prevExpression) handleExpressionSelect(prevExpression);
+          if (prevAccessories.length > 0) prevAccessories.forEach(acc => handleAccessorySelect(acc));
+          if (prevGender) handleGenderSelect(prevGender);
+          // Now the prompt should be cleaned of the old controlled settings
+
+          // 4. Apply new settings from the preset
+          if (preset.settings.cameraShot) handleCameraShotSelect(preset.settings.cameraShot);
+          if (preset.settings.bgColor) handleBgColorSelect(preset.settings.bgColor);
+          if (preset.settings.expression) handleExpressionSelect(preset.settings.expression);
+          if (preset.settings.accessories && preset.settings.accessories.length > 0) preset.settings.accessories.forEach(acc => handleAccessorySelect(acc)); // This will add them one by one
+          if (preset.settings.gender) handleGenderSelect(preset.settings.gender);
+
+        setSelectedPreset(presetValue); // Set the preset state *after* applying everything
+      } else {
+        // Handle case where user selects a "clear" or empty option (if we add one)
+        // For now, just resetting everything if preset is not found (shouldn't happen with Select)
+        // Or maybe call the full reset? Let's just clear the preset state.
+         // Let's trigger the removal of all items if the user selects the placeholder/default again
+         const prevBgColor = selectedBgColor;
+         const prevExpression = selectedExpression;
+         const prevAccessories = [...selectedAccessory];
+         const prevCameraShot = selectedCameraShot;
+         const prevGender = selectedGender;
+
+         setSelectedBgColor(null);
+         setSelectedExpression(null);
+         setSelectedAccessory([]);
+         setSelectedCameraShot(null);
+         setSelectedGender(null);
+         setSelectedPreset(null);
+
+         if (prevCameraShot) handleCameraShotSelect(prevCameraShot);
+         if (prevBgColor) handleBgColorSelect(prevBgColor);
+         if (prevExpression) handleExpressionSelect(prevExpression);
+         prevAccessories.forEach(acc => handleAccessorySelect(acc));
+         if (prevGender) handleGenderSelect(prevGender);
+
+      }
+    };
+
     return (
       <Collapsible
         open={showAdvancedSettings}
@@ -669,6 +818,28 @@ export const AdvancedSettings = forwardRef<AdvancedSettingsRefType, AdvancedSett
         >
           <div className="pt-4">
             <div className="space-y-6">
+              {/* Added Preset Selection Section */}
+              <div className="space-y-2">
+                 <Label htmlFor="preset-select" className="text-sm font-medium">Style Preset</Label>
+                 <Select value={selectedPreset ?? ""} onValueChange={handlePresetSelect}>
+                   <SelectTrigger id="preset-select">
+                     <SelectValue placeholder="Select a preset..." />
+                   </SelectTrigger>
+                   <SelectContent>
+                     {/* Optional: Add an item to clear selection */}
+                     {/* <SelectItem value="clear">-- No Preset --</SelectItem> */}
+                     {presets.map((preset) => (
+                       <SelectItem key={preset.value} value={preset.value}>
+                         {preset.label}
+                         {preset.description && (
+                            <span className="ml-2 text-xs text-muted-foreground">({preset.description})</span>
+                         )}
+                       </SelectItem>
+                     ))}
+                   </SelectContent>
+                 </Select>
+              </div>
+
               {/* Camera Shots Section */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between h-6">

@@ -9,6 +9,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useRouter } from "next/navigation";
 import { Navbar } from "@/components/Navbar";
 import { motion } from "framer-motion";
+import { useTheme } from "next-themes";
 
 export default function Home() {
   // Create a shuffled array of 5 images from the available ones
@@ -71,6 +72,20 @@ export default function Home() {
   // Get auth context and router
   const { user } = useAuth();
   const router = useRouter();
+  
+  // Force light theme for the landing page
+  const { theme, setTheme, resolvedTheme } = useTheme();
+  useEffect(() => {
+    const originalTheme = resolvedTheme || theme; // Store the current theme
+    setTheme("light"); // Force light theme
+
+    // Cleanup function to restore the original theme on unmount
+    return () => {
+      if (originalTheme) {
+        setTheme(originalTheme);
+      }
+    };
+  }, [setTheme, theme, resolvedTheme]); // Dependencies ensure effect runs correctly
   
   // Handle navigation to app or auth
   const handleStartNow = () => {

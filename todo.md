@@ -29,7 +29,7 @@
 - ✅ Use model name from user and modelname-id for replicate
 - ✅ cancel/route.ts should handle both training and image generation cancelation
 - ✅ rework cancel / delete button for image generations
-- Default to a model for image geneneration and other options
+- ✅ Default to a model for image geneneration and other options
 - ✅ Add back the webp format
 - ✅ Download button with option to rename or download all of them
 - 🟡 Buttons with predined options (blonde, linkedin profile)
@@ -44,7 +44,7 @@
 
 # App
 
-- Let the user choose colors
+- ✅ Let the user choose colors
 - ✅ Rework the navigation bar to something more native
 - ✅ Remove things related to current debugging
 - ✅ Improve UI for model management
@@ -108,22 +108,22 @@
 - ✅ Burger menu and close button are fucked
 - ✅ Images are no more deleted from supabase when marked as this
 - Many shit happen probably due to this: Remove the getUserId effect that calls this function
-- Model is not stored in local storage
+- ✅ Model is not stored in local storage
 
 # Caching
 
 - ✅ Images
-- ✅ Coins
-- ✅ Models
-- ✅ Form values
+- Coins
+- Models
+- Form values
 
 
 # Advanced 
 
-- Lightning (warm, cold, sunset, blue hour)
-- Camera (closeup shot, portrait, bokeh, depth)
-- Background (Solid color, INPUT (color palette), red, blue)
-- Facial expressions (smile, sad, choked)
+- ✅ Lightning (warm, cold, sunset, blue hour)
+- ✅ Camera (closeup shot, portrait, bokeh, depth)
+- ✅ Background (Solid color, INPUT (color palette), red, blue)
+- ✅ Facial expressions (smile, sad, choked)
 
 
 # Have a look
