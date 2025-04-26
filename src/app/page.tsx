@@ -313,7 +313,6 @@ export default function Home() {
               
               {/* Feature 6 */}
               <div className="bg-gradient-to-br from-background to-muted/50 rounded-lg p-6 shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1 border border-muted relative">
-                <div className="absolute top-2 right-2 bg-muted px-2 py-1 rounded text-xs">Coming Soon</div>
                 <div className="w-12 h-12 rounded-2xl bg-indigo-100 flex items-center justify-center mb-4 shadow-inner">
                   <span className="text-2xl">🎞️</span>
                 </div>
