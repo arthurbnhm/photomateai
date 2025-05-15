@@ -501,8 +501,8 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
 
     const newImages = [...uploadedImages];
     
-    // Check if the total size of existing and new files would exceed 100MB
-    const MAX_TOTAL_SIZE = 100 * 1024 * 1024; // 100MB in bytes
+    // Check if the total size of existing and new files would exceed 200MB
+    const MAX_TOTAL_SIZE = 200 * 1024 * 1024; // 200MB in bytes
     const MAX_INDIVIDUAL_FILE_SIZE = 10 * 1024 * 1024; // 10MB per file
     const currentTotalSize = uploadedImages.reduce((total, file) => total + file.size, 0);
     let newFilesTotalSize = 0;
@@ -543,7 +543,7 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
     const totalSizeRejected = sortedFiles.length - validFiles.length - oversizedFiles.length;
     if (totalSizeRejected > 0) {
       const wouldBeTotalSize = formatSizeInMB(currentTotalSize + sortedFiles.reduce((total, file) => total + file.size, 0));
-      toast.error(`${totalSizeRejected} file(s) were rejected because total size would be ${wouldBeTotalSize} (max 100MB)`);
+      toast.error(`${totalSizeRejected} file(s) were rejected because total size would be ${wouldBeTotalSize} (max 200MB)`);
     }
     
     // Si aucun fichier valide, on arrête
@@ -590,13 +590,13 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
       
       // Then check total size
       const currentTotalSize = uploadedImages.reduce((total, f) => total + f.size, 0);
-      const MAX_TOTAL_SIZE = 100 * 1024 * 1024; // 100MB
+      const MAX_TOTAL_SIZE = 200 * 1024 * 1024; // 200MB
       
       if (currentTotalSize + file.size > MAX_TOTAL_SIZE) {
         const wouldBeTotalSize = formatSizeInMB(currentTotalSize + file.size);
         return {
           code: 'total-size-too-large',
-          message: `Adding this file would make total size ${wouldBeTotalSize} (max 100MB)`
+          message: `Adding this file would make total size ${wouldBeTotalSize} (max 200MB)`
         };
       }
       
@@ -630,7 +630,7 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
       totalSizeRejected.forEach(item => {
         const currentTotalSize = uploadedImages.reduce((total, file) => total + file.size, 0);
         const wouldBeTotalSize = formatSizeInMB(currentTotalSize + item.file.size);
-        toast.error(`Adding \"${item.file.name}\" would make total size ${wouldBeTotalSize} (max 100MB)`);
+        toast.error(`Adding \"${item.file.name}\" would make total size ${wouldBeTotalSize} (max 200MB)`);
       });
 
       if (tooManyFiles) {
@@ -708,10 +708,6 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
     if (!e.dataTransfer.files || e.dataTransfer.files.length === 0) {
       return;
     }
-    
-    // Check if files would exceed total size limit before processing
-    const MAX_TOTAL_SIZE = 100 * 1024 * 1024; // 100MB in bytes
-    const currentTotalSize = uploadedImages.reduce((total, file) => total + file.size, 0);
     
     // Create an array from the FileList and filter only image files
     const fileArray = Array.from(e.dataTransfer.files);
@@ -892,7 +888,7 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
               Drop Images Here
             </h3>
             <p className="text-sm text-muted-foreground">
-              JPG, PNG, WebP - entre {MIN_IMAGES} et {MAX_IMAGES} images requises, max 100MB au total
+              JPG, PNG, WebP - entre {MIN_IMAGES} et {MAX_IMAGES} images requises, max 200MB au total
             </p>
           </div>
         )}
@@ -964,7 +960,7 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
                         Drag and drop images here, or click to select files
                       </p>
                       <p className="text-xs text-muted-foreground/80 mt-1">
-                        JPG, PNG, WebP - entre {MIN_IMAGES} et {MAX_IMAGES} images requises, max 100MB au total
+                        JPG, PNG, WebP - entre {MIN_IMAGES} et {MAX_IMAGES} images requises, max 200MB au total
                       </p>
                     </div>
                   </div>
@@ -979,7 +975,7 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
                         {uploadedImages.length > MAX_IMAGES && ` (${uploadedImages.length - MAX_IMAGES} de trop)`}
                       </Label>
                       <span className="text-sm text-muted-foreground">
-                        Total size: {formatSizeInMB(uploadedImages.reduce((total, file) => total + file.size, 0))} / 100MB
+                        Total size: {formatSizeInMB(uploadedImages.reduce((total, file) => total + file.size, 0))} / 200MB
                       </span>
                     </div>
                     
