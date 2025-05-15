@@ -136,7 +136,7 @@ export function PromptForm({
   const [errorDetails, setErrorDetails] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
   const [loadingModels, setLoadingModels] = useState(false);
-  const [placeholderText, setPlaceholderText] = useState("Describe your image...");
+  const [placeholderText, setPlaceholderText] = useState("");
   const [isAnimating, setIsAnimating] = useState(true);
   const [creditDeducting, setCreditDeducting] = useState(false);
   const [isInputFocused, setIsInputFocused] = useState(false);
@@ -148,23 +148,25 @@ export function PromptForm({
   const [selectedGender, setSelectedGender] = useState<string | null>(null);
 
   const placeholderExamples = useMemo(() => [
-    "A woman portrait on studio grey background",
-    "A closeup shot of a man at sunset",
-    "A professional headshot with soft lighting",
-    "A black and white street photography in NYC",
-    "A minimalist product photo on white background",
-    "A fashion editorial with dramatic lighting",
-    "A landscape with golden hour lighting",
-    "A architectural interior with natural light"
+    "A woman portrait on studio grey background, smiling",
+    "Close-up shot of a man wearing sunglasses, sunset lighting",
+    "Professional headshot, serious expression, on a white background",
+    "A minimalist product photo, teal background",
+    "Fashion editorial, dramatic lighting, full body shot",
+    "A man laughing, wearing a beanie, casual avatar style",
+    "Architectural interior, natural light, wide shot",
+    "Cyberpunk city street at night, neon lights, cinematic",
+    "Fantasy landscape with floating islands and waterfalls",
+    "Abstract art, vibrant colors, geometric patterns"
   ], []);
 
   // Animation state
   const animationState = useRef<AnimationState>({
     currentExampleIndex: 0,
-    currentText: "Describe your image...",
+    currentText: "",
     isDeleting: false,
-    typingSpeed: 80,
-    deletingSpeed: 40,
+    typingSpeed: 70,
+    deletingSpeed: 35,
     pauseBeforeDelete: 2000,
     pauseBeforeNewExample: 500,
     timeoutRef: null,
@@ -505,7 +507,15 @@ export function PromptForm({
   // Handle input blur
   const handleInputBlur = useCallback(() => {
     setIsInputFocused(false);
-  }, []);
+    // If input is empty and animation was stopped, restart it
+    if (!form.getValues().prompt && !isAnimating) {
+      animationState.current.currentText = ""; // Reset text for animation
+      // animationState.current.currentExampleIndex = 0; // Optional: reset to first example, current logic cycles
+      animationState.current.isDeleting = false;
+      animationState.current.lastAnimationTime = 0; // Reset timer for smooth restart
+      setIsAnimating(true);
+    }
+  }, [form, isAnimating]);
   
   // Handle input click - only allow expand if there's meaningful content
   const handleInputClick = useCallback(() => {

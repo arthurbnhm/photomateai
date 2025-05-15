@@ -145,6 +145,21 @@ const backgroundColors: BackgroundColor[] = [
   }
 ];
 
+// Utility function to clean up prompt string
+const cleanupPrompt = (prompt: string): string => {
+  if (!prompt) return "";
+  // Consolidate multiple spaces into one
+  let cleaned = prompt.replace(/\s+/g, ' ').trim();
+  // Remove leading/trailing commas and spaces around commas
+  cleaned = cleaned.replace(/^,|,$/g, '').trim();
+  cleaned = cleaned.replace(/\s*,\s*/g, ', ').trim();
+  // Remove duplicate commas that might result from replacements
+  cleaned = cleaned.replace(/,+/g, ',');
+  // Remove any leading/trailing commas again if they reappeared
+  cleaned = cleaned.replace(/^,|,$/g, '').trim();
+  return cleaned;
+};
+
 // Define facial expressions
 const facialExpressions: FacialExpression[] = [
   {
@@ -436,49 +451,33 @@ export const AdvancedSettings = forwardRef<AdvancedSettingsRefType, AdvancedSett
       const currentBgColor = selectedBgColor;
       const currentPrompt = form.getValues().prompt;
       
-      // If deselecting the current bg color
       if (currentBgColor === bgColorValue) {
         setSelectedBgColor(null);
-        
-        // Find and remove the bg color text from the prompt
         const bgColorToRemove = backgroundColors.find(bg => bg.value === currentBgColor);
         if (bgColorToRemove) {
-          let updatedPrompt = currentPrompt.replace(bgColorToRemove.promptText, '').trim();
-          // Clean up any duplicate commas or comma+space patterns that might be left behind
-          updatedPrompt = updatedPrompt.replace(/,\s*,\s*/g, ', ');
-          // Clean up any starting or trailing commas
-          updatedPrompt = updatedPrompt.replace(/^,\s*/, '').replace(/,\s*$/, '');
-          form.setValue("prompt", updatedPrompt);
+          const updatedPrompt = currentPrompt.replace(bgColorToRemove.promptText, '');
+          form.setValue("prompt", cleanupPrompt(updatedPrompt));
         }
         return;
       }
       
-      // Remove previous bg color from prompt if there was one
       let updatedPrompt = currentPrompt;
       if (currentBgColor) {
         const previousBgColor = backgroundColors.find(bg => bg.value === currentBgColor);
         if (previousBgColor) {
-          updatedPrompt = updatedPrompt.replace(previousBgColor.promptText, '').trim();
-          // Clean up any duplicate commas or comma+space patterns 
-          updatedPrompt = updatedPrompt.replace(/,\s*,\s*/g, ', ');
-          // Clean up any starting or trailing commas
-          updatedPrompt = updatedPrompt.replace(/^,\s*/, '').replace(/,\s*$/, '');
+          updatedPrompt = updatedPrompt.replace(previousBgColor.promptText, '');
         }
       }
       
-      // Add new bg color
       const newBgColor = backgroundColors.find(bg => bg.value === bgColorValue);
       if (newBgColor) {
-        // Check if prompt already ends with a comma or space, and add bg color text
-        if (updatedPrompt.endsWith(',') || updatedPrompt.endsWith(' ')) {
-          updatedPrompt = `${updatedPrompt} ${newBgColor.promptText}`;
-        } else if (updatedPrompt) {
-          updatedPrompt = `${updatedPrompt}, ${newBgColor.promptText}`;
+        const cleanedBasePrompt = cleanupPrompt(updatedPrompt);
+        if (cleanedBasePrompt) {
+          updatedPrompt = `${cleanedBasePrompt}, ${newBgColor.promptText}`;
         } else {
           updatedPrompt = newBgColor.promptText;
         }
-        
-        form.setValue("prompt", updatedPrompt);
+        form.setValue("prompt", cleanupPrompt(updatedPrompt));
         setSelectedBgColor(bgColorValue);
       }
     };
@@ -488,49 +487,33 @@ export const AdvancedSettings = forwardRef<AdvancedSettingsRefType, AdvancedSett
       const currentExpression = selectedExpression;
       const currentPrompt = form.getValues().prompt;
       
-      // If deselecting the current expression
       if (currentExpression === expressionValue) {
         setSelectedExpression(null);
-        
-        // Find and remove the expression text from the prompt
         const expressionToRemove = facialExpressions.find(expr => expr.value === currentExpression);
         if (expressionToRemove) {
-          let updatedPrompt = currentPrompt.replace(expressionToRemove.promptText, '').trim();
-          // Clean up any duplicate commas or comma+space patterns
-          updatedPrompt = updatedPrompt.replace(/,\s*,\s*/g, ', ');
-          // Clean up any starting or trailing commas
-          updatedPrompt = updatedPrompt.replace(/^,\s*/, '').replace(/,\s*$/, '');
-          form.setValue("prompt", updatedPrompt);
+          const updatedPrompt = currentPrompt.replace(expressionToRemove.promptText, '');
+          form.setValue("prompt", cleanupPrompt(updatedPrompt));
         }
         return;
       }
       
-      // Remove previous expression from prompt if there was one
       let updatedPrompt = currentPrompt;
       if (currentExpression) {
         const previousExpression = facialExpressions.find(expr => expr.value === currentExpression);
         if (previousExpression) {
-          updatedPrompt = updatedPrompt.replace(previousExpression.promptText, '').trim();
-          // Clean up any duplicate commas or comma+space patterns
-          updatedPrompt = updatedPrompt.replace(/,\s*,\s*/g, ', ');
-          // Clean up any starting or trailing commas
-          updatedPrompt = updatedPrompt.replace(/^,\s*/, '').replace(/,\s*$/, '');
+          updatedPrompt = updatedPrompt.replace(previousExpression.promptText, '');
         }
       }
       
-      // Add new expression
       const newExpression = facialExpressions.find(expr => expr.value === expressionValue);
       if (newExpression) {
-        // Check if prompt already ends with a comma or space, and add expression text
-        if (updatedPrompt.endsWith(',') || updatedPrompt.endsWith(' ')) {
-          updatedPrompt = `${updatedPrompt} ${newExpression.promptText}`;
-        } else if (updatedPrompt) {
-          updatedPrompt = `${updatedPrompt}, ${newExpression.promptText}`;
+        const cleanedBasePrompt = cleanupPrompt(updatedPrompt);
+        if (cleanedBasePrompt) {
+          updatedPrompt = `${cleanedBasePrompt}, ${newExpression.promptText}`;
         } else {
           updatedPrompt = newExpression.promptText;
         }
-        
-        form.setValue("prompt", updatedPrompt);
+        form.setValue("prompt", cleanupPrompt(updatedPrompt));
         setSelectedExpression(expressionValue);
       }
     };
@@ -539,38 +522,27 @@ export const AdvancedSettings = forwardRef<AdvancedSettingsRefType, AdvancedSett
     const handleAccessorySelect = (accessoryValue: string) => {
       const currentPrompt = form.getValues().prompt;
       
-      // If already selected, remove it
       if (selectedAccessory.includes(accessoryValue)) {
         const updatedAccessories = selectedAccessory.filter(acc => acc !== accessoryValue);
         setSelectedAccessory(updatedAccessories);
-        
-        // Find and remove the accessory text from the prompt
         const accessoryToRemove = accessories.find(acc => acc.value === accessoryValue);
         if (accessoryToRemove) {
-          let updatedPrompt = currentPrompt.replace(accessoryToRemove.promptText, '').trim();
-          // Clean up any duplicate commas or comma+space patterns that might be left behind
-          updatedPrompt = updatedPrompt.replace(/,\s*,\s*/g, ', ');
-          // Clean up any starting or trailing commas
-          updatedPrompt = updatedPrompt.replace(/^,\s*/, '').replace(/,\s*$/, '');
-          form.setValue("prompt", updatedPrompt);
+          const updatedPrompt = currentPrompt.replace(accessoryToRemove.promptText, '');
+          form.setValue("prompt", cleanupPrompt(updatedPrompt));
         }
         return;
       }
       
-      // Add the new accessory
       const newAccessories = [...selectedAccessory, accessoryValue];
       setSelectedAccessory(newAccessories);
       
-      // Add the new accessory text to the prompt
       const newAccessory = accessories.find(acc => acc.value === accessoryValue);
       if (newAccessory) {
-        // Check if prompt already ends with a comma or space, and add accessory text
-        if (currentPrompt.endsWith(',') || currentPrompt.endsWith(' ')) {
-          form.setValue("prompt", `${currentPrompt} ${newAccessory.promptText}`);
-        } else if (currentPrompt) {
-          form.setValue("prompt", `${currentPrompt}, ${newAccessory.promptText}`);
+        const basePrompt = cleanupPrompt(currentPrompt);
+        if (basePrompt) {
+          form.setValue("prompt", cleanupPrompt(`${basePrompt}, ${newAccessory.promptText}`));
         } else {
-          form.setValue("prompt", newAccessory.promptText);
+          form.setValue("prompt", cleanupPrompt(newAccessory.promptText));
         }
       }
     };
@@ -580,47 +552,33 @@ export const AdvancedSettings = forwardRef<AdvancedSettingsRefType, AdvancedSett
       const currentShot = selectedCameraShot;
       const currentPrompt = form.getValues().prompt;
       
-      // If deselecting the current shot
       if (currentShot === shotValue) {
         setSelectedCameraShot(null);
-        
-        // Find and remove the shot text from the prompt
         const shotToRemove = cameraShots.find(shot => shot.value === currentShot);
         if (shotToRemove) {
-          let updatedPrompt = currentPrompt.replace(shotToRemove.promptText, '').trim();
-          // Clean up any duplicate commas or comma+space patterns
-          updatedPrompt = updatedPrompt.replace(/,\s*,\s*/g, ', ');
-          // Clean up any starting or trailing commas
-          updatedPrompt = updatedPrompt.replace(/^,\s*/, '').replace(/,\s*$/, '');
-          form.setValue("prompt", updatedPrompt);
+          const updatedPrompt = currentPrompt.replace(shotToRemove.promptText, '');
+          form.setValue("prompt", cleanupPrompt(updatedPrompt));
         }
         return;
       }
       
-      // Remove previous shot from prompt if there was one
       let updatedPrompt = currentPrompt;
       if (currentShot) {
         const previousShot = cameraShots.find(shot => shot.value === currentShot);
         if (previousShot) {
-          updatedPrompt = updatedPrompt.replace(previousShot.promptText, '').trim();
-          // Clean up any duplicate commas or comma+space patterns
-          updatedPrompt = updatedPrompt.replace(/,\s*,\s*/g, ', ');
-          // Clean up any starting or trailing commas 
-          updatedPrompt = updatedPrompt.replace(/^,\s*/, '').replace(/,\s*$/, '');
+          updatedPrompt = updatedPrompt.replace(previousShot.promptText, '');
         }
       }
       
-      // Add new shot at the beginning
       const newShot = cameraShots.find(shot => shot.value === shotValue);
       if (newShot) {
-        // If there's existing prompt text, add it after the shot text with a comma
-        if (updatedPrompt) {
-          updatedPrompt = `${newShot.promptText}, ${updatedPrompt}`;
+        const cleanedBasePrompt = cleanupPrompt(updatedPrompt);
+        if (cleanedBasePrompt) {
+          updatedPrompt = `${newShot.promptText}, ${cleanedBasePrompt}`;
         } else {
           updatedPrompt = newShot.promptText;
         }
-        
-        form.setValue("prompt", updatedPrompt);
+        form.setValue("prompt", cleanupPrompt(updatedPrompt));
         setSelectedCameraShot(shotValue);
       }
     };
@@ -630,137 +588,80 @@ export const AdvancedSettings = forwardRef<AdvancedSettingsRefType, AdvancedSett
       const currentGender = selectedGender;
       const currentPrompt = form.getValues().prompt;
       
-      // If deselecting the current gender
       if (currentGender === genderValue) {
         setSelectedGender(null);
-        
-        // Notify parent component if callback exists
-        if (onGenderChange) {
-          onGenderChange(null);
-        }
-        
-        // Find and remove the gender text from the prompt
+        if (onGenderChange) onGenderChange(null);
         const genderToRemove = genders.find(g => g.value === currentGender);
         if (genderToRemove) {
-          let updatedPrompt = currentPrompt.replace(genderToRemove.promptText, '').trim();
-          // Clean up any duplicate commas or comma+space patterns
-          updatedPrompt = updatedPrompt.replace(/,\s*,\s*/g, ', ');
-          // Clean up any starting or trailing commas
-          updatedPrompt = updatedPrompt.replace(/^,\s*/, '').replace(/,\s*$/, '');
-          form.setValue("prompt", updatedPrompt);
+          const updatedPrompt = currentPrompt.replace(genderToRemove.promptText, '');
+          form.setValue("prompt", cleanupPrompt(updatedPrompt));
         }
         return;
       }
       
-      // Remove previous gender from prompt if there was one
       let updatedPrompt = currentPrompt;
       if (currentGender) {
         const previousGender = genders.find(g => g.value === currentGender);
         if (previousGender) {
-          updatedPrompt = updatedPrompt.replace(previousGender.promptText, '').trim();
-          // Clean up any duplicate commas or comma+space patterns
-          updatedPrompt = updatedPrompt.replace(/,\s*,\s*/g, ', ');
-          // Clean up any starting or trailing commas
-          updatedPrompt = updatedPrompt.replace(/^,\s*/, '').replace(/,\s*$/, '');
+          updatedPrompt = updatedPrompt.replace(previousGender.promptText, '');
         }
       }
       
-      // Add new gender at the end
       const newGender = genders.find(g => g.value === genderValue);
       if (newGender) {
-        // If there's existing prompt text, add the gender text after it with a comma
-        if (updatedPrompt) {
-          updatedPrompt = `${updatedPrompt}, ${newGender.promptText}`;
+        const cleanedBasePrompt = cleanupPrompt(updatedPrompt);
+        if (cleanedBasePrompt) {
+          updatedPrompt = `${cleanedBasePrompt}, ${newGender.promptText}`;
         } else {
           updatedPrompt = newGender.promptText;
         }
-        
-        form.setValue("prompt", updatedPrompt);
+        form.setValue("prompt", cleanupPrompt(updatedPrompt));
         setSelectedGender(genderValue);
-        
-        // Notify parent component if callback exists
-        if (onGenderChange) {
-          onGenderChange(genderValue);
-        }
+        if (onGenderChange) onGenderChange(genderValue);
       }
     };
 
     // Added: Function to handle preset selection
     const handlePresetSelect = (presetValue: string) => {
+      const isClearingPreset = presetValue === "__no_preset__";
+      setSelectedPreset(isClearingPreset ? null : presetValue);
+
+      // Store current selections to be cleared
+      const prevCameraShot = selectedCameraShot;
+      const prevBgColor = selectedBgColor;
+      const prevExpression = selectedExpression;
+      const prevAccessories = [...selectedAccessory]; // Clone for iteration
+      const prevGender = selectedGender;
+
+      // Clear all current selections from state and prompt by calling their respective handlers
+      // This triggers their deselection logic
+      if (prevCameraShot) handleCameraShotSelect(prevCameraShot);
+      if (prevBgColor) handleBgColorSelect(prevBgColor);
+      if (prevExpression) handleExpressionSelect(prevExpression);
+      // For accessories, call handleAccessorySelect for each to remove them
+      // This relies on handleAccessorySelect to correctly remove the item from selectedAccessory state and prompt
+      prevAccessories.forEach(accValue => {
+        // Ensure handleAccessorySelect is called in a way that it processes removal
+        // It checks selectedAccessory.includes(accessoryValue), so this should work if state is not cleared prematurely
+        if (selectedAccessory.includes(accValue)) { // Check if it's still in state before trying to remove
+            handleAccessorySelect(accValue);
+        }
+      });
+      if (prevGender) handleGenderSelect(prevGender);
+      // At this point, all individual selection states (selectedBgColor, etc.) should be null/empty
+      // and their corresponding texts removed from the prompt.
+
       const preset = presets.find(p => p.value === presetValue);
 
       if (preset) {
-        // Reset individual selections but keep prompt base? No, let's clear state fully first.
-        // The subsequent handler calls will rebuild the prompt based *only* on the preset.
-        // Let's clear the prompt entirely before applying, to avoid conflicts if user had prior text.
-        // Or maybe better: Reset selections state *only*, then let handlers modify existing prompt.
-        // const currentPrompt = form.getValues().prompt; // Keep existing non-managed parts of the prompt - REMOVED as unused
-
-        // Reset selections states without clearing the prompt text initially
-        setSelectedBgColor(null);
-        setSelectedExpression(null);
-        setSelectedAccessory([]);
-        setSelectedCameraShot(null);
-        setSelectedGender(null);
-
-        // Apply preset settings sequentially, letting each handler manage its part of the prompt
-        // Camera shot often goes first stylistically
-        // --- Refactored logic below handles all cases ---
-          // 1. Store current values
-          const prevBgColor = selectedBgColor;
-          const prevExpression = selectedExpression;
-          const prevAccessories = [...selectedAccessory];
-          const prevCameraShot = selectedCameraShot;
-          const prevGender = selectedGender;
-
-          // 2. Clear state *after* storing previous values
-          setSelectedBgColor(null);
-          setSelectedExpression(null);
-          setSelectedAccessory([]);
-          setSelectedCameraShot(null);
-          setSelectedGender(null);
-
-          // 3. Remove previous values from prompt (call handlers with current value to trigger removal)
-          //    Check if value existed before attempting removal
-          if (prevCameraShot) handleCameraShotSelect(prevCameraShot);
-          if (prevBgColor) handleBgColorSelect(prevBgColor);
-          if (prevExpression) handleExpressionSelect(prevExpression);
-          if (prevAccessories.length > 0) prevAccessories.forEach(acc => handleAccessorySelect(acc));
-          if (prevGender) handleGenderSelect(prevGender);
-          // Now the prompt should be cleaned of the old controlled settings
-
-          // 4. Apply new settings from the preset
-          if (preset.settings.cameraShot) handleCameraShotSelect(preset.settings.cameraShot);
-          if (preset.settings.bgColor) handleBgColorSelect(preset.settings.bgColor);
-          if (preset.settings.expression) handleExpressionSelect(preset.settings.expression);
-          if (preset.settings.accessories && preset.settings.accessories.length > 0) preset.settings.accessories.forEach(acc => handleAccessorySelect(acc)); // This will add them one by one
-          if (preset.settings.gender) handleGenderSelect(preset.settings.gender);
-
-        setSelectedPreset(presetValue); // Set the preset state *after* applying everything
-      } else {
-        // Handle case where user selects a "clear" or empty option (if we add one)
-        // For now, just resetting everything if preset is not found (shouldn't happen with Select)
-        // Or maybe call the full reset? Let's just clear the preset state.
-         // Let's trigger the removal of all items if the user selects the placeholder/default again
-         const prevBgColor = selectedBgColor;
-         const prevExpression = selectedExpression;
-         const prevAccessories = [...selectedAccessory];
-         const prevCameraShot = selectedCameraShot;
-         const prevGender = selectedGender;
-
-         setSelectedBgColor(null);
-         setSelectedExpression(null);
-         setSelectedAccessory([]);
-         setSelectedCameraShot(null);
-         setSelectedGender(null);
-         setSelectedPreset(null);
-
-         if (prevCameraShot) handleCameraShotSelect(prevCameraShot);
-         if (prevBgColor) handleBgColorSelect(prevBgColor);
-         if (prevExpression) handleExpressionSelect(prevExpression);
-         prevAccessories.forEach(acc => handleAccessorySelect(acc));
-         if (prevGender) handleGenderSelect(prevGender);
-
+        // Apply new settings from the preset
+        if (preset.settings.cameraShot) handleCameraShotSelect(preset.settings.cameraShot);
+        if (preset.settings.bgColor) handleBgColorSelect(preset.settings.bgColor);
+        if (preset.settings.expression) handleExpressionSelect(preset.settings.expression);
+        if (preset.settings.accessories && preset.settings.accessories.length > 0) {
+          preset.settings.accessories.forEach(acc => handleAccessorySelect(acc));
+        }
+        if (preset.settings.gender) handleGenderSelect(preset.settings.gender);
       }
     };
 
@@ -786,7 +687,7 @@ export const AdvancedSettings = forwardRef<AdvancedSettingsRefType, AdvancedSett
             </Button>
           </CollapsibleTrigger>
 
-          {/* Gender Selection Icons - moved to the far right */}
+          {/* Gender Selection Icons - MOVED BACK HERE */}
           <div className="flex space-x-1">
             <div
               className={cn(
@@ -818,16 +719,58 @@ export const AdvancedSettings = forwardRef<AdvancedSettingsRefType, AdvancedSett
         >
           <div className="pt-4">
             <div className="space-y-6">
+              {/* Gender Selection Section - REMOVED FROM HERE */}
+              {/* <div className="space-y-2">
+                <div className="flex items-center justify-between h-6">
+                  <h4 className="text-sm font-medium flex items-center">
+                    Gender
+                    <span className="ml-2 text-xs text-muted-foreground min-w-[80px]">
+                      {selectedGender && (
+                        <>({genders.find(g => g.value === selectedGender)?.label})</>
+                      )}
+                    </span>
+                  </h4>
+                  <div className="w-[60px] text-right">
+                    {selectedGender && (
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        className="h-6 px-2 text-xs"
+                        onClick={() => handleGenderSelect(selectedGender)} // Clears by re-selecting
+                      >
+                        Clear
+                      </Button>
+                    )}
+                  </div>
+                </div>
+                <div className="flex space-x-2">
+                  {genders.map((gender) => (
+                    <div
+                      key={gender.value}
+                      className={cn(
+                        "h-10 flex-1 flex items-center justify-center px-3 py-2 rounded-md cursor-pointer border border-input transition-all duration-200 hover:bg-accent/10",
+                        selectedGender === gender.value 
+                          ? "ring-2 ring-inset ring-ring/50 bg-accent/20" 
+                          : "opacity-90 hover:opacity-100"
+                      )}
+                      onClick={() => handleGenderSelect(gender.value)}
+                      title={gender.label}
+                    >
+                      <div className="text-sm font-medium">{gender.label}</div>
+                    </div>
+                  ))}
+                </div>
+              </div> */}
+
               {/* Added Preset Selection Section */}
               <div className="space-y-2">
                  <Label htmlFor="preset-select" className="text-sm font-medium">Style Preset</Label>
-                 <Select value={selectedPreset ?? ""} onValueChange={handlePresetSelect}>
+                 <Select value={selectedPreset ?? "__no_preset__"} onValueChange={handlePresetSelect}>
                    <SelectTrigger id="preset-select">
                      <SelectValue placeholder="Select a preset..." />
                    </SelectTrigger>
                    <SelectContent>
-                     {/* Optional: Add an item to clear selection */}
-                     {/* <SelectItem value="clear">-- No Preset --</SelectItem> */}
+                     <SelectItem value="__no_preset__">-- No Preset --</SelectItem>
                      {presets.map((preset) => (
                        <SelectItem key={preset.value} value={preset.value}>
                          {preset.label}
@@ -1000,20 +943,11 @@ export const AdvancedSettings = forwardRef<AdvancedSettingsRefType, AdvancedSett
                         size="sm" 
                         className="h-6 px-2 text-xs"
                         onClick={() => {
-                          // Remove all accessory texts from prompt
-                          let updatedPrompt = form.getValues().prompt;
-                          selectedAccessory.forEach(accValue => {
-                            const acc = accessories.find(a => a.value === accValue);
-                            if (acc) {
-                              updatedPrompt = updatedPrompt.replace(acc.promptText, '').trim();
-                            }
-                          });
-                          // Clean up any duplicate commas or comma+space patterns that might be left behind
-                          updatedPrompt = updatedPrompt.replace(/,\s*,\s*/g, ', ');
-                          // Clean up any starting or trailing commas
-                          updatedPrompt = updatedPrompt.replace(/^,\s*/, '').replace(/,\s*$/, '');
-                          form.setValue("prompt", updatedPrompt);
-                          setSelectedAccessory([]);
+                          // Call handleAccessorySelect for each selected accessory to remove it
+                          // This uses the existing logic in handleAccessorySelect for removal
+                          // Make a copy for iteration as selectedAccessory state will change
+                          const accessoriesToClear = [...selectedAccessory];
+                          accessoriesToClear.forEach(accValue => handleAccessorySelect(accValue));
                         }}
                       >
                         Clear All
