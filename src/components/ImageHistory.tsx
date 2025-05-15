@@ -473,45 +473,6 @@ export function ImageHistory({
     return () => clearInterval(interval);
   }, [pendingGenerations, setPendingGenerations]);
 
-  const performDeletion = async (id: string): Promise<boolean> => {
-    try {
-      setIsDeleting(id);
-      
-      // Find the generation to delete
-      const generationToDelete = generations.find(g => g.id === id);
-      if (!generationToDelete) {
-        toast.error("Generation not found");
-        return false;
-      }
-      
-      // Get the replicate_id and image URLs
-      const { replicate_id, images } = generationToDelete;
-      const imageUrls = images.map(img => img.url);
-      
-      // Send the delete request to the API
-      const success = await sendDeleteRequest(replicate_id, imageUrls);
-      
-      if (success) {
-        // Update the UI by removing the deleted generation
-        setGenerations(prevGenerations => 
-          prevGenerations.filter(g => g.id !== id)
-        );
-        
-        toast.success("Image deleted successfully");
-        return true;
-      } else {
-        toast.error("Failed to delete image");
-        return false;
-      }
-    } catch (error) {
-      console.error("Error deleting image:", error);
-      toast.error("An error occurred while deleting the image");
-      return false;
-    } finally {
-      setIsDeleting(null);
-    }
-  };
-  
   const sendDeleteRequest = async (replicateId: string, storageUrls?: string[]): Promise<boolean> => {
     try {
       // Add timeout to the operation
@@ -639,39 +600,78 @@ export function ImageHistory({
         // For pending generations, we should cancel instead of delete
         setIsCancelling(id);
         const pendingGen = pendingGenerations.find(gen => gen.id === id);
-        const success = await cancelGeneration(id, pendingGen?.replicate_id);
-        
-        if (success) {
-          toast.success('Generation cancelled successfully');
-        } else {
-          toast.error('Failed to cancel generation');
+        try {
+          const success = await cancelGeneration(id, pendingGen?.replicate_id);
+          
+          if (success) {
+            toast.success('Generation cancelled successfully');
+          } else {
+            toast.error('Failed to cancel generation');
+          }
+        } catch (e) {
+          console.error("Error during cancellation in handleDelete:", e);
+          toast.error('An error occurred during cancellation.');
+        } finally {
+          setIsCancelling(null); // Use null for consistency
         }
-        
-        setIsCancelling('');
         return;
       }
       
-      // If we get here, try to delete from database
-      setIsDeleting(id);
-      
-      // Call the performDeletion function
-      const success = await performDeletion(id);
-      
-      if (success) {
-        toast.success('Image deleted from history');
-      } else {
-        toast.error('Failed to delete image');
-        // Refresh the generations to ensure UI is in sync with server
-        loadGenerations(true);
+      // If we get here, it's a completed generation, try to delete from database optimistically
+      const generationIndex = generations.findIndex(g => g.id === id);
+      if (generationIndex === -1) {
+        toast.error("Generation not found for deletion.");
+        return;
       }
+      const generationToDelete = { ...generations[generationIndex] }; // Shallow copy for potential rollback
+
+      // Optimistic UI update: remove the item immediately
+      setGenerations(prevGenerations => prevGenerations.filter(g => g.id !== id));
       
-      setIsDeleting('');
+      const toastId = `delete-${id}`; // Keep toastId for error messages
+      // toast("Deleting image...", { id: toastId }); // Removed: In-progress toast
+      setIsDeleting(id); // Show spinner on button
+
+      // Perform actual deletion in background
+      sendDeleteRequest(generationToDelete.replicate_id, generationToDelete.images.map(img => img.url))
+        .then(success => {
+          if (success) {
+            // toast.success("Image deleted successfully", { id: toastId }); // Removed: Success toast
+            // UI is already updated optimistically.
+            // No need to call loadGenerations(true) unless there's a specific reason to distrust local state.
+          } else {
+            toast.error("Failed to delete image. Restoring...", { id: toastId });
+            // Rollback UI
+            setGenerations(prev => {
+              const restoredGenerations = [...prev];
+              restoredGenerations.splice(generationIndex, 0, generationToDelete);
+              // Ensure the list remains sorted by timestamp
+              return restoredGenerations.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+            });
+          }
+        })
+        .catch(error => {
+          console.error('Error during background image deletion:', error);
+          toast.error("Deletion error. Restoring...", { id: toastId });
+          // Rollback UI on unexpected error as well
+          setGenerations(prev => {
+            const restoredGenerations = [...prev];
+            restoredGenerations.splice(generationIndex, 0, generationToDelete);
+            return restoredGenerations.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+          });
+        })
+        .finally(() => {
+          setIsDeleting(null); // Clear loading state for the button
+        });
+
     } catch (error) {
+      // This catch is for synchronous errors in the initial part of handleDelete (e.g., finding item)
+      // Async errors from sendDeleteRequest are handled in its own .catch block.
       console.error('Error handling delete:', error);
-      toast.error('An error occurred while processing your request');
-      setIsDeleting('');
-      // Refresh the generations to ensure UI is in sync with server
-      loadGenerations(true);
+      toast.error('An error occurred while initiating the delete request');
+      setIsDeleting(null); // Ensure isDeleting is cleared if an early error occurs
+      // Consider if a global refresh is needed here, though specific rollback is preferred
+      // loadGenerations(true); 
     }
   };
 
