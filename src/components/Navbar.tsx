@@ -119,72 +119,67 @@ export function Navbar({
 
   return (
     <>
-      {/* Logo animation styles - only needed when mobile menu is open */}
-      {mobileMenuOpen && (
-        <style jsx global>{`
-          @keyframes pulse {
-            0% { opacity: 0.6; r: 10; }
-            50% { opacity: 1; r: 12; }
-            100% { opacity: 0.6; r: 10; }
-          }
-          
-          @keyframes glow {
-            0% { opacity: 0.2; r: 15; }
-            50% { opacity: 0.4; r: 20; }
-            100% { opacity: 0.2; r: 15; }
-          }
-          
-          .red-dot {
-            animation: pulse 2s infinite ease-in-out;
-          }
-          
-          .red-glow {
-            animation: glow 2s infinite ease-in-out;
-          }
-          
-          /* Menu item staggered animation */
-          .menu-item {
-            opacity: 0;
-            transform: translateY(10px);
-            transition: opacity 0.3s ease, transform 0.3s ease;
-            will-change: opacity, transform;
-          }
-          
-          .mobile-menu.open .menu-item:nth-child(1) {
-            transition-delay: 0.05s;
-          }
-          
-          .mobile-menu.open .menu-item:nth-child(2) {
-            transition-delay: 0.1s;
-          }
-          
-          .mobile-menu.open .menu-item:nth-child(3) {
-            transition-delay: 0.15s;
-          }
-          
-          .mobile-menu.open .menu-item:nth-child(4) {
-            transition-delay: 0.2s;
-          }
-          
-          .mobile-menu.open .menu-item {
-            opacity: 1;
-            transform: translateY(0);
-          }
-          
-          .menu-cta {
-            opacity: 0;
-            transform: translateY(10px);
-            transition: opacity 0.3s ease, transform 0.3s ease;
-            transition-delay: 0.25s;
-            will-change: opacity, transform;
-          }
-          
-          .mobile-menu.open .menu-cta {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        `}</style>
-      )}
+      {/* Logo animation styles - MOVED HERE so they are not conditionally rendered */}
+      <style jsx global>{`
+        @keyframes pulse {
+          0% { opacity: 0.6; r: 10; }
+          50% { opacity: 1; r: 12; }
+          100% { opacity: 0.6; r: 10; }
+        }
+        
+        @keyframes glow {
+          0% { opacity: 0.2; r: 15; }
+          50% { opacity: 0.4; r: 20; }
+          100% { opacity: 0.2; r: 15; }
+        }
+        
+        .red-dot {
+          animation: pulse 2s infinite ease-in-out;
+        }
+        
+        .red-glow {
+          animation: glow 2s infinite ease-in-out;
+        }
+        
+        /* Menu item staggered animation */
+        .menu-item {
+          opacity: 0;
+          transform: translateY(10px);
+          transition: opacity 0.3s ease, transform 0.3s ease;
+          will-change: opacity, transform;
+        }
+        
+        .mobile-menu.open .menu-item:nth-child(1) {
+          transition-delay: 0.05s;
+        }
+        
+        .mobile-menu.open .menu-item:nth-child(2) {
+          transition-delay: 0.1s;
+        }
+        
+        .mobile-menu.open .menu-item:nth-child(3) {
+          transition-delay: 0.15s;
+        }
+        
+        .mobile-menu.open .menu-item:nth-child(4) {
+          transition-delay: 0.2s;
+        }
+        
+        /* Combined rule for items when menu is open */
+        .mobile-menu.open .menu-item,
+        .mobile-menu.open .menu-cta {
+          opacity: 1;
+          transform: translateY(0);
+        }
+        
+        .menu-cta {
+          opacity: 0;
+          transform: translateY(10px);
+          transition: opacity 0.3s ease, transform 0.3s ease;
+          transition-delay: 0.25s; /* Delay for CTA to animate in */
+          will-change: opacity, transform;
+        }
+      `}</style>
       
       <header className="py-4 px-6 bg-background relative z-30">
         <div className="max-w-6xl mx-auto flex justify-between items-center">
@@ -362,7 +357,15 @@ export function Navbar({
       
       {/* Mobile Menu - Only visible on mobile */}
       <div 
-        className={`mobile-menu block md:hidden fixed inset-0 bg-background z-50 flex items-center justify-center text-center ${mobileMenuOpen ? 'open' : 'closed'}`}
+        className={`
+          mobile-menu block md:hidden fixed inset-0 bg-background z-50 
+          flex items-center justify-center text-center 
+          transition-opacity duration-300 ease-in-out
+          ${mobileMenuOpen ? 'opacity-100 visible open' : 'opacity-0 invisible closed'}
+        `}
+        // 'open' and 'closed' classes are kept for the .mobile-menu.open selectors
+        // used by child item animations in the <style jsx global> block.
+        // The main container's visibility/fade is now handled by opacity/visible classes.
       >
         <div className="mobile-menu-items flex flex-col justify-center items-center p-4">
           <nav>
