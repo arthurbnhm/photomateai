@@ -547,8 +547,14 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
     }
     
     // Si aucun fichier valide, on arrête
-    if (validFiles.length === 0) {
+    if (validFiles.length === 0 && acceptedFiles.length > 0 && oversizedFiles.length < acceptedFiles.length) { // Check if validFiles is empty due to size, not because no files were accepted
+      // This case implies files were accepted by dropzone but then rejected by size logic here.
+      // Errors for oversized files or total size rejected already shown.
+      // If all accepted files were oversized or hit total size limit, validFiles would be empty.
       return;
+    }
+    if (validFiles.length === 0 && acceptedFiles.length === 0) { // No files accepted by dropzone initially
+        return;
     }
     
     // Vérifier si le total d'images dépasse la limite
@@ -567,7 +573,7 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
     }
     // Si on est dans la plage autorisée
     setUploadedImages([...newImages, ...validFiles]);
-  }, [uploadedImages, isGeneratingPreviews, isProcessing]);
+  }, [uploadedImages, isGeneratingPreviews, isProcessing, MIN_IMAGES, MAX_IMAGES]);
 
   // Setup dropzone
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
@@ -714,21 +720,25 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
     const imageFiles = fileArray.filter(file => file.type.startsWith('image/'));
     
     if (imageFiles.length === 0) {
-      toast.error('Only image files are accepted');
+      toast.error('Only image files are accepted (JPG, PNG, WebP).');
       return;
     }
 
-    // Check if this would exceed ou ne pas atteindre la plage autorisée
-    if (uploadedImages.length + imageFiles.length > MAX_IMAGES) {
-      toast.error(`Vous pouvez uploader au maximum ${MAX_IMAGES} images. Veuillez en retirer quelques-unes.`);
+    const potentialTotalImages = uploadedImages.length + imageFiles.length;
+
+    // Check only if the drop would exceed the absolute maximum.
+    // The main onDrop handler (from useDropzone) will manage messages related to MIN_IMAGES.
+    if (potentialTotalImages > MAX_IMAGES) {
+      toast.error(
+        `Cannot add ${imageFiles.length} image(s). Maximum is ${MAX_IMAGES} images. ` +
+        `(Current: ${uploadedImages.length}, adding these would make ${potentialTotalImages} total).`
+      );
       return;
     }
-    if (uploadedImages.length + imageFiles.length < MIN_IMAGES) {
-      toast.info(`Ajoutez encore ${MIN_IMAGES - (uploadedImages.length + imageFiles.length)} image(s) pour atteindre le minimum de ${MIN_IMAGES}.`);
-      // On ajoute quand même les fichiers pour permettre d'en ajouter d'autres ensuite
-      onDrop(imageFiles);
-      return;
-    }
+    
+    // Delegate to the main onDrop handler from useDropzone.
+    // This handler will process files, check sizes, and manage MIN_IMAGES/MAX_IMAGES logic consistently.
+    onDrop(imageFiles);
   };
 
   // Update effect for handling dragActive changes
