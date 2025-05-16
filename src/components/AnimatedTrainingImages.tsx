@@ -75,7 +75,7 @@ export function AnimatedTrainingImages() {
         return (
           <motion.div
             key={imgConfig.id}
-            className={`relative w-20 h-20 rounded-lg overflow-hidden shadow-md border-4 border-gray-300 dark:border-white 
+            className={`relative w-20 h-20 rounded-lg overflow-hidden shadow-md border-4 border-white 
                        ${imgConfig.id === 'center' ? 'mx-1' : (imgConfig.id === 'left' ? 'mr-[-12px]' : 'ml-[-12px]')}`}
             initial={anim.initial}
             animate={anim.animate}
