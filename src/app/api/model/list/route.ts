@@ -35,9 +35,20 @@ export async function GET(request: NextRequest) {
     const status = searchParams.get('status');
     const isCancelled = searchParams.get('is_cancelled');
     const isDeleted = searchParams.get('is_deleted');
-    const limit = parseInt(searchParams.get('limit') || '10', 10);
-    const page = parseInt(searchParams.get('page') || '1', 10);
-    const offset = (page - 1) * limit;
+
+    // Pagination parameters
+    const hasPageParam = searchParams.has('page');
+    const hasLimitParam = searchParams.has('limit');
+
+    let limit = 10; // Default limit if pagination params are present but one is missing
+    let page = 1;   // Default page
+    let offset = 0;
+
+    if (hasPageParam || hasLimitParam) {
+      limit = parseInt(searchParams.get('limit') || '10', 10);
+      page = parseInt(searchParams.get('page') || '1', 10);
+      offset = (page - 1) * limit;
+    }
 
     // Initialize Supabase client with user session
     const supabase = createServerClient();
@@ -116,18 +127,22 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // Otherwise, fetch a list of models with pagination
-    const query = supabase
+    // Otherwise, fetch a list of models
+    let modelsListQuery = supabase
       .from('models')
       .select('*, trainings!trainings_model_id_fkey(*)')
       .eq('is_deleted', isDeleted === 'true' ? true : (isDeleted === 'false' ? false : false))
-      .eq('user_id', authenticatedUserId); // Always filter by authenticated user
+      .eq('user_id', authenticatedUserId) // Always filter by authenticated user
+      .order('created_at', { ascending: false });
 
-    // Apply pagination
-    const { data: models, error: modelsError } = await query
-      .order('created_at', { ascending: false })
-      .range(offset, offset + limit - 1)
-      .limit(limit);
+    // Apply pagination ONLY if page or limit parameters are present
+    if (hasPageParam || hasLimitParam) {
+      modelsListQuery = modelsListQuery.range(offset, offset + limit - 1).limit(limit);
+    }
+    // If no page/limit params, the query will fetch all matching models.
+
+    const { data: models, error: modelsError } = await modelsListQuery;
+
 
     if (modelsError) {
       console.error('Error fetching models:', modelsError);
@@ -200,31 +215,36 @@ export async function GET(request: NextRequest) {
       trainings: model.trainings.filter((training: Training) => !training.is_cancelled)
     }));
 
-    // Get total count for pagination with user_id filter if available
-    let countQuery = supabase
+    // Get total count for pagination metadata (always count all matching models for the user)
+    const countQueryBuilder = supabase
       .from('models')
       .select('*', { count: 'exact', head: true })
-      .eq('is_deleted', false);
-      
-    // Apply user_id filter to count query if available
-    if (authenticatedUserId) {
-      countQuery = countQuery.eq('user_id', authenticatedUserId);
-    }
+      .eq('is_deleted', isDeleted === 'true' ? true : (isDeleted === 'false' ? false : false)) // Match is_deleted filter
+      .eq('user_id', authenticatedUserId);
     
-    const { count: totalCount, error: countError } = await countQuery;
+    const { count: totalCount, error: countError } = await countQueryBuilder;
 
     if (countError) {
       console.error('Error counting models:', countError);
+      // Not returning error here, as fetching models might have succeeded
     }
+    
+    // For the pagination object in response:
+    // If we fetched all models (no page/limit params), page is 1, limit is totalCount, pages is 1.
+    // Otherwise, use the provided page/limit.
+    const responsePage = (hasPageParam || hasLimitParam) ? page : 1;
+    const responseLimit = (hasPageParam || hasLimitParam) ? limit : (totalCount || finalModels.length); // Use finalModels.length if totalCount is null
+    const responsePages = (hasPageParam || hasLimitParam) ? Math.ceil((totalCount || 0) / limit) : 1;
+
 
     return NextResponse.json({
       success: true,
       models: finalModels,
       pagination: {
-        total: totalCount || 0,
-        page,
-        limit,
-        pages: Math.ceil((totalCount || 0) / limit)
+        total: totalCount || finalModels.length, // Use finalModels.length if totalCount is null
+        page: responsePage,
+        limit: responseLimit,
+        pages: responsePages
       }
     });
   } catch (error) {

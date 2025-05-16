@@ -49,9 +49,7 @@ interface NewTraining {
 // Cache structure
 interface ModelsCache {
   models: Model[];
-  totalPages: number;
   lastFetched: number;
-  page: number;
 }
 
 // Create a global models cache
@@ -62,13 +60,11 @@ export function useModels(newTraining: NewTraining | null = null) {
   const [models, setModels] = useState<Model[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
   const { user } = useAuth();
   
-  // Create a cache key based on user ID and page
-  const getCacheKey = useCallback((userId: string | undefined, pageNum: number) => {
-    return `${userId || 'anonymous'}_${pageNum}`;
+  // Create a cache key based on user ID
+  const getCacheKey = useCallback((userId: string | undefined) => {
+    return `${userId || 'anonymous'}`;
   }, []);
 
   // Check if cache is still valid
@@ -79,25 +75,24 @@ export function useModels(newTraining: NewTraining | null = null) {
   }, []);
 
   // Memoize the fetch function
-  const fetchModels = useCallback(async (pageNum = 1, forceRefresh = false) => {
+  const fetchModels = useCallback(async (forceRefresh = false) => {
     setLoading(true);
     try {
       const userId = user?.id;
-      const cacheKey = getCacheKey(userId, pageNum);
+      const cacheKey = getCacheKey(userId);
       
       // Check if we have a valid cache and it's not a forced refresh
       if (!forceRefresh && isCacheValid(cacheKey)) {
         const cache = modelsCache[cacheKey];
         setModels(cache.models);
-        setTotalPages(cache.totalPages);
         setLoading(false);
         return;
       }
       
-      // Fetch from API
+      // Fetch from API - remove pageNum from URL
       const url = userId 
-        ? `/api/model/list?page=${pageNum}&user_id=${userId}` 
-        : `/api/model/list?page=${pageNum}`;
+        ? `/api/model/list?user_id=${userId}` 
+        : `/api/model/list`;
       
       const response = await fetch(url);
       
@@ -109,14 +104,11 @@ export function useModels(newTraining: NewTraining | null = null) {
       
       if (data.success) {
         setModels(data.models);
-        setTotalPages(data.pagination.pages);
         
         // Update the cache
         modelsCache[cacheKey] = {
           models: data.models,
-          totalPages: data.pagination.pages,
           lastFetched: Date.now(),
-          page: pageNum
         };
       } else {
         setError(data.error || "Failed to fetch models");
@@ -128,17 +120,10 @@ export function useModels(newTraining: NewTraining | null = null) {
     }
   }, [user?.id, getCacheKey, isCacheValid]);
 
-  // Function to handle page changes
-  const handlePageChange = useCallback((newPage: number) => {
-    if (newPage >= 1 && newPage <= totalPages) {
-      setPage(newPage);
-    }
-  }, [totalPages]);
-
-  // Initial fetch
+  // Initial fetch - remove page dependency
   useEffect(() => {
-    fetchModels(page);
-  }, [fetchModels, page]);
+    fetchModels();
+  }, [fetchModels]);
 
   // Function to check if a new training is already in models list
   const isNewTrainingInModels = useCallback(() => {
@@ -167,9 +152,9 @@ export function useModels(newTraining: NewTraining | null = null) {
     if (!newTraining) return;
     
     // A new training was created, so invalidate the cache by forcing a refresh
-    fetchModels(page, true);
+    fetchModels(true);
     
-  }, [newTraining, fetchModels, page]);
+  }, [newTraining, fetchModels]);
 
   // Functions to remove models from the list and cache
   const removeModelFromState = useCallback((modelId: string) => {
@@ -186,16 +171,13 @@ export function useModels(newTraining: NewTraining | null = null) {
     Object.keys(modelsCache).forEach(key => {
       delete modelsCache[key];
     });
-    fetchModels(page, true);
-  }, [fetchModels, page]);
+    fetchModels(true);
+  }, [fetchModels]);
 
   return {
     models,
     loading,
     error,
-    page,
-    totalPages,
-    handlePageChange,
     fetchModels,
     isNewTrainingInModels,
     removeModelFromState,
