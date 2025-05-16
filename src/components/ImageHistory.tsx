@@ -566,8 +566,8 @@ export function ImageHistory({
   // Simplified handleImageError without retry mechanism
   const handleImageError = (generationId: string, imageIndex: number) => {
     // Instead of retrying multiple times, just attempt to refresh the URL once
-    console.log(`Attempting to refresh image: ${generationId}-${imageIndex}`);
-    
+    // console.log(`Attempting to refresh image: ${generationId}-${imageIndex}`);
+
     // Force a re-render of the image by updating the URL with a cache-busting parameter
     setGenerations(prev => 
       prev.map(gen => 

@@ -745,10 +745,7 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
       detail: { isOpen: dragActive } 
     });
     window.dispatchEvent(event);
-
-    // Log the current theme for debugging
-    console.log('Current theme:', resolvedTheme);
-  }, [dragActive, resolvedTheme]);
+  }, [dragActive]);
 
   // Add global event listeners for drag and drop
   useEffect(() => {

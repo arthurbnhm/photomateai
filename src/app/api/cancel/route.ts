@@ -215,15 +215,16 @@ async function cancelPrediction(predictionId: string, supabase: SupabaseClient, 
   }
 }
 
-// Helper function to delete training files
+// Helper function to delete training files (placeholder)
 async function deleteTrainingFiles(
-  modelOwner: string, 
-  modelName: string
+  // modelOwner: string,
+  // modelName: string
 ): Promise<boolean> {
   try {
-    // Note: Replicate doesn't have a direct API to delete training files
-    // This is a placeholder for future implementation
-    console.log(`Would delete training files for ${modelOwner}/${modelName}`);
+    // For now, we won't actually delete, just log what would be deleted
+    // This is a placeholder for actual file deletion logic
+    // console.log(`Would delete training files for ${modelOwner}/${modelName}`);
+
     return true;
   } catch (error) {
     console.error('Error deleting training files:', error);
@@ -278,8 +279,8 @@ async function cancelTraining(trainingId: string, supabase: SupabaseClient, user
         // Delete training files
         if (internalTrainingData.models) {
           await deleteTrainingFiles(
-            internalTrainingData.models.model_owner,
-            internalTrainingData.models.model_id
+            // internalTrainingData.models.model_owner,
+            // internalTrainingData.models.model_id
           );
         }
         
@@ -318,8 +319,8 @@ async function cancelTraining(trainingId: string, supabase: SupabaseClient, user
       // Delete training files
       if (trainingData.models) {
         await deleteTrainingFiles(
-          trainingData.models.model_owner,
-          trainingData.models.model_id
+          // trainingData.models.model_owner,
+          // trainingData.models.model_id
         );
       }
 

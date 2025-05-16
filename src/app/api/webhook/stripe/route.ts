@@ -164,8 +164,6 @@ export async function POST(req: NextRequest) {
             .from('subscriptions')
             .update(updateData)
             .eq('stripe_subscription_id', invoiceSubscriptionId);
-            
-          console.log(`Updated subscription for customer ${invoiceCustomerId} - Payment succeeded`);
         } else {
           // This is unusual - we should have a subscription record from checkout.session.completed
           // But just in case, try to find the user and create a subscription record
@@ -206,8 +204,6 @@ export async function POST(req: NextRequest) {
                 last_payment_date: now,
                 current_period_end: periodEnd,
               });
-              
-            console.log(`Created new subscription for user ${invoiceUserId} from invoice payment`);
           } else {
             console.error(`No user found for customer ID ${invoiceCustomerId} in invoice.payment_succeeded`);
           }

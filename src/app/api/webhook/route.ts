@@ -170,6 +170,16 @@ export async function POST(request: Request) {
     
     const replicate_id = webhookData.id;
 
+    /*
+    // For debugging specific webhooks if needed
+    if (replicate_id === "specific_id_to_debug") {
+      // console.log(
+      //   'Webhook event details for specific ID:',
+      //   JSON.stringify(webhookData, null, 2)
+      // );
+    }
+    */
+
     if (!replicate_id) {
       console.error('No replicate_id in webhook data');
       return NextResponse.json({ error: 'No replicate_id provided' }, { status: 400 });
@@ -234,12 +244,12 @@ export async function POST(request: Request) {
         } else if (parts.length === 1 && !rawModelVersionIdentifier.includes('/')) {
           // If it's already just a hash (no owner/model and no colon)
           finalModelVersionToStore = rawModelVersionIdentifier;
-          console.log(
-            `Training webhook for training ID ${replicate_id}: ` +
-            `Using model version identifier '${rawModelVersionIdentifier}' directly as it appears to be a hash.`
-          );
+          // console.log(
+          //   `Training webhook for training ID ${replicate_id}: ` +
+          //   `Using model version identifier '${rawModelVersionIdentifier}' directly as it appears to be a hash.`
+          // );
         } else {
-          // Unexpected format, log error and store the raw identifier to avoid data loss
+          // It's an unexpected format (e.g., just "owner/model" without a hash)
           finalModelVersionToStore = rawModelVersionIdentifier;
           console.error(
             `Training webhook for training ID ${replicate_id}: ` +
@@ -257,45 +267,49 @@ export async function POST(request: Request) {
         completed_at?: string | null;
         predict_time?: number | null;
         cost?: number | null;
+        new_model_version?: string | null;
+        replicate_raw_output?: Record<string, unknown>;
       } = {
         status: webhookData.status,
-        error: webhookData.error
+        error: webhookData.error,
+        started_at: startedAt,
+        completed_at: completedAt,
+        predict_time: predictTime,
+        cost: cost,
+        new_model_version: finalModelVersionToStore,
+        replicate_raw_output: webhookData.output,
       };
 
-      // Add timing and cost data if available
-      if (startedAt) updateData.started_at = startedAt;
-      if (completedAt || webhookData.status === 'succeeded' || webhookData.status === 'failed' || webhookData.status === 'canceled') {
-        updateData.completed_at = completedAt || new Date().toISOString();
-      }
-      if (predictTime) updateData.predict_time = predictTime;
-      if (cost) updateData.cost = cost;
-
-      // Update the training with all available information
+      // Update the training record
       const { error: updateError } = await supabase
         .from('trainings')
         .update(updateData)
         .eq('training_id', replicate_id);
 
       if (updateError) {
-        console.error('Error updating training:', updateError);
-        return NextResponse.json({ error: 'Error updating training' }, { status: 500 });
+        console.error('Error updating training record:', updateError);
+        // Continue even if update fails, as we still need to update the model
       }
 
-      // If training succeeded and we have a parsed version hash, update the models table
-      if (webhookData.status === 'succeeded' && finalModelVersionToStore && training.model_id) {
+      // If training succeeded and we have a model ID and the new version,
+      // update the corresponding record in the 'models' table.
+      if (webhookData.status === 'succeeded' && training.model_id && finalModelVersionToStore) {
         const { error: modelUpdateError } = await supabase
           .from('models')
-          .update({ version: finalModelVersionToStore })
+          .update({ 
+            latest_version_id: finalModelVersionToStore,
+            last_trained_at: completedAt || new Date().toISOString(),
+            status: 'trained' // Mark the model as trained
+          })
           .eq('id', training.model_id);
 
         if (modelUpdateError) {
-          console.error(`Error updating model version for model ${training.model_id} to ${finalModelVersionToStore}:`, modelUpdateError);
+          console.error(`Error updating model ${training.model_id} to version ${finalModelVersionToStore}:`, modelUpdateError);
           // Continue even if model update fails
         } else {
-          console.log(`Successfully updated model ${training.model_id} to version ${finalModelVersionToStore}.`);
+          // console.log(`Successfully updated model ${training.model_id} to version ${finalModelVersionToStore}.`);
         }
       } else if (webhookData.status === 'succeeded' && !finalModelVersionToStore && training.model_id) {
-        // This case implies rawModelVersionIdentifier was null or parsing failed and resulted in null (though current logic falls back to raw)
         console.error(
             `Training webhook for training ID ${replicate_id} (model ID ${training.model_id}) succeeded, ` +
             `but no valid model version hash could be determined/parsed from the webhook. Model version not updated.` +

@@ -177,13 +177,8 @@ export function MediaFocus({
             toast.success('Image shared successfully')
             return
           }
-        } catch (shareError: unknown) {
-          if (shareError && typeof shareError === 'object' && 'name' in shareError && shareError.name === 'AbortError') {
-            console.log('Share cancelled by user')
-            return
-          }
-          // If sharing fails, fall back to regular download
-          console.error('Error sharing:', shareError)
+        } catch {
+          // Silently ignore share cancellation
         }
       }
 
