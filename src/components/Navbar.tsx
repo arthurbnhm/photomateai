@@ -146,7 +146,7 @@ export function Navbar({
           opacity: 0;
           transform: translateY(10px);
           transition: opacity 0.3s ease, transform 0.3s ease;
-          will-change: opacity, transform;
+          /* will-change: opacity, transform; */
         }
         
         .mobile-menu.open .menu-item:nth-child(1) {
@@ -177,7 +177,7 @@ export function Navbar({
           transform: translateY(10px);
           transition: opacity 0.3s ease, transform 0.3s ease;
           transition-delay: 0.25s; /* Delay for CTA to animate in */
-          will-change: opacity, transform;
+          /* will-change: opacity, transform; */
         }
       `}</style>
       
