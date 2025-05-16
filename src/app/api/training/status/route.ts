@@ -24,20 +24,31 @@ export async function GET(request: Request) {
       version: training.version, 
     });
   } catch (error: unknown) {
+    // Type guard for error with response and status
+    let isHttpErrorWithStatus = false;
+    let httpStatus: number | undefined = undefined;
+
     if (
       typeof error === 'object' &&
       error !== null &&
-      'response' in error &&
-      typeof (error as { response: unknown }).response === 'object' &&
-      (error as { response: unknown }).response !== null &&
-      'status' in (error as { response: unknown }).response &&
-      typeof (error as { response: { status: unknown } }).response.status === 'number' 
+      'response' in error
     ) {
-      const status = (error as { response: { status: number } }).response.status;
-      if (status === 404) {
-        return NextResponse.json({ error: 'Training not found' }, { status: 404 });
+      const errorResponse = (error as { response: unknown }).response;
+      if (
+        typeof errorResponse === 'object' &&
+        errorResponse !== null &&
+        'status' in errorResponse &&
+        typeof (errorResponse as { status: unknown }).status === 'number'
+      ) {
+        isHttpErrorWithStatus = true;
+        httpStatus = (errorResponse as { status: number }).status;
       }
     }
+
+    if (isHttpErrorWithStatus && httpStatus === 404) {
+      return NextResponse.json({ error: 'Training not found' }, { status: 404 });
+    }
+    
     if (error instanceof Error) {
       console.error('Error fetching training status from Replicate:', error.message, { name: error.name, stack: error.stack, cause: error.cause });
     } else {
