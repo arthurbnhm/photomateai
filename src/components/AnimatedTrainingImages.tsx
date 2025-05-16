@@ -81,7 +81,7 @@ export function AnimatedTrainingImages() {
             animate={anim.animate}
             transition={anim.transition}
           >
-            <div className="absolute inset-[-1px] overflow-hidden">
+            <div className="absolute inset-[-1px]">
               <Image
                 src={imgConfig.src}
                 alt={imgConfig.alt}
