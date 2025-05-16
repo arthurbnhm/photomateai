@@ -22,7 +22,6 @@ import {
   DialogTrigger,
   DialogDescription
 } from "@/components/ui/dialog";
-import { useModels } from "@/hooks/useModels";
 
 // Reusable upload icon component
 const UploadIcon = ({ 
@@ -205,8 +204,7 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
   // State for the models dialog
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   
-  // Get the invalidateCache function from useModels
-  const { invalidateCache } = useModels();
+  // const { invalidateCache } = useModels(); // This was removed as caching is gone
 
   // Format model name to meet Replicate's requirements
   const formatModelName = (name: string): string => {
@@ -454,8 +452,7 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
           displayName: displayModelName
         };
         
-        // Invalidate the models cache
-        invalidateCache();
+        // invalidateCache(); // This was removed as caching is gone
         
         onTrainingStatusChange(newTrainingStatus);
         

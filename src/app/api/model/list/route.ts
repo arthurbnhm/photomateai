@@ -36,19 +36,19 @@ export async function GET(request: NextRequest) {
     const isCancelled = searchParams.get('is_cancelled');
     const isDeleted = searchParams.get('is_deleted');
 
-    // Pagination parameters
-    const hasPageParam = searchParams.has('page');
-    const hasLimitParam = searchParams.has('limit');
+    // Pagination parameters - REMOVING PAGINATION
+    // const hasPageParam = searchParams.has('page');
+    // const hasLimitParam = searchParams.has('limit');
 
-    let limit = 10; // Default limit if pagination params are present but one is missing
-    let page = 1;   // Default page
-    let offset = 0;
+    // let limit = 10; // Default limit if pagination params are present but one is missing
+    // let page = 1;   // Default page
+    // let offset = 0;
 
-    if (hasPageParam || hasLimitParam) {
-      limit = parseInt(searchParams.get('limit') || '10', 10);
-      page = parseInt(searchParams.get('page') || '1', 10);
-      offset = (page - 1) * limit;
-    }
+    // if (hasPageParam || hasLimitParam) {
+    //   limit = parseInt(searchParams.get('limit') || '10', 10);
+    //   page = parseInt(searchParams.get('page') || '1', 10);
+    //   offset = (page - 1) * limit;
+    // }
 
     // Initialize Supabase client with user session
     const supabase = createServerClient();
@@ -128,7 +128,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Otherwise, fetch a list of models
-    let modelsListQuery = supabase
+    const modelsListQuery = supabase
       .from('models')
       .select('*, trainings!trainings_model_id_fkey(*)')
       .eq('is_deleted', isDeleted === 'true' ? true : (isDeleted === 'false' ? false : false))
@@ -136,9 +136,9 @@ export async function GET(request: NextRequest) {
       .order('created_at', { ascending: false });
 
     // Apply pagination ONLY if page or limit parameters are present
-    if (hasPageParam || hasLimitParam) {
-      modelsListQuery = modelsListQuery.range(offset, offset + limit - 1).limit(limit);
-    }
+    // if (hasPageParam || hasLimitParam) {
+    //   modelsListQuery = modelsListQuery.range(offset, offset + limit - 1).limit(limit);
+    // }
     // If no page/limit params, the query will fetch all matching models.
 
     const { data: models, error: modelsError } = await modelsListQuery;
@@ -216,36 +216,36 @@ export async function GET(request: NextRequest) {
     }));
 
     // Get total count for pagination metadata (always count all matching models for the user)
-    const countQueryBuilder = supabase
-      .from('models')
-      .select('*', { count: 'exact', head: true })
-      .eq('is_deleted', isDeleted === 'true' ? true : (isDeleted === 'false' ? false : false)) // Match is_deleted filter
-      .eq('user_id', authenticatedUserId);
-    
-    const { count: totalCount, error: countError } = await countQueryBuilder;
+    // const countQueryBuilder = supabase
+    //   .from('models')
+    //   .select('*', { count: 'exact', head: true })
+    //   .eq('is_deleted', isDeleted === 'true' ? true : (isDeleted === 'false' ? false : false)) // Match is_deleted filter
+    //   .eq('user_id', authenticatedUserId);
+    // 
+    // const { count: totalCount, error: countError } = await countQueryBuilder;
 
-    if (countError) {
-      console.error('Error counting models:', countError);
-      // Not returning error here, as fetching models might have succeeded
-    }
+    // if (countError) {
+    //   console.error('Error counting models:', countError);
+    //   // Not returning error here, as fetching models might have succeeded
+    // }
     
     // For the pagination object in response:
     // If we fetched all models (no page/limit params), page is 1, limit is totalCount, pages is 1.
     // Otherwise, use the provided page/limit.
-    const responsePage = (hasPageParam || hasLimitParam) ? page : 1;
-    const responseLimit = (hasPageParam || hasLimitParam) ? limit : (totalCount || finalModels.length); // Use finalModels.length if totalCount is null
-    const responsePages = (hasPageParam || hasLimitParam) ? Math.ceil((totalCount || 0) / limit) : 1;
+    // const responsePage = (hasPageParam || hasLimitParam) ? page : 1;
+    // const responseLimit = (hasPageParam || hasLimitParam) ? limit : (totalCount || finalModels.length); // Use finalModels.length if totalCount is null
+    // const responsePages = (hasPageParam || hasLimitParam) ? Math.ceil((totalCount || 0) / limit) : 1;
 
 
     return NextResponse.json({
       success: true,
       models: finalModels,
-      pagination: {
-        total: totalCount || finalModels.length, // Use finalModels.length if totalCount is null
-        page: responsePage,
-        limit: responseLimit,
-        pages: responsePages
-      }
+      // pagination: {
+      //   total: totalCount || finalModels.length, // Use finalModels.length if totalCount is null
+      //   page: responsePage,
+      //   limit: responseLimit,
+      //   pages: responsePages
+      // }
     });
   } catch (error) {
     console.error('Error in model/list API:', error);
@@ -297,11 +297,35 @@ export async function POST(request: NextRequest) {
           );
         }
 
+        // Ensure user owns the model associated with the training
+        const { data: trainingToUpdate, error: trainingFetchError } = await supabase
+          .from('trainings')
+          .select('model_id, models(user_id)') // Reverted from !inner, will check array
+          .eq('id', trainingId)
+          .single();
+
+        let ownerUserId: string | null | undefined = null;
+
+        // If Supabase types models as an array even for a direct FK followed by .single()
+        if (trainingToUpdate && trainingToUpdate.models && Array.isArray(trainingToUpdate.models) && trainingToUpdate.models.length > 0) {
+          ownerUserId = trainingToUpdate.models[0]?.user_id;
+        } else if (trainingToUpdate && trainingToUpdate.models && !Array.isArray(trainingToUpdate.models)) {
+          // Fallback if it is somehow an object (as initially expected)
+          ownerUserId = (trainingToUpdate.models as { user_id: string }).user_id;
+        }
+
+        if (trainingFetchError || !trainingToUpdate || !ownerUserId || ownerUserId !== user.id) {
+          return NextResponse.json(
+            { error: 'Unauthorized to update this training or training not found', success: false },
+            { status: 403 } // 403 Forbidden or 404 Not Found
+          );
+        }
+
         const { error: updateTrainingError } = await supabase
           .from('trainings')
           .update({ 
             status,
-            ...(status === 'succeeded' || status === 'failed' ? { completed_at: new Date().toISOString() } : {})
+            ...(status === 'succeeded' || status === 'failed' || status === 'canceled' ? { completed_at: new Date().toISOString() } : {})
           })
           .eq('id', trainingId);
 
@@ -323,6 +347,20 @@ export async function POST(request: NextRequest) {
             { error: 'Model ID is required', success: false },
             { status: 400 }
           );
+        }
+
+        // Ensure user owns the model
+        const { data: modelToDelete, error: modelFetchError } = await supabase
+            .from('models')
+            .select('user_id')
+            .eq('id', modelId)
+            .single();
+
+        if (modelFetchError || !modelToDelete || modelToDelete.user_id !== user.id) {
+            return NextResponse.json(
+                { error: 'Unauthorized to delete this model or model not found', success: false },
+                { status: 403 } // 403 Forbidden or 404 Not Found
+            );
         }
 
         const { error: markDeletedError } = await supabase

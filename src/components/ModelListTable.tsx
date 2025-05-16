@@ -79,9 +79,6 @@ export function ModelListTable({ newTraining, onClearNewTraining }: ModelListTab
     models,
     loading,
     error,
-    page,
-    totalPages,
-    handlePageChange,
     fetchModels,
     isNewTrainingInModels,
     removeModelFromState
@@ -330,7 +327,7 @@ export function ModelListTable({ newTraining, onClearNewTraining }: ModelListTab
       toast.success("Training cancelled successfully");
       
       // Force a refresh of the models 
-      fetchModels(page, true);
+      fetchModels();
     } catch (err) {
       toast.error(`Error: ${err instanceof Error ? err.message : 'Failed to cancel training'}`);
     } finally {
@@ -440,7 +437,7 @@ export function ModelListTable({ newTraining, onClearNewTraining }: ModelListTab
               toast.success("Training cancelled successfully");
               
               // Force a refresh of the models
-              fetchModels(page, true);
+              fetchModels();
             } catch (error) {
               toast.error(`Error: ${error instanceof Error ? error.message : 'Failed to cancel training'}`);
             }
@@ -520,30 +517,6 @@ export function ModelListTable({ newTraining, onClearNewTraining }: ModelListTab
           )}
         </TableBody>
       </Table>
-
-      {totalPages > 1 && (
-        <div className="flex justify-center gap-2 mt-4">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => handlePageChange(page - 1)}
-            disabled={page === 1}
-          >
-            Previous
-          </Button>
-          <span className="py-2 px-3">
-            Page {page} of {totalPages}
-          </span>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => handlePageChange(page + 1)}
-            disabled={page === totalPages}
-          >
-            Next
-          </Button>
-        </div>
-      )}
 
       {/* Alert dialog for cancelling training */}
       <AlertDialog 
