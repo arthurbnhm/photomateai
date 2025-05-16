@@ -484,7 +484,7 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
     }
   };
 
-  // Définir les nouvelles constantes pour le nombre d'images
+  // Define new constants for the number of images
   const MIN_IMAGES = 12;
   const MAX_IMAGES = 20;
 
@@ -532,7 +532,7 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
     // Show appropriate error messages
     if (oversizedFiles.length > 0) {
       oversizedFiles.forEach(file => {
-        toast.error(`File \"${file.name}\" (${formatSizeInMB(file.size)}) exceeds the individual file limit of 10MB`);
+        toast.error(`File "${file.name}" (${formatSizeInMB(file.size)}) exceeds the individual file limit of 10MB`);
       });
     }
     
@@ -557,18 +557,18 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
     // Vérifier si le total d'images dépasse la limite
     if (newImages.length + validFiles.length > MAX_IMAGES) {
       const excessCount = newImages.length + validFiles.length - MAX_IMAGES;
-      toast.error(`Vous pouvez uploader au maximum ${MAX_IMAGES} images. Veuillez en retirer ${excessCount}.`);
+      toast.error(`You can upload a maximum of ${MAX_IMAGES} images. Please remove ${excessCount}.`);
       return;
     }
     // Vérifier si on n'atteint pas le minimum
     if (newImages.length + validFiles.length < MIN_IMAGES) {
       const neededCount = MIN_IMAGES - (newImages.length + validFiles.length);
-      toast.info(`Ajoutez encore ${neededCount} image(s) pour atteindre le minimum de ${MIN_IMAGES}.`);
-      // On ajoute quand même les fichiers pour permettre d'en ajouter d'autres ensuite
+      toast.info(`Add ${neededCount} more image(s) to reach the minimum of ${MIN_IMAGES}.`);
+      // Add the files anyway to allow adding more later
       setUploadedImages([...newImages, ...validFiles]);
       return;
     }
-    // Si on est dans la plage autorisée
+    // If within the allowed range
     setUploadedImages([...newImages, ...validFiles]);
   }, [uploadedImages, isGeneratingPreviews, isProcessing, MIN_IMAGES, MAX_IMAGES]);
 
@@ -587,7 +587,7 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
       if (file.size > MAX_INDIVIDUAL_FILE_SIZE) {
         return {
           code: 'file-too-large',
-          message: `File \"${file.name}\" (${formatSizeInMB(file.size)}) exceeds the individual file limit of 10MB`
+          message: `File "${file.name}" (${formatSizeInMB(file.size)}) exceeds the individual file limit of 10MB`
         };
       }
       
@@ -627,21 +627,21 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
       }
       
       individualSizeRejected.forEach(item => {
-        toast.error(`File \"${item.file.name}\" (${formatSizeInMB(item.file.size)}) exceeds the individual file limit of 10MB`);
+        toast.error(`File "${item.file.name}" (${formatSizeInMB(item.file.size)}) exceeds the individual file limit of 10MB`);
       });
       
       totalSizeRejected.forEach(item => {
         const currentTotalSize = uploadedImages.reduce((total, file) => total + file.size, 0);
         const wouldBeTotalSize = formatSizeInMB(currentTotalSize + item.file.size);
-        toast.error(`Adding \"${item.file.name}\" would make total size ${wouldBeTotalSize} (max 200MB)`);
+        toast.error(`Adding "${item.file.name}" would make total size ${wouldBeTotalSize} (max 200MB)`);
       });
 
       if (tooManyFiles) {
         const remainingSlots = MAX_IMAGES - uploadedImages.length;
         if (remainingSlots > 0) {
-          toast.error(`Vous pouvez ajouter encore ${remainingSlots} image(s) maximum.`);
+          toast.error(`You can add a maximum of ${remainingSlots} more image(s).`);
         } else {
-          toast.error(`Vous avez déjà ${MAX_IMAGES} images. Veuillez en retirer avant d'en ajouter d'autres.`);
+          toast.error(`You already have ${MAX_IMAGES} images. Please remove some before adding more.`);
         }
       }
     }
@@ -655,9 +655,9 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
     // Show message about how many more images are needed
     const remainingNeeded = Math.max(MIN_IMAGES - newImages.length, 0);
     if (newImages.length < MIN_IMAGES) {
-      toast.info(`Ajoutez encore ${remainingNeeded} image(s) pour atteindre le minimum de ${MIN_IMAGES}.`);
+      toast.info(`Add ${remainingNeeded} more image(s) to reach the minimum of ${MIN_IMAGES}.`);
     } else {
-      toast.info(`${newImages.length} image(s) sélectionnées.`);
+      toast.info(`${newImages.length} image(s) selected.`);
     }
   };
 
@@ -892,7 +892,7 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
               Drop Images Here
             </h3>
             <p className="text-sm text-muted-foreground">
-              JPG, PNG, WebP - entre {MIN_IMAGES} et {MAX_IMAGES} images requises, max 200MB au total
+              JPG, PNG, WebP - between {MIN_IMAGES} and {MAX_IMAGES} images required, max 200MB total
             </p>
           </div>
         )}
@@ -946,7 +946,7 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
                 </div>
                 
                 <div className="space-y-2">
-                  <Label>Upload Images (entre {MIN_IMAGES} et {MAX_IMAGES} requises)</Label>
+                  <Label>Upload Images (between {MIN_IMAGES} and {MAX_IMAGES} required)</Label>
                   <div 
                     {...getRootProps()} 
                     className={`bg-muted/50 border ${
@@ -964,7 +964,7 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
                         Drag and drop images here, or click to select files
                       </p>
                       <p className="text-xs text-muted-foreground/80 mt-1">
-                        JPG, PNG, WebP - entre {MIN_IMAGES} et {MAX_IMAGES} images requises, max 200MB au total
+                        JPG, PNG, WebP - between {MIN_IMAGES} and {MAX_IMAGES} images required, max 200MB total
                       </p>
                     </div>
                   </div>
@@ -974,9 +974,9 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
                   <div className="space-y-2">
                     <div className="flex justify-between items-center">
                       <Label>
-                        {uploadedImages.length} image(s) sélectionnées (min {MIN_IMAGES}, max {MAX_IMAGES})
-                        {uploadedImages.length < MIN_IMAGES && ` (${MIN_IMAGES - uploadedImages.length} de plus requises)`}
-                        {uploadedImages.length > MAX_IMAGES && ` (${uploadedImages.length - MAX_IMAGES} de trop)`}
+                        {uploadedImages.length} image(s) selected (min {MIN_IMAGES}, max {MAX_IMAGES})
+                        {uploadedImages.length < MIN_IMAGES && ` (${MIN_IMAGES - uploadedImages.length} more required)`}
+                        {uploadedImages.length > MAX_IMAGES && ` (${uploadedImages.length - MAX_IMAGES} too many)`}
                       </Label>
                       <span className="text-sm text-muted-foreground">
                         Total size: {formatSizeInMB(uploadedImages.reduce((total, file) => total + file.size, 0))} / 200MB
