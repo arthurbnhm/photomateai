@@ -356,12 +356,12 @@ export function Navbar({
       </header>
       
       {/* Mobile Menu - Only visible on mobile */}
-      <div 
+      <div
         className={`
-          mobile-menu block md:hidden fixed inset-0 bg-background z-50 
-          flex items-center justify-center text-center 
+          mobile-menu block md:hidden fixed inset-0 bg-background z-50
+          flex items-center justify-center text-center
           transition-opacity duration-300 ease-in-out
-          ${mobileMenuOpen ? 'opacity-100 visible open' : 'opacity-0 invisible closed'}
+          ${mobileMenuOpen ? 'opacity-100 open' : 'opacity-0 pointer-events-none closed'}
         `}
         // 'open' and 'closed' classes are kept for the .mobile-menu.open selectors
         // used by child item animations in the <style jsx global> block.
