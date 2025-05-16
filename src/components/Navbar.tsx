@@ -195,6 +195,7 @@ export function Navbar({
               width={32}
               height={32}
               priority
+              className="hidden md:inline-block"
             />
             <span className="font-bold text-xl">PhotomateAI</span>
           </Link>
@@ -361,31 +362,9 @@ export function Navbar({
       
       {/* Mobile Menu - Only visible on mobile */}
       <div 
-        className={`mobile-menu block md:hidden ${mobileMenuOpen ? 'open' : 'closed'}`}
+        className={`mobile-menu block md:hidden fixed inset-0 bg-background z-50 flex items-center justify-center text-center ${mobileMenuOpen ? 'open' : 'closed'}`}
       >
-        <div className="mobile-menu-items">
-          <div className="mb-12">
-            {/* Make logo clickable to close menu */}
-            <div 
-              className="cursor-pointer"
-              onClick={() => {
-                setMobileMenuOpen(false);
-                router.push('/');
-              }}
-              aria-label="Close menu"
-            >
-              <Image 
-                src="/logo.svg"
-                alt="PhotomateAI Logo"
-                width={64}
-                height={64}
-                className="mx-auto mb-4"
-                priority
-              />
-              <span className="font-bold text-2xl">PhotomateAI</span>
-            </div>
-          </div>
-          
+        <div className="mobile-menu-items flex flex-col justify-center items-center p-4">
           <nav>
             <ul className="space-y-8">
               {/* Landing page links - same as desktop */}
@@ -394,7 +373,7 @@ export function Navbar({
                   <li className="menu-item">
                     <a 
                       href="#features" 
-                      className="hover:text-blue-500" 
+                      className="hover:text-blue-500 font-bold"
                       onClick={(e) => handleAnchorClick(e, '#features')}
                     >
                       Features
@@ -403,7 +382,7 @@ export function Navbar({
                   <li className="menu-item">
                     <a 
                       href="#pricing" 
-                      className="hover:text-blue-500" 
+                      className="hover:text-blue-500 font-bold"
                       onClick={(e) => handleAnchorClick(e, '#pricing')}
                     >
                       Pricing
@@ -420,7 +399,7 @@ export function Navbar({
                     <li className="menu-item">
                       <Link 
                         href="/create" 
-                        className="hover:text-blue-500" 
+                        className="hover:text-blue-500 font-bold"
                         onClick={() => setMobileMenuOpen(false)}
                       >
                         Go to App
@@ -438,7 +417,7 @@ export function Navbar({
                       <li className="menu-item">
                         <Link 
                           href="/train" 
-                          className="hover:text-blue-500" 
+                          className="hover:text-blue-500 font-bold"
                           onClick={() => setMobileMenuOpen(false)}
                         >
                           Train
@@ -449,7 +428,7 @@ export function Navbar({
                           href="https://billing.stripe.com/p/login/6oE14c04k7BpeFGfYY" 
                           target="_blank" 
                           rel="noopener noreferrer" 
-                          className="hover:text-blue-500" 
+                          className="hover:text-blue-500 font-bold"
                           onClick={() => setMobileMenuOpen(false)}
                         >
                           Billing
@@ -468,7 +447,7 @@ export function Navbar({
                       <li className="menu-item">
                         <Link 
                           href="/create" 
-                          className="hover:text-blue-500" 
+                          className="hover:text-blue-500 font-bold"
                           onClick={() => setMobileMenuOpen(false)}
                         >
                           Create
@@ -479,7 +458,7 @@ export function Navbar({
                           href="https://billing.stripe.com/p/login/6oE14c04k7BpeFGfYY" 
                           target="_blank" 
                           rel="noopener noreferrer" 
-                          className="hover:text-blue-500" 
+                          className="hover:text-blue-500 font-bold"
                           onClick={() => setMobileMenuOpen(false)}
                         >
                           Billing
@@ -496,7 +475,7 @@ export function Navbar({
                           setMobileMenuOpen(false);
                           handleSignOut();
                         }}
-                        className="hover:text-blue-500"
+                        className="hover:text-blue-500 font-bold"
                       >
                         Sign out
                       </button>
@@ -507,7 +486,7 @@ export function Navbar({
                 <li className="menu-item">
                   <Link 
                     href="/auth/login" 
-                    className="hover:text-blue-500" 
+                    className="hover:text-blue-500 font-bold"
                     onClick={() => setMobileMenuOpen(false)}
                   >
                     Sign in
