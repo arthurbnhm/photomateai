@@ -43,6 +43,7 @@ export function MediaFocus({
 }: MediaFocusProps) {
   const [mounted, setMounted] = React.useState(false)
   const supabase = createBrowserSupabaseClient()
+  const activeTouchesRef = useRef<number>(0); // Added to track active touches
   
   // Handle mounting for portal
   useEffect(() => {
@@ -68,29 +69,54 @@ export function MediaFocus({
   const touchStartYRef = useRef<number | null>(null)
   
   const handleTouchStart = (e: React.TouchEvent) => {
-    touchStartXRef.current = e.touches[0].clientX
-    touchStartYRef.current = e.touches[0].clientY
-  }
+    activeTouchesRef.current = e.touches.length; // Record number of touches
+    if (e.touches.length === 1) {
+      touchStartXRef.current = e.touches[0].clientX;
+      touchStartYRef.current = e.touches[0].clientY; // Store Y for potential future use
+    } else {
+      // Multi-touch, clear swipe start data to prevent swipe on release
+      touchStartXRef.current = null;
+      touchStartYRef.current = null;
+    }
+  };
   
   const handleTouchMove = (e: React.TouchEvent) => {
-    // Prevent default to stop scrolling
-    e.preventDefault()
-  }
+    if (activeTouchesRef.current === 1 && touchStartXRef.current !== null) { 
+      // If it started as a single touch and is potentially a swipe
+      e.preventDefault(); // Prevent scrolling during swipe
+    }
+    // If activeTouchesRef.current > 1 (multi-touch), do nothing here to allow native pinch-zoom.
+  };
   
   const handleTouchEnd = (e: React.TouchEvent) => {
-    if (touchStartXRef.current === null) return
-    
-    const touchEndX = e.changedTouches[0].clientX
-    const diff = touchStartXRef.current - touchEndX
-    
-    if (Math.abs(diff) > 50) {
-      if (diff > 0) nextImage()
-      else prevImage()
+    // Only process swipe if it was a single touch gesture from start to end
+    if (activeTouchesRef.current === 1 && touchStartXRef.current !== null && e.changedTouches.length === 1) {
+      const touchEndX = e.changedTouches[0].clientX;
+      const diffX = touchStartXRef.current - touchEndX;
+      
+      // Optional: Could add Y-axis difference check if stricter swipe detection is needed
+      // const touchEndY = e.changedTouches[0].clientY;
+      // const diffY = touchStartYRef.current !== null ? touchStartYRef.current - touchEndY : 0;
+      // A common threshold for swipe detection
+      const swipeThreshold = 50; 
+
+      if (Math.abs(diffX) > swipeThreshold) {
+        // Check if horizontal movement is dominant if diffY is also considered
+        // if (Math.abs(diffX) > Math.abs(diffY)) { 
+        if (diffX > 0) { // Swipe left
+          nextImage();
+        } else { // Swipe right
+          prevImage();
+        }
+        // }
+      }
     }
     
-    touchStartXRef.current = null
-    touchStartYRef.current = null
-  }
+    // Reset for next touch interaction
+    touchStartXRef.current = null;
+    touchStartYRef.current = null;
+    activeTouchesRef.current = 0; // Reset active touches
+  };
   
   // Navigation
   const nextImage = useCallback(() => {
