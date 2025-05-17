@@ -191,6 +191,7 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
   const getSupabase = useCallback(() => supabaseRef.current, []);
   
   // State variables
+  const [currentStep, setCurrentStep] = useState(1);
   const [displayModelName, setDisplayModelName] = useState("");
   const [actualModelName, setActualModelName] = useState("");
   const [uploadedImages, setUploadedImages] = useState<File[]>([]);
@@ -855,6 +856,54 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
     // No cleanup needed anymore
   }, []);
 
+  if (currentStep === 1) {
+    return (
+      <ErrorBoundary>
+        <div className="w-full bg-card border border-border rounded-xl overflow-hidden shadow-lg p-5 space-y-4">
+          <div className="text-center">
+            <h2 className="text-xl font-semibold">Quick Tips for Great Training Images!</h2> 
+            <p className="text-sm text-muted-foreground mt-1">
+              Good photos help create an amazing AI model of your subject. Here&rsquo;s what to aim for:
+            </p>
+          </div>
+
+          <div className="space-y-3 py-3">
+            <ul className="space-y-2 text-sm text-muted-foreground">
+              <li className="flex items-start">
+                <svg className="w-5 h-5 text-green-500 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"></path></svg>
+                <span><strong>Variety is Key:</strong> Use different poses, backgrounds, and expressions.</span>
+              </li>
+              <li className="flex items-start">
+                <svg className="w-5 h-5 text-green-500 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"></path></svg>
+                <span><strong>Clear Subject:</strong> Ensure the face is well-lit, visible, and the only person in the shot.</span>
+              </li>
+              <li className="flex items-start">
+                <svg className="w-5 h-5 text-green-500 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"></path></svg>
+                <span><strong>Good Quality:</strong> Use sharp, clear photos. Avoid very blurry or pixelated images.</span>
+              </li>
+              <li className="flex items-start">
+                <svg className="w-5 h-5 text-red-500 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd"></path></svg>
+                <span><strong>Avoid Face Obstructions:</strong> No sunglasses or heavy face-altering accessories/filters.</span>
+              </li>
+            </ul>
+          </div>
+
+          <div className="text-xs text-center text-muted-foreground p-3 bg-muted/30 rounded-md">
+            Aim for <strong>{MIN_IMAGES} to {MAX_IMAGES} images</strong> for the best results. More quality photos mean a better AI!
+          </div>
+          
+          <Button
+            onClick={() => setCurrentStep(2)}
+            className="w-full py-3"
+          >
+            Got it, Let&rsquo;s Upload Photos!
+          </Button>
+        </div>
+      </ErrorBoundary>
+    );
+  }
+
+  // Existing form content for Step 2
   return (
     <ErrorBoundary>
       <div className="w-full">
@@ -898,7 +947,9 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
         )}
         
         <div className="flex justify-between items-center mb-4">
-          <div></div>
+          <Button variant="outline" onClick={() => setCurrentStep(1)} className="mr-auto">
+            &larr; Back to Guidelines
+          </Button>
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
               <Button variant="outline">View Your Models</Button>
