@@ -182,14 +182,20 @@ export default function Home() {
               variants={staggerContainer}
             >
               {sampleImages.map((imageSrc, i) => (
-                <motion.div 
-                  key={i} 
-                  className="group w-48 h-48 rounded-xl overflow-hidden relative shadow-md transform hover:scale-105 hover:shadow-lg"
+                <motion.div
+                  key={i}
+                  className="group w-48 h-48 rounded-xl overflow-hidden relative shadow-md transform"
                   custom={{ index: i }}
                   variants={imageVariant}
-                  style={{ 
+                  whileHover={{
+                    scale: 1.07,
+                    y: -5,
+                    rotate: 0,
+                    boxShadow: "0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -4px rgba(0,0,0,0.1)"
+                  }}
+                  transition={{ duration: 0.3, ease: "easeOut" }}
+                  style={{
                     border: '4px solid #E5E7EB',
-                    boxShadow: '0 0 0 1px rgba(0, 0, 0, 0.1)'
                   }}
                 >
                   <div className="absolute inset-0 bg-gradient-to-b from-transparent to-black/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
