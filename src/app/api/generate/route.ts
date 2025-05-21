@@ -233,18 +233,14 @@ export async function POST(request: NextRequest) {
         const description = openAICompletion.choices[0]?.message?.content;
 
         if (description && typeof description === 'string' && description.trim() !== '') {
-          prompt = description; // Use OpenAI description as the new prompt for Replicate
-          console.log("OpenAI description successful. Using as prompt for Replicate.");
+          prompt = description;
         } else {
-          console.warn("OpenAI did not return a valid description. Falling back to original prompt.", openAICompletion);
-          prompt = originalPrompt; // Fallback to original prompt (which might be empty if user didn't provide one)
+          prompt = originalPrompt;
         }
-      } catch (e) {
-        console.error("Error calling OpenAI for image description:", e);
-        prompt = originalPrompt; // Fallback to original prompt on error
+      } catch {
+        prompt = originalPrompt; 
       }
     } else if (image_data_url && !openAIKey) {
-      console.warn("OpenAI API key not found. Skipping image description step and using original prompt.");
       prompt = originalPrompt;
     }
     // If there's no image_data_url, prompt remains as is from the request (and was validated above).
@@ -385,8 +381,6 @@ export async function POST(request: NextRequest) {
       });
       
     } catch (replicateError) {
-      console.error('Error calling Replicate API:', replicateError);
-      
       // Create an error response
       const isRateLimitError = replicateError instanceof Error && 
         (replicateError.message.includes('429') || 
@@ -423,7 +417,6 @@ export async function POST(request: NextRequest) {
       );
     }
   } catch (error) {
-    console.error('Error in generate API route:', error);
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
