@@ -9,10 +9,9 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Badge } from "@/components/ui/badge"
 import { createBrowserSupabaseClient } from "@/lib/supabase"
 import { MediaFocus } from "@/components/MediaFocus"
-import { useAuth } from "@/contexts/AuthContext"
 
-// Define the type for image generation
-type ImageGeneration = {
+// Define the type for image generation (now passed as prop)
+export type ImageGeneration = {
   id: string
   replicate_id: string
   prompt: string
@@ -20,21 +19,28 @@ type ImageGeneration = {
   images: ImageWithStatus[]
   aspectRatio: string
   format?: string
-  modelDisplayName?: string  // Renamed for consistency
+  modelDisplayName?: string
 }
 
-// Define the type for pending generations with potential stall status
-type PendingGeneration = {
+// Define the type for pending generations (already passed as prop)
+export type PendingGeneration = {
   id: string
   replicate_id?: string
   prompt: string
   aspectRatio: string
   startTime?: string
   format?: string
-  modelDisplayName?: string  // Renamed for consistency
+  modelDisplayName?: string
 }
 
-// Define a type for prediction data from Supabase
+// Define a type for image with status (now passed as prop)
+export type ImageWithStatus = {
+  url: string
+  isExpired: boolean
+}
+
+// Define a type for prediction data from Supabase (used in polling logic)
+// This might still be needed if polling logic remains complex here
 type PredictionData = {
   id: string
   replicate_id: string
@@ -52,30 +58,11 @@ type PredictionData = {
   input?: {
     output_format?: string
   }
-  model_id: string  // Reference to the model's model_id (not database id)
-  // Joined data from models table
+  model_id: string
   models?: {
-    display_name: string  // Human-readable model name
+    display_name: string
   } | null
 }
-
-// Add new type for image with status
-type ImageWithStatus = {
-  url: string
-  isExpired: boolean
-}
-
-// Simplified processOutput to only use storage URLs
-const processOutput = (storageUrls: string[] | null): ImageWithStatus[] => {
-  if (!storageUrls || !Array.isArray(storageUrls)) {
-    return [];
-  }
-  
-  return storageUrls.map(url => ({
-    url,
-    isExpired: false // Always initialize as not expired
-  }));
-};
 
 // Define the type for image viewing
 type ImageViewerState = {
@@ -84,195 +71,95 @@ type ImageViewerState = {
   currentImageIndex: number
 }
 
-export function ImageHistory({
-  pendingGenerations,
-  setPendingGenerations
-}: {
+// Define props for ImageHistory
+interface ImageHistoryProps {
+  generations: ImageGeneration[];
+  setGenerations: React.Dispatch<React.SetStateAction<ImageGeneration[]>>;
+  isLoading: boolean;
+  error: string | null;
+  loadGenerations: (silentUpdate?: boolean) => Promise<void>;
   pendingGenerations: PendingGeneration[];
   setPendingGenerations: React.Dispatch<React.SetStateAction<PendingGeneration[]>>;
-}) {
-  const [generations, setGenerations] = useState<ImageGeneration[]>([])
-  const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  setPromptValue: (value: string) => void;
+}
+
+export function ImageHistory({ 
+  generations, 
+  setGenerations, 
+  isLoading, 
+  error, 
+  loadGenerations, 
+  pendingGenerations, 
+  setPendingGenerations, 
+  setPromptValue 
+}: ImageHistoryProps) {
   const [isDeleting, setIsDeleting] = useState<string | null>(null)
   const [isCancelling, setIsCancelling] = useState<string | null>(null)
-  const [elapsedTimes, setElapsedTimes] = useState<Record<string, number>>({})
+  const [elapsedTimes, setElapsedTimes] = useState<Record<string, number>>({}) 
   const [isMounted, setIsMounted] = useState(false)
-  const { user } = useAuth()
   
-  // Create a Supabase client reference - not using realtime subscriptions
-  // so no need to call removeAllChannels() on cleanup
-  const supabaseClient = useRef(createBrowserSupabaseClient());
+  const supabaseClient = useRef(createBrowserSupabaseClient()); // Still needed for polling and delete/cancel
   
-  // Refs for polling mechanism
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   
-  // Local state for image viewer
   const [imageViewer, setImageViewer] = useState<ImageViewerState>({
     isOpen: false,
     currentGeneration: null,
     currentImageIndex: 0
   })
 
-  // Set mounted state on component init
   useEffect(() => {
     setIsMounted(true)
     return () => {
       setIsMounted(false)
-      // No need to clean up Supabase client since we're not using realtime subscriptions
     }
   }, [])
 
-  // Add effect to prevent scrolling when modal is open
   useEffect(() => {
     if (imageViewer.isOpen) {
-      // Prevent scrolling on the body when modal is open
       document.body.style.overflow = 'hidden';
     } else {
-      // Re-enable scrolling when modal is closed
       document.body.style.overflow = '';
     }
-    
-    // Cleanup function to ensure scrolling is re-enabled when component unmounts
     return () => {
       document.body.style.overflow = '';
     };
   }, [imageViewer.isOpen]);
 
-  // Separate Supabase fetch logic
-  const fetchFromSupabase = useCallback(async (silentUpdate: boolean = false) => {
-    // Add timeout to the fetch operation
-    const abortController = new AbortController();
-    const timeoutId = setTimeout(() => abortController.abort(), 10000); // 10 second timeout
-    
-    try {
-      // Build the query with user_id filter if user is authenticated
-      let query = supabaseClient.current
-        .from('predictions')
-        .select(`
-          *,
-          models:model_id (
-            display_name
-          )
-        `)
-        .eq('is_deleted', false);
-      
-      // Add user_id filter if user is authenticated
-      if (user?.id) {
-        query = query.eq('user_id', user.id);
-      }
-      
-      // Complete the query with ordering and limit
-      const { data, error } = await query
-        .order('created_at', { ascending: false })
-        .limit(50);
-      
-      clearTimeout(timeoutId);
-      
-      if (error) {
-        throw error;
-      }
-      
-      if (data) {
-        // Process the data
-        const processedData: ImageGeneration[] = data
-          .filter((item: PredictionData) => item.status === 'succeeded' && item.storage_urls)
-          .map((item: PredictionData) => {
-            // Get the display name directly from the joined models table
-            const modelDisplayName = item.models?.display_name || 'Default Model';
-            
-            return {
-              id: item.id,
-              replicate_id: item.replicate_id,
-              prompt: item.prompt,
-              timestamp: item.created_at,
-              images: processOutput(item.storage_urls),
-              aspectRatio: item.aspect_ratio,
-              format: item.format || item.input?.output_format || 'webp',
-              modelDisplayName: modelDisplayName  // Consistent property naming
-            };
-          });
-        
-        // Update state immediately without checking for changes
-        setGenerations(processedData);
-      }
-      
-      if (!silentUpdate) {
-        setIsLoading(false);
-      }
-    } catch (fetchError: unknown) {
-      if (fetchError instanceof Error && fetchError.name === 'AbortError') {
-        console.warn('Fetch aborted due to timeout');
-      } else {
-        throw fetchError;
-      }
-    } finally {
-      clearTimeout(timeoutId);
-      if (!silentUpdate) {
-        setIsLoading(false);
-      }
-    }
-  }, [user?.id]);
-
-  // Load generations from Supabase
-  const loadGenerations = useCallback(async (silentUpdate: boolean = false) => {
-    try {
-      // Only set loading state if this isn't a silent update
-      if (!silentUpdate) {
-        setIsLoading(true);
-      }
-      
-      await fetchFromSupabase(silentUpdate);
-    } catch (err) {
-      console.error('Error loading generations:', err);
-      setError('Failed to load image history. Please try again later.');
-      setIsLoading(false);
-    }
-  }, [fetchFromSupabase]);
-
-  // Initial data load
-  useEffect(() => {
-    if (isMounted && user) {
-      // Initial load
-      loadGenerations(false);
-    }
-  }, [isMounted, user, loadGenerations]);
-
-  // Add a fallback polling mechanism for pending generations
+  // Polling mechanism for pending generations
   useEffect(() => {
     if (!isMounted || pendingGenerations.length === 0) return;
     
-    // Check if any generation has been running for at least 30 seconds
     const shouldStartPolling = () => {
       const now = Date.now();
       return pendingGenerations.some(gen => {
         if (!gen.startTime) return false;
         const startTime = new Date(gen.startTime).getTime();
-        return (now - startTime) >= 30000; // 30 seconds threshold
+        return (now - startTime) >= 10000; // Check after 10 seconds (was 30s)
       });
     };
     
     const checkPendingGenerations = async () => {
       try {
-        // Skip if no generation has been running long enough
         if (!shouldStartPolling()) return;
         
-        // Get all pending replicate_ids that we need to check
         const replicateIds = pendingGenerations
           .filter(gen => gen.replicate_id)
-          .map(gen => gen.replicate_id);
+          .map(gen => gen.replicate_id as string);
         
         if (replicateIds.length === 0) return;
+
+        if (!supabaseClient.current) {
+          console.error("Supabase client not initialized in ImageHistory polling");
+          return;
+        }
         
-        // Add timeout to the fetch operation
         const abortController = new AbortController();
-        const timeoutId = setTimeout(() => abortController.abort(), 5000); // 5 second timeout
+        const fetchTimeoutId = setTimeout(() => abortController.abort(), 5000);
         
         try {
-          // Fetch all predictions with these replicate_ids in a single query
-          // Include a join with the models table
-          const { data, error } = await supabaseClient.current
+          const { data, error: fetchDbError } = await supabaseClient.current!
             .from('predictions')
             .select(`
               *,
@@ -280,160 +167,89 @@ export function ImageHistory({
                 display_name
               )
             `)
-            .in('replicate_id', replicateIds);
+            .in('replicate_id', replicateIds)
+            .abortSignal(abortController.signal);
             
-          clearTimeout(timeoutId);
+          clearTimeout(fetchTimeoutId);
             
-          if (error) {
-            throw error;
+          if (fetchDbError) {
+            throw fetchDbError;
           }
           
           if (data && data.length > 0) {
-            let shouldRefreshGenerations = false;
+            let shouldRefreshParentGenerations = false;
             
-            // Process each prediction
             data.forEach((prediction: PredictionData) => {
-              // Find the matching pending generation
               const matchingPending = pendingGenerations.find(p => 
                 p.replicate_id === prediction.replicate_id
               );
               
               if (matchingPending) {
                 if (prediction.status === 'succeeded' && prediction.storage_urls) {
-                  // Process the new image data
-                  const processedImages = processOutput(prediction.storage_urls);
+                  // The parent component (CreatePageContent) is responsible for updating `generations`.
+                  // We can call loadGenerations(true) to ask the parent to refresh.
+                  shouldRefreshParentGenerations = true;
                   
-                  // Get the model display name directly from the joined models table
-                  const modelDisplayName = prediction.models?.display_name || 'Default Model';
-                  
-                  // Update generations state
-                  setGenerations(prev => {
-                    const existingIndex = prev.findIndex(g => g.id === matchingPending.id);
-                    const updatedGenerations = [...prev];
-                    
-                    if (existingIndex >= 0) {
-                      // Update existing generation
-                      updatedGenerations[existingIndex] = {
-                        ...updatedGenerations[existingIndex],
-                        images: processedImages,
-                        modelDisplayName: modelDisplayName  // Consistent naming
-                      };
-                    } else {
-                      // Add as new generation
-                      const newGeneration = {
-                        id: matchingPending.id,
-                        replicate_id: prediction.replicate_id,
-                        prompt: matchingPending.prompt,
-                        timestamp: new Date().toISOString(),
-                        images: processedImages,
-                        aspectRatio: matchingPending.aspectRatio,
-                        format: prediction.format || matchingPending.format || prediction.input?.output_format || 'webp',
-                        modelDisplayName: modelDisplayName  // Consistent naming
-                      };
-                      // Add to the beginning of the array
-                      updatedGenerations.unshift(newGeneration);
-                    }
-                    
-                    return updatedGenerations;
-                  });
-                  
-                  // Remove from pending
+                  // Remove from local pendingGenerations state in ImageHistory
                   setPendingGenerations(prev => 
                     prev.filter(g => g.id !== matchingPending.id)
                   );
                 } else if (prediction.status === 'failed' || prediction.is_cancelled) {
-                  // Show error toast if there's an error
                   if (prediction.error) {
                     toast.error(`Generation failed: ${prediction.error}`);
                   }
-                  
-                  // Remove from pending
                   setPendingGenerations(prev => 
                     prev.filter(g => g.id !== matchingPending.id)
                   );
                 } else {
-                  // Update elapsed time display
                   setElapsedTimes(prev => ({
                     ...prev,
                     [matchingPending.id]: Math.floor((Date.now() - new Date(matchingPending.startTime || '').getTime()) / 1000)
                   }));
                 }
               } else {
-                // If we have a prediction that wasn't in pending, it might be
-                // a new generation that we missed
-                shouldRefreshGenerations = true;
+                shouldRefreshParentGenerations = true;
               }
             });
             
-            // Do a silent refresh if needed
-            if (shouldRefreshGenerations) {
-              loadGenerations(true); // Silent update
+            if (shouldRefreshParentGenerations) {
+              loadGenerations(true); // Call prop to refresh parent's generation list
             }
           }
         } catch (fetchError: unknown) {
           if (fetchError instanceof Error && fetchError.name === 'AbortError') {
-            console.warn('Fetch aborted due to timeout');
-            // Timeout handled gracefully - no need to bubble up
+            console.warn('Polling fetch aborted due to timeout');
           } else {
             throw fetchError;
           }
         } finally {
-          clearTimeout(timeoutId);
+          clearTimeout(fetchTimeoutId);
         }
       } catch (err) {
         console.error('Error checking pending generations:', err);
       }
     };
     
-    // Start polling mechanism
-    const pollInterval = 5000; // 5 seconds between polls (changed from 10000)
+    const pollInterval = 5000;
     
-    // Clear any existing intervals/timeouts
     if (intervalRef.current) {
       clearInterval(intervalRef.current);
-      intervalRef.current = null;
     }
-    
-    // Set up new polling interval
     intervalRef.current = setInterval(checkPendingGenerations, pollInterval);
     
-    // Check immediately on mount or when pendingGenerations changes
-    // Small delay to avoid overlapping with initial load
     if (timeoutRef.current) {
       clearTimeout(timeoutRef.current);
     }
     timeoutRef.current = setTimeout(checkPendingGenerations, 1000);
     
-    // Clean up
     return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-        intervalRef.current = null;
-      }
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
-        timeoutRef.current = null;
-      }
+      if (intervalRef.current) clearInterval(intervalRef.current);
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
     };
-  }, [isMounted, pendingGenerations, loadGenerations, setPendingGenerations]);
+  }, [isMounted, pendingGenerations, loadGenerations, setPendingGenerations, supabaseClient]); // Added supabaseClient dependency
 
-  // Keep the visibility change effect to reload when the tab becomes visible again
+  // Update UI when generations prop changes (from parent)
   useEffect(() => {
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        loadGenerations(true);
-      }
-    };
-    
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-    return () => {
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
-    };
-  }, [loadGenerations]);
-
-  // Update UI when generations change
-  useEffect(() => {
-    // If we have generations that match pending ones, remove them from pending
     if (generations.length > 0 && pendingGenerations.length > 0) {
       const completedIds = generations.map(gen => gen.id);
       const pendingToRemove = pendingGenerations.filter(pending => 
@@ -448,14 +264,13 @@ export function ImageHistory({
     }
   }, [generations, pendingGenerations, setPendingGenerations]);
 
-  // Update elapsed times
+  // Update elapsed times (remains the same)
   useEffect(() => {
     if (pendingGenerations.length === 0) return;
     
     const updateElapsedTimes = () => {
       const now = Date.now();
       const updatedTimes: Record<string, number> = {};
-      
       pendingGenerations.forEach(gen => {
         if (gen.startTime) {
           const startTime = new Date(gen.startTime).getTime();
@@ -463,51 +278,36 @@ export function ImageHistory({
           updatedTimes[gen.id] = elapsedSeconds;
         }
       });
-      
       setElapsedTimes(updatedTimes);
     };
     
-    // Update immediately and then every second
     updateElapsedTimes();
     const interval = setInterval(updateElapsedTimes, 1000);
     return () => clearInterval(interval);
-  }, [pendingGenerations, setPendingGenerations]);
+  }, [pendingGenerations]);
 
   const sendDeleteRequest = async (replicateId: string, storageUrls?: string[]): Promise<boolean> => {
     try {
-      // Add timeout to the operation
       const abortController = new AbortController();
-      const timeoutId = setTimeout(() => abortController.abort(), 15000); // 15 second timeout
+      const timeoutId = setTimeout(() => abortController.abort(), 15000);
       
       try {
-        // Call the API to handle both database update and file deletion
         const deleteResponse = await fetch('/api/delete', {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            urls: storageUrls,
-            replicateId
-          }),
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ urls: storageUrls, replicateId }),
           signal: abortController.signal
         });
-        
         clearTimeout(timeoutId);
-        
         if (!deleteResponse.ok) {
           const errorData = await deleteResponse.json().catch(() => ({ error: 'Unknown error' }));
           console.error('Error deleting generation:', errorData);
           return false;
         }
-        
         const responseData = await deleteResponse.json();
-        
-        // Log any storage deletion issues but still consider it a success if the database was updated
         if (!responseData.storageDeleteSuccess && responseData.databaseUpdateSuccess) {
           console.warn('Some files may not have been deleted from storage, but the record was marked as deleted');
         }
-        
         return responseData.databaseUpdateSuccess;
       } catch (fetchError: unknown) {
         if (fetchError instanceof Error && fetchError.name === 'AbortError') {
@@ -524,17 +324,12 @@ export function ImageHistory({
     }
   };
 
-  // Function to cancel a pending generation
   const cancelGeneration = async (id: string, replicateId?: string): Promise<boolean> => {
     try {
-      // Call the cancel API endpoint with either the replicate_id or the prediction id
       const predictionId = replicateId || id;
-      
       const response = await fetch('/api/cancel', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ predictionId }),
       });
 
@@ -544,17 +339,11 @@ export function ImageHistory({
         return false;
       }
 
-      // Remove from pending generations
-      clearPendingGeneration(id);
+      // Remove from pendingGenerations state (local to ImageHistory)
+      setPendingGenerations(prev => prev.filter(gen => gen.id !== id));
       
-      // Update local state if it exists in generations
-      const existingIndex = generations.findIndex(gen => gen.id === id);
-      if (existingIndex >= 0) {
-        const updatedGenerations = [...generations];
-        // Mark as cancelled in the UI
-        updatedGenerations.splice(existingIndex, 1);
-        setGenerations(updatedGenerations);
-      }
+      // Ask parent to refresh its list, as a cancelled item might need to be removed from display
+      loadGenerations(true);
       
       return true;
     } catch (error) {
@@ -563,14 +352,17 @@ export function ImageHistory({
     }
   };
 
-  // Simplified handleImageError without retry mechanism
   const handleImageError = (generationId: string, imageIndex: number) => {
-    // Instead of retrying multiple times, just attempt to refresh the URL once
-    // console.log(`Attempting to refresh image: ${generationId}-${imageIndex}`);
+    // Use setGenerations (the prop) to update parent state if needed
+    // Forcing a re-render here might be tricky if parent controls 'generations'
+    // This could be a candidate for local state override or a specific callback to parent.
+    // For now, let's assume parent re-fetch or cache-busting is preferred.
+    // console.warn("handleImageError needs review with lifted state.");
+    // The parent's `loadGenerations(true)` might be a way to refresh, or a more targeted update.
 
-    // Force a re-render of the image by updating the URL with a cache-busting parameter
-    setGenerations(prev => 
-      prev.map(gen => 
+    // Simple cache-busting by updating setGenerations (prop from parent)
+    setGenerations(prevGens => 
+      prevGens.map(gen => 
         gen.id === generationId
           ? {
               ...gen,
@@ -585,108 +377,80 @@ export function ImageHistory({
     );
   };
 
-  // Clear a specific pending generation by ID
-  const clearPendingGeneration = (id: string) => {
-    // Remove from pendingGenerations state
-    setPendingGenerations(prev => prev.filter(gen => gen.id !== id));
-  };
-
   const handleDelete = async (id: string) => {
-    try {
-      // First check if this is a pending generation
-      const isPending = pendingGenerations.some(gen => gen.id === id);
-      
-      if (isPending) {
-        // For pending generations, we should cancel instead of delete
-        setIsCancelling(id);
-        const pendingGen = pendingGenerations.find(gen => gen.id === id);
-        try {
-          const success = await cancelGeneration(id, pendingGen?.replicate_id);
-          
-          if (success) {
-            toast.success('Generation cancelled successfully');
-          } else {
-            toast.error('Failed to cancel generation');
-          }
-        } catch (e) {
-          console.error("Error during cancellation in handleDelete:", e);
-          toast.error('An error occurred during cancellation.');
-        } finally {
-          setIsCancelling(null); // Use null for consistency
+    const isPending = pendingGenerations.some(gen => gen.id === id);
+    
+    if (isPending) {
+      setIsCancelling(id);
+      const pendingGen = pendingGenerations.find(gen => gen.id === id);
+      try {
+        const success = await cancelGeneration(id, pendingGen?.replicate_id);
+        if (success) {
+          toast.success('Generation cancelled successfully');
+          // Parent will refresh via loadGenerations(true) called in cancelGeneration
+        } else {
+          toast.error('Failed to cancel generation');
         }
-        return;
+      } catch (e) {
+        console.error("Error during cancellation in handleDelete:", e);
+        toast.error('An error occurred during cancellation.');
+      } finally {
+        setIsCancelling(null);
       }
-      
-      // If we get here, it's a completed generation, try to delete from database optimistically
-      const generationIndex = generations.findIndex(g => g.id === id);
-      if (generationIndex === -1) {
-        toast.error("Generation not found for deletion.");
-        return;
-      }
-      const generationToDelete = { ...generations[generationIndex] }; // Shallow copy for potential rollback
-
-      // Optimistic UI update: remove the item immediately
-      setGenerations(prevGenerations => prevGenerations.filter(g => g.id !== id));
-      
-      const toastId = `delete-${id}`; // Keep toastId for error messages
-      // toast("Deleting image...", { id: toastId }); // Removed: In-progress toast
-      setIsDeleting(id); // Show spinner on button
-
-      // Perform actual deletion in background
-      sendDeleteRequest(generationToDelete.replicate_id, generationToDelete.images.map(img => img.url))
-        .then(success => {
-          if (success) {
-            // toast.success("Image deleted successfully", { id: toastId }); // Removed: Success toast
-            // UI is already updated optimistically.
-            // No need to call loadGenerations(true) unless there's a specific reason to distrust local state.
-          } else {
-            toast.error("Failed to delete image. Restoring...", { id: toastId });
-            // Rollback UI
-            setGenerations(prev => {
-              const restoredGenerations = [...prev];
-              restoredGenerations.splice(generationIndex, 0, generationToDelete);
-              // Ensure the list remains sorted by timestamp
-              return restoredGenerations.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-            });
-          }
-        })
-        .catch(error => {
-          console.error('Error during background image deletion:', error);
-          toast.error("Deletion error. Restoring...", { id: toastId });
-          // Rollback UI on unexpected error as well
-          setGenerations(prev => {
-            const restoredGenerations = [...prev];
-            restoredGenerations.splice(generationIndex, 0, generationToDelete);
-            return restoredGenerations.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-          });
-        })
-        .finally(() => {
-          setIsDeleting(null); // Clear loading state for the button
-        });
-
-    } catch (error) {
-      // This catch is for synchronous errors in the initial part of handleDelete (e.g., finding item)
-      // Async errors from sendDeleteRequest are handled in its own .catch block.
-      console.error('Error handling delete:', error);
-      toast.error('An error occurred while initiating the delete request');
-      setIsDeleting(null); // Ensure isDeleting is cleared if an early error occurs
-      // Consider if a global refresh is needed here, though specific rollback is preferred
-      // loadGenerations(true); 
+      return;
     }
+    
+    const generationIndex = generations.findIndex(g => g.id === id);
+    if (generationIndex === -1) {
+      toast.error("Generation not found for deletion.");
+      return;
+    }
+    const generationToDelete = { ...generations[generationIndex] };
+
+    // Optimistic UI update using setGenerations prop
+    setGenerations(prevGenerations => prevGenerations.filter(g => g.id !== id));
+    
+    setIsDeleting(id);
+
+    sendDeleteRequest(generationToDelete.replicate_id, generationToDelete.images.map(img => img.url))
+      .then(success => {
+        if (success) {
+          // toast.success("Image deleted successfully"); // Optional: parent handles refresh
+          loadGenerations(true); // Ensure parent re-fetches to confirm deletion
+        } else {
+          toast.error("Failed to delete image. Restoring...");
+          // Rollback UI by calling setGenerations with the original item re-inserted
+          setGenerations(prev => {
+            const restored = [...prev];
+            restored.splice(generationIndex, 0, generationToDelete);
+            return restored.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+          });
+        }
+      })
+      .catch(error => {
+        console.error('Error during background image deletion:', error);
+        toast.error("Deletion error. Restoring...");
+        setGenerations(prev => {
+          const restored = [...prev];
+          restored.splice(generationIndex, 0, generationToDelete);
+          return restored.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+        });
+      })
+      .finally(() => {
+        setIsDeleting(null);
+      });
   };
 
   const copyPromptToClipboard = (prompt: string) => {
     navigator.clipboard.writeText(prompt)
       .then(() => {
-        toast.success('Prompt copied to clipboard');
+        setPromptValue(prompt);
       })
       .catch((err) => {
         console.error('Failed to copy prompt:', err);
-        toast.error('Failed to copy prompt');
       });
   };
 
-  // Add function to open image viewer
   const openImageViewer = (generation: ImageGeneration, imageIndex: number) => {
     setImageViewer({
       isOpen: true,
@@ -695,52 +459,52 @@ export function ImageHistory({
     })
   }
 
-  // Add function to close image viewer
   const closeImageViewer = useCallback(() => {
-    setImageViewer({
-      ...imageViewer,
-      isOpen: false
-    })
-  }, [imageViewer]);
+    setImageViewer(prev => ({ ...prev, isOpen: false }));
+  }, []);
 
-  // Add function to navigate to next image
   const handleNavigate = useCallback((newIndex: number) => {
-    setImageViewer({
-      ...imageViewer,
-      currentImageIndex: newIndex
-    })
-  }, [imageViewer]);
+    setImageViewer(prev => ({ ...prev, currentImageIndex: newIndex }));
+  }, []);
 
-  // Create a combined and sorted list of all generations
   const getAllGenerations = useCallback(() => {
-    // Start with completed generations
-    const allGenerations = [...generations];
+    const allDisplayableGenerations: (ImageGeneration & { isPending?: boolean })[] = [...generations];
     
-    // Add pending generations that aren't already in the completed list
     pendingGenerations.forEach(pending => {
-      const existingIndex = allGenerations.findIndex(gen => gen.id === pending.id);
-      
-      // If this pending generation isn't in the completed list or doesn't have all images
+      const existingIndex = allDisplayableGenerations.findIndex(gen => gen.id === pending.id);
       if (existingIndex === -1 || 
-          (existingIndex >= 0 && allGenerations[existingIndex].images.length < 4)) {
-        // Create a virtual generation for the pending item
-        const virtualGeneration = {
+          (existingIndex >= 0 && allDisplayableGenerations[existingIndex].images.length < 4)) {
+        const virtualGeneration: ImageGeneration & { isPending?: boolean } = {
           id: pending.id,
           replicate_id: pending.replicate_id || '',
           prompt: pending.prompt,
           timestamp: pending.startTime || new Date().toISOString(),
-          images: [],
+          images: [], // Pending items don't have images to display yet
           aspectRatio: pending.aspectRatio,
           format: pending.format,
           modelDisplayName: pending.modelDisplayName,
           isPending: true
         };
-        allGenerations.push(virtualGeneration);
+        // If it's truly new, add it. If it exists but incomplete, replace (or update)
+        if (existingIndex === -1) {
+            allDisplayableGenerations.push(virtualGeneration);
+        } else {
+            // This case suggests a mismatch or partial update from parent, 
+            // best to rely on parent's `generations` for completed data.
+            // For display, we can ensure a pending marker if necessary.
+            if (!allDisplayableGenerations[existingIndex].isPending) {
+                 allDisplayableGenerations[existingIndex] = {
+                    ...allDisplayableGenerations[existingIndex],
+                    // Ensure it has the isPending flag if it's in pendingGenerations
+                    // and not fully loaded in `generations` prop
+                    isPending: true 
+                 };
+            }
+        }
       }
     });
     
-    // Sort by timestamp (newest first)
-    return allGenerations.sort((a, b) => 
+    return allDisplayableGenerations.sort((a, b) => 
       new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
     );
   }, [generations, pendingGenerations]);
@@ -749,7 +513,6 @@ export function ImageHistory({
     <div className="w-full space-y-6">
       <Toaster />
       
-      {/* Image Viewer Modal */}
       <MediaFocus 
         isOpen={imageViewer.isOpen}
         currentGeneration={imageViewer.currentGeneration}
@@ -758,47 +521,63 @@ export function ImageHistory({
         onNavigate={handleNavigate}
       />
       
-      {!isLoading && error ? (
+      {isLoading && generations.length === 0 && pendingGenerations.length === 0 ? (
+        // Show skeleton loaders only when initially loading and no data at all
+        <div className="space-y-8">
+          {Array.from({ length: 2 }).map((_, i) => (
+            <div key={`skel-gen-${i}`} className="space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <Skeleton className="h-6 w-16 rounded-md" />
+                  <Skeleton className="h-6 w-12 rounded-md" />
+                </div>
+                <div className="flex items-center gap-2">
+                  <Skeleton className="h-8 w-8 rounded-md" />
+                  <Skeleton className="h-8 w-8 rounded-md" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-3">
+                {Array.from({ length: 4 }).map((_, j) => (
+                  <Skeleton key={`skel-img-${j}`} className="aspect-square rounded-lg" />
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : !isLoading && error ? (
         <div className="bg-destructive/10 border border-destructive/30 rounded-lg p-4">
           <p className="text-destructive">{error}</p>
+          <Button onClick={() => loadGenerations(false)} variant="link" className="mt-2">Try again</Button>
         </div>
-      ) : !isLoading && generations.length === 0 && pendingGenerations.length === 0 ? (
+      ) : !isLoading && getAllGenerations().length === 0 ? (
         <div className="bg-muted/50 border border-border rounded-lg p-6 text-center">
           <p className="text-muted-foreground">No images generated yet.</p>
           <p className="text-sm text-muted-foreground/80 mt-2">
             Use the form above to create your first image!
           </p>
         </div>
-      ) : !isLoading && (
+      ) : (
         <div className="space-y-8">
           {getAllGenerations().map((generation) => {
-              const isPending = pendingGenerations.some(p => p.id === generation.id);
-              const pending = isPending ? pendingGenerations.find(p => p.id === generation.id) : null;
+              // isPending is now a property of the items from getAllGenerations
+              const isGenPending = generation.isPending || pendingGenerations.some(p => p.id === generation.id && generation.images.length === 0);
               
               return (
                 <div
                   key={`generation-${generation.id}`}
                   className="space-y-3"
                 >
-                  {/* Header section with badges and buttons */}
                   <div className="flex items-center justify-between gap-3">
-                    {/* Left side - Tags */}
-                    <div className="flex items-center gap-2">
-                      {/* Badges */}
-                      <div className={isPending ? 'hidden sm:flex items-center gap-2' : 'flex items-center gap-2'}>
-                        {/* Aspect ratio badge */}
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <div className={isGenPending ? 'hidden sm:flex items-center gap-2' : 'flex items-center gap-2'}>
                         <Badge variant="outline" className="!bg-blue-200 !text-blue-800 hover:!bg-blue-300 !border-blue-300 dark:bg-blue-900/30 dark:text-blue-300 dark:hover:bg-blue-900/40 dark:border-blue-800/30">
                           {generation.aspectRatio}
                         </Badge>
-                        
-                        {/* Format badge */}
                         {generation.format && (
                           <Badge variant="outline" className="!bg-green-200 !text-green-800 hover:!bg-green-300 !border-green-300 dark:bg-green-900/30 dark:text-green-300 dark:hover:bg-green-900/40 dark:border-green-800/30">
                             {generation.format.toUpperCase()}
                           </Badge>
                         )}
-                        
-                        {/* Model badge */}
                         {generation.modelDisplayName && (
                           <Badge variant="outline" className="!bg-purple-200 !text-purple-800 hover:!bg-purple-300 !border-purple-300 max-w-[150px] truncate dark:bg-purple-900/30 dark:text-purple-300 dark:hover:bg-purple-900/40 dark:border-purple-800/30">
                             {generation.modelDisplayName}
@@ -806,8 +585,7 @@ export function ImageHistory({
                         )}
                       </div>
                       
-                      {/* Status indicators for pending generations - Now in a separate div outside the badge container */}
-                      {isPending && pending && (
+                      {isGenPending && (
                         <div className="flex items-center gap-1">
                           <div className="flex items-center gap-1.5 text-muted-foreground text-sm">
                             <span className="h-2 w-2 rounded-full bg-blue-400 animate-pulse"></span>
@@ -822,8 +600,7 @@ export function ImageHistory({
                       )}
                     </div>
                     
-                    {/* Right side - Actions */}
-                    <div className="flex items-center gap-2 ml-auto">
+                    <div className="flex items-center gap-2 ml-auto shrink-0">
                       <Button 
                         variant="outline" 
                         size="icon"
@@ -838,7 +615,7 @@ export function ImageHistory({
                         </svg>
                       </Button>
                       
-                      {isPending ? (
+                      {isGenPending ? (
                         <Button 
                           variant="outline" 
                           size="icon"
@@ -889,14 +666,12 @@ export function ImageHistory({
                     </div>
                   </div>
                   
-                  {/* Image grid section */}
                   <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-3">
-                    {!isPending && generation.images && generation.images.length > 0 ? (
-                      // Show available images for completed generations
+                    {!isGenPending && generation.images && generation.images.length > 0 ? (
                       <>
                         {generation.images.map((image, index) => (
                           <div 
-                            key={index} 
+                            key={`${generation.id}-img-${index}`}
                             className="aspect-square relative overflow-hidden rounded-lg shadow-sm hover:shadow-md transition-all duration-300 group cursor-pointer"
                             onClick={() => {
                               if (!image.isExpired) {
@@ -917,27 +692,24 @@ export function ImageHistory({
                                 fill
                                 sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
                                 onError={() => handleImageError(generation.id, index)}
-                                priority={true}
-                                loading="eager"
+                                priority={true} // Consider making this conditional based on visibility
+                                loading="eager" // Same as priority
                                 unoptimized={true}
                               />
                             )}
                           </div>
                         ))}
-                        
-                        {/* Show skeletons for remaining slots if not all images are loaded */}
                         {generation.images.length < 4 && Array.from({ length: 4 - generation.images.length }).map((_, index) => (
                           <Skeleton 
-                            key={`skeleton-${index}`} 
+                            key={`skeleton-fill-${index}`}
                             className="aspect-square rounded-lg animate-pulse"
                           />
                         ))}
                       </>
                     ) : (
-                      // Show all skeletons for pending generations
                       Array.from({ length: 4 }).map((_, index) => (
                         <Skeleton 
-                          key={index} 
+                          key={`skeleton-pending-${index}`} 
                           className="aspect-square rounded-lg animate-pulse"
                         />
                       ))

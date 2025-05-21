@@ -344,6 +344,53 @@ const genders: Gender[] = [
   }
 ];
 
+// Define lights
+interface LightSetting {
+  value: string;
+  label: string;
+  icon: string;
+  promptText: string;
+}
+
+const lightSettings: LightSetting[] = [
+  {
+    value: "natural",
+    label: "Natural Light",
+    icon: "🌞",
+    promptText: "with natural lighting"
+  },
+  {
+    value: "studio",
+    label: "Studio Light",
+    icon: "💡",
+    promptText: "with studio lighting"
+  },
+  {
+    value: "soft",
+    label: "Soft Light",
+    icon: "🕯️",
+    promptText: "with soft lighting"
+  },
+  {
+    value: "dramatic",
+    label: "Dramatic Light",
+    icon: "🎭",
+    promptText: "with dramatic lighting"
+  },
+  {
+    value: "backlit",
+    label: "Backlit",
+    icon: "🔦",
+    promptText: "with backlighting"
+  },
+  {
+    value: "outdoor",
+    label: "Outdoor Light",
+    icon: "🌤️",
+    promptText: "with outdoor lighting"
+  }
+];
+
 // Added Preset data
 const presets: Preset[] = [
   {
@@ -421,6 +468,7 @@ export const AdvancedSettings = forwardRef<AdvancedSettingsRefType, AdvancedSett
     const [selectedCameraShot, setSelectedCameraShot] = useState<string | null>(null);
     const [selectedGender, setSelectedGender] = useState<string | null>(null);
     const [selectedPreset, setSelectedPreset] = useState<string | null>(null);
+    const [selectedLight, setSelectedLight] = useState<string | null>(null);
 
     // Reset all selections
     const resetSelections = () => {
@@ -430,6 +478,7 @@ export const AdvancedSettings = forwardRef<AdvancedSettingsRefType, AdvancedSett
       setSelectedCameraShot(null);
       setSelectedGender(null);
       setSelectedPreset(null);
+      setSelectedLight(null);
     };
 
     // Close the panel
@@ -662,6 +711,42 @@ export const AdvancedSettings = forwardRef<AdvancedSettingsRefType, AdvancedSett
           preset.settings.accessories.forEach(acc => handleAccessorySelect(acc));
         }
         if (preset.settings.gender) handleGenderSelect(preset.settings.gender);
+      }
+    };
+
+    // Function to handle light selection
+    const handleLightSelect = (lightValue: string) => {
+      const currentLight = selectedLight;
+      const currentPrompt = form.getValues().prompt;
+      
+      if (currentLight === lightValue) {
+        setSelectedLight(null);
+        const lightToRemove = lightSettings.find(l => l.value === currentLight);
+        if (lightToRemove) {
+          const updatedPrompt = currentPrompt.replace(lightToRemove.promptText, '');
+          form.setValue("prompt", cleanupPrompt(updatedPrompt));
+        }
+        return;
+      }
+      
+      let updatedPrompt = currentPrompt;
+      if (currentLight) {
+        const previousLight = lightSettings.find(l => l.value === currentLight);
+        if (previousLight) {
+          updatedPrompt = updatedPrompt.replace(previousLight.promptText, '');
+        }
+      }
+      
+      const newLight = lightSettings.find(l => l.value === lightValue);
+      if (newLight) {
+        const cleanedBasePrompt = cleanupPrompt(updatedPrompt);
+        if (cleanedBasePrompt) {
+          updatedPrompt = `${cleanedBasePrompt}, ${newLight.promptText}`;
+        } else {
+          updatedPrompt = newLight.promptText;
+        }
+        form.setValue("prompt", cleanupPrompt(updatedPrompt));
+        setSelectedLight(lightValue);
       }
     };
 
@@ -970,6 +1055,49 @@ export const AdvancedSettings = forwardRef<AdvancedSettingsRefType, AdvancedSett
                     >
                       <div className="text-2xl mb-1">{accessory.emoji}</div>
                       <div className="text-xs font-medium text-center">{accessory.label}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Lights Section */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between h-6">
+                  <h4 className="text-sm font-medium flex items-center">
+                    Lights
+                    <span className="ml-2 text-xs text-muted-foreground min-w-[80px]">
+                      {selectedLight && (
+                        <>({lightSettings.find(l => l.value === selectedLight)?.label})</>
+                      )}
+                    </span>
+                  </h4>
+                  <div className="w-[60px] text-right">
+                    {selectedLight && (
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        className="h-6 px-2 text-xs"
+                        onClick={() => handleLightSelect(selectedLight)}
+                      >
+                        Clear
+                      </Button>
+                    )}
+                  </div>
+                </div>
+                <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
+                  {lightSettings.map((light) => (
+                    <div
+                      key={light.value}
+                      className={cn(
+                        "relative flex flex-col items-center justify-center px-2 py-3 rounded-md cursor-pointer border border-input transition-all duration-200 hover:bg-accent/10",
+                        selectedLight === light.value 
+                          ? "ring-2 ring-inset ring-ring/50 bg-accent/20" 
+                          : "opacity-90 hover:opacity-100"
+                      )}
+                      onClick={() => handleLightSelect(light.value)}
+                    >
+                      <div className="text-2xl mb-1">{light.icon}</div>
+                      <div className="text-xs font-medium text-center">{light.label}</div>
                     </div>
                   ))}
                 </div>

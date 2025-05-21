@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Replicate from 'replicate';
 import { createServerClient } from '@/lib/supabase-server';
+import OpenAI from "openai";
 
 // Initialize Replicate with API token
 const replicate = new Replicate({
@@ -75,8 +76,30 @@ export async function POST(request: NextRequest) {
     let dbRecordId = null;
     let userId = null;
     
+    // Define a type for the expected request body parts
+    interface GenerateRequestBody {
+      prompt: string;
+      aspectRatio?: string;
+      outputFormat?: string;
+      modelId?: string;
+      modelName?: string;
+      modelVersion?: string;
+      image_data_url?: string;
+      // Add any other expected properties from the request body here
+    }
+
     // Parse the request body
-    const { prompt, aspectRatio, outputFormat, modelId: requestModelId, modelName: requestModelName, modelVersion } = await request.json();
+    const fullRequestBody = await request.json() as GenerateRequestBody;
+    let { prompt } = fullRequestBody;
+    const { 
+        image_data_url, 
+        aspectRatio, 
+        outputFormat, 
+        modelId: requestModelId, 
+        modelName: requestModelName, 
+        modelVersion 
+    } = fullRequestBody;
+    const originalPrompt = prompt; // Keep original prompt for fallback
     
     // Use the authenticated user's ID
     userId = user.id;
@@ -93,12 +116,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!prompt) {
+    // Conditional prompt validation: Prompt is required only if no image is being used for description
+    if (!image_data_url && (!prompt || prompt.trim() === '')) {
       return NextResponse.json(
-        { error: 'Prompt is required' },
+        { error: 'Prompt is required when no reference image is used' },
         { status: 400 }
       );
     }
+    // If image_data_url is present, an empty initial prompt is acceptable as OpenAI is expected to generate one.
+    // The originalPrompt (which could be empty) will be used if OpenAI fails.
 
     // Initialize model variables
     let finalModelVersion = null;
@@ -165,22 +191,137 @@ export async function POST(request: NextRequest) {
       );
     }
     
-    const inputParams = {
+    // OpenAI Image Description Step
+    const openAIKey = process.env.OPENAI_API_KEY;
+    if (image_data_url && openAIKey) {
+      try {
+        const openai = new OpenAI({
+          apiKey: openAIKey,
+        });
+
+        const systemPrompt = "Describe this image in a professional and detailed way. Focus on the following aspects:\n\n- Image composition – talk about framing, angle, lighting, background, and overall layout\n\n- Colors – describe the dominant colors, color harmony, contrast, and any mood they create\n\n- Facial expression and pose – describe what the subject is expressing emotionally, how they are positioned, and what direction they are looking\n\n- Accessories – mention any visible accessories like jewelry, glasses, hats, etc.\n\n- Garments – describe the clothing style, color, texture, and how it fits or contributes to the visual impact";
+
+        console.log("Sending image to OpenAI for description...");
+        const openAICompletion = await openai.chat.completions.create({
+          model: "gpt-4o-mini",
+          messages: [
+            {
+              "role": "system",
+              "content": systemPrompt
+            },
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "Describe the following image."
+                },
+                {
+                  "type": "image_url",
+                  "image_url": {
+                    "url": image_data_url
+                  }
+                }
+              ]
+            }
+          ],
+          temperature: 1,
+          max_tokens: 2048,
+          top_p: 1,
+        });
+
+        const description = openAICompletion.choices[0]?.message?.content;
+
+        if (description && typeof description === 'string' && description.trim() !== '') {
+          prompt = description; // Use OpenAI description as the new prompt for Replicate
+          console.log("OpenAI description successful. Using as prompt for Replicate.");
+        } else {
+          console.warn("OpenAI did not return a valid description. Falling back to original prompt.", openAICompletion);
+          prompt = originalPrompt; // Fallback to original prompt (which might be empty if user didn't provide one)
+        }
+      } catch (e) {
+        console.error("Error calling OpenAI for image description:", e);
+        prompt = originalPrompt; // Fallback to original prompt on error
+      }
+    } else if (image_data_url && !openAIKey) {
+      console.warn("OpenAI API key not found. Skipping image description step and using original prompt.");
+      prompt = originalPrompt;
+    }
+    // If there's no image_data_url, prompt remains as is from the request (and was validated above).
+
+    // After OpenAI step, if prompt is still empty (e.g. original was empty and OpenAI failed),
+    // Replicate might still need a prompt. Let's add a final check or default if necessary.
+    if (!prompt || prompt.trim() === '') {
+      // This case means: an image was provided, but OpenAI failed to describe it, AND the user provided no original prompt.
+      // Replicate likely still needs some prompt. We can use a generic one or error out.
+      // For now, let's use a generic prompt. Consider making this behavior more sophisticated.
+      prompt = "A generated image based on the provided reference."; 
+      console.warn("Prompt was empty after OpenAI step (image provided, but no description and no original prompt). Using a generic prompt for Replicate.");
+    }
+
+    // Define a type for the Replicate input parameters
+    interface ReplicateInputParams {
+      prompt: string;
+      model: string;
+      go_fast: boolean;
+      lora_scale: number;
+      megapixels: string;
+      num_outputs: number;
+      aspect_ratio?: string; // Optional because it's removed for img2img
+      output_format: string; // Expects a string
+      guidance_scale: number;
+      output_quality: number;
+      prompt_strength: number;
+      extra_lora_scale: number;
+      num_inference_steps: number;
+      disable_safety_checker: boolean;
+      image?: Buffer; // Optional for img2img
+    }
+    
+    const inputParams: ReplicateInputParams = {
       prompt,
       model: "dev",
       go_fast: false,
       lora_scale: 1,
       megapixels: "1",
       num_outputs: 4,
-      aspect_ratio: aspectRatio || "1:1",
-      output_format: outputFormat,
+      // aspectRatio will be set conditionally
+      output_format: outputFormat || "webp", // Provide default if undefined
       guidance_scale: 3,
       output_quality: 100,
-      prompt_strength: 0.8,
+      prompt_strength: 0.8, // Default prompt_strength
       extra_lora_scale: 1,
       num_inference_steps: 28,
       disable_safety_checker: true
     };
+
+    if (image_data_url) {
+      // Image is provided, prepare it for Replicate
+      try {
+        // Convert base64 data URL to Buffer
+        // Expected format: "data:[<mediatype>];base64,<data>"
+        const base64Data = image_data_url.split(',')[1];
+        if (!base64Data) {
+          throw new Error("Invalid image data URL format.");
+        }
+        const imageBuffer = Buffer.from(base64Data, 'base64');
+        inputParams.image = imageBuffer;
+        // Prompt strength is more relevant for img2img
+        inputParams.prompt_strength = 0.8; // Or make this configurable
+        // Remove aspectRatio as it's ignored by Replicate when an image is provided
+        delete inputParams.aspect_ratio;
+
+      } catch (e) {
+        console.error("Error processing image data URL:", e);
+        return NextResponse.json(
+          { error: 'Invalid image data provided.', details: e instanceof Error ? e.message : "Unknown error processing image" },
+          { status: 400 }
+        );
+      }
+    } else {
+      // No image provided, use aspectRatio
+      inputParams.aspect_ratio = aspectRatio || "1:1"; // Provide default if undefined
+    }
     
     try {
       // Get the webhook URL from environment variables
@@ -204,15 +345,21 @@ export async function POST(request: NextRequest) {
       
       // Store the initial prediction with "starting" status in the database
       try {
+        // Prepare input for logging, remove image buffer if present
+        const inputForLogging = { ...inputParams };
+        if (inputForLogging.image) {
+          delete inputForLogging.image; // Remove the image Buffer before logging
+        }
+
         const { data: predictionRecord, error: insertError } = await supabase
           .from('predictions')
           .insert({
             replicate_id: predictionId,
-            prompt: prompt,
-            aspect_ratio: aspectRatio || "1:1",
+            prompt: prompt, // Log the final prompt used (could be from OpenAI or original)
+            aspect_ratio: image_data_url ? "N/A (image used)" : (aspectRatio || "1:1"), // Indicate if aspect ratio was from image
             format: outputFormat || "webp",
             status: prediction.status,
-            input: inputParams,
+            input: inputForLogging, // Use the modified input for logging
             model_id: modelName
             // user_id is now handled by Supabase trigger
           })
