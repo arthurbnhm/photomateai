@@ -356,7 +356,7 @@ export async function POST(request: NextRequest) {
           .insert({
             replicate_id: predictionId,
             prompt: prompt, // Log the final prompt used (could be from OpenAI or original)
-            aspect_ratio: image_data_url ? "N/A (image used)" : (aspectRatio || "1:1"), // Indicate if aspect ratio was from image
+            aspect_ratio: image_data_url ? "Image Reference" : (aspectRatio || "1:1"), // Changed to "Image Reference"
             format: outputFormat || "webp",
             status: prediction.status,
             input: inputForLogging, // Use the modified input for logging

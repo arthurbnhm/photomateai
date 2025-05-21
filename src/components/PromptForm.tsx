@@ -353,7 +353,7 @@ export function PromptForm({
       addPendingGeneration({
         id: tempId,
         prompt: prompt, // Use the prompt from submissionData
-        aspectRatio: aspectRatio,
+        aspectRatio: imageDataUrl ? "Image Reference" : aspectRatio, // Conditional aspect ratio for UI display
         startTime: new Date().toISOString(),
         format: outputFormat,
         modelDisplayName: modelDisplayName
@@ -912,6 +912,62 @@ export function PromptForm({
                       currentImageUrl={uploadedImageDataUrl} // Pass current image URL
                       className="w-full"
                     />
+
+                    {/* Add Model and Format selectors here */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
+                      <FormField
+                        control={form.control}
+                        name="modelId"
+                        render={({ field }) => (
+                          <FormItem className="md:col-span-1">
+                            <Select 
+                              onValueChange={field.onChange} 
+                              value={field.value} // Use value to ensure it reflects form state
+                              disabled={loadingModels || models.length === 0}
+                            >
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Select model" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                {models.map((model) => (
+                                  <SelectItem key={model.id} value={model.id}>
+                                    {model.display_name}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name="outputFormat"
+                        render={({ field }) => (
+                          <FormItem className="md:col-span-1">
+                            <Select 
+                              onValueChange={field.onChange} 
+                              defaultValue={field.value} // Or value={field.value} if you want it strictly controlled
+                            >
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Select format" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                <SelectItem value="png">PNG</SelectItem>
+                                <SelectItem value="jpg">JPG</SelectItem>
+                                <SelectItem value="webp">WebP</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+
                     <div className="flex justify-end">
                       <Button 
                         type="button"
