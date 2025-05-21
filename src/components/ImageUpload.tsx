@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useCallback, ChangeEvent, useEffect } from 'react';
+import { useState, useCallback, ChangeEvent, useEffect, DragEvent } from 'react';
 import Image from 'next/image';
+import { X, FolderUp } from 'lucide-react';
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { UploadCloud, X } from 'lucide-react';
 
 interface ImageUploadProps {
   onImageChange: (imageDataUrl: string | null) => void;
@@ -12,11 +13,11 @@ interface ImageUploadProps {
 }
 
 export function ImageUpload({ onImageChange, currentImageUrl, className }: ImageUploadProps) {
-  const [fileName, setFileName] = useState<string | null>(null);
+  const [dragActive, setDragActive] = useState(false);
 
+  // Reset input when currentImageUrl is cleared externally
   useEffect(() => {
     if (!currentImageUrl) {
-      setFileName(null);
       const input = document.getElementById('imageUploadInput') as HTMLInputElement;
       if (input) {
         input.value = '';
@@ -24,85 +25,105 @@ export function ImageUpload({ onImageChange, currentImageUrl, className }: Image
     }
   }, [currentImageUrl]);
 
-  const handleFileChange = useCallback((event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      setFileName(file.name);
+  const processFile = useCallback((file: File | null) => {
+    if (file && file.type.startsWith('image/')) {
       const reader = new FileReader();
       reader.onloadend = () => {
         const result = reader.result as string;
         onImageChange(result);
       };
       reader.readAsDataURL(file);
+    } else if (file) {
+      // Handle non-image file type if needed, e.g., show an error
+      console.warn("Attempted to upload non-image file:", file.name);
+      onImageChange(null); // Clear any existing image
     } else {
-      setFileName(null);
       onImageChange(null);
     }
   }, [onImageChange]);
 
-  const handleRemoveImage = useCallback(() => {
-    setFileName(null);
+  const handleFileChange = useCallback((event: ChangeEvent<HTMLInputElement>) => {
+    processFile(event.target.files?.[0] || null);
+  }, [processFile]);
+
+  const handleRemoveImage = useCallback((e?: React.MouseEvent<HTMLButtonElement>) => {
+    e?.stopPropagation(); // Prevent click from triggering file input if 'x' is over dropzone
     onImageChange(null);
-    const input = document.getElementById('imageUploadInput') as HTMLInputElement;
-    if (input) {
-      input.value = '';
-    }
+    // Input value is cleared by the useEffect hook when currentImageUrl becomes null
   }, [onImageChange]);
 
-  return (
-    <div className={`space-y-3 ${className}`}>
-      <div
-        className={`
-          w-full border-2 border-dashed border-muted-foreground/30 rounded-lg p-6 
-          flex flex-col items-center justify-center text-center
-          transition-colors hover:border-primary/50 cursor-pointer
-          ${currentImageUrl ? 'bg-muted/20' : 'bg-transparent'}
-        `}
-        onClick={() => document.getElementById('imageUploadInput')?.click()}
-      >
-        <input
-          id="imageUploadInput"
-          type="file"
-          accept="image/*"
-          onChange={handleFileChange}
-          className="hidden"
+  const handleDrop = useCallback((event: DragEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setDragActive(false);
+    processFile(event.dataTransfer.files?.[0] || null);
+  }, [processFile]);
+
+  const handleDragEvent = (event: DragEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (event.type === "dragenter" || event.type === "dragover") {
+      if (event.dataTransfer.items && event.dataTransfer.items.length > 0 && event.dataTransfer.items[0].kind === 'file' && event.dataTransfer.items[0].type.startsWith('image/')) {
+        setDragActive(true);
+      }
+    } else if (event.type === "dragleave") {
+      const dropzone = event.currentTarget as HTMLButtonElement;
+      if (!event.relatedTarget || (event.relatedTarget instanceof Node && !dropzone.contains(event.relatedTarget))) {
+        setDragActive(false);
+      }
+    }
+  };
+
+
+  if (currentImageUrl) {
+    return (
+      <div className={cn("relative group w-full max-w-md mx-auto aspect-square", className)}>
+        <Image
+          src={currentImageUrl}
+          alt="Uploaded image"
+          fill
+          sizes="(max-width: 768px) 100vw, (max-width: 1024px) 50vw, 33vw"
+          className="object-contain rounded-lg shadow-md"
         />
-        {currentImageUrl ? (
-          <div className="relative group w-full max-w-xs mx-auto flex justify-center items-center h-48">
-            <Image
-              src={currentImageUrl}
-              alt={fileName || "Uploaded image"}
-              width={192}
-              height={192}
-              objectFit="contain"
-              className="rounded-md shadow-md"
-            />
-            <Button
-              variant="destructive"
-              size="icon"
-              className="absolute top-1 right-1 h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity"
-              onClick={(e) => {
-                e.stopPropagation();
-                handleRemoveImage();
-              }}
-              aria-label="Remove image"
-            >
-              <X size={16} />
-            </Button>
-            {fileName && <p className="text-xs text-muted-foreground mt-2 truncate">{fileName}</p>}
-          </div>
-        ) : (
-          <>
-            <UploadCloud size={32} className="text-muted-foreground/70 mb-2" />
-            <p className="text-sm text-muted-foreground">
-              Click to upload an image
-            </p>
-            <p className="text-xs text-muted-foreground/80">
-              (Optional, for image-to-image generation)
-            </p>
-          </>
-        )}
+        <button
+          type="button"
+          onClick={handleRemoveImage}
+          className="absolute top-2 right-2 bg-background/70 hover:bg-background/90 text-foreground rounded-full p-1.5 opacity-0 group-hover:opacity-100 transition-opacity focus:opacity-100"
+          aria-label="Remove image"
+        >
+          <X size={18} />
+        </button>
       </div>
+    );
+  }
+
+  return (
+    <div className={cn("w-full", className)}>
+      <input
+        id="imageUploadInput"
+        type="file"
+        accept="image/*"
+        onChange={handleFileChange}
+        className="hidden"
+      />
+      <Button
+        variant="outline"
+        className={cn(
+          "w-full h-10 flex items-center justify-between text-muted-foreground font-normal",
+          dragActive ? "ring-2 ring-primary border-primary bg-primary/5" : "hover:border-muted-foreground/70"
+        )}
+        onClick={() => document.getElementById('imageUploadInput')?.click()}
+        onDragEnter={handleDragEvent}
+        onDragLeave={handleDragEvent}
+        onDragOver={handleDragEvent}
+        onDrop={handleDrop}
+        type="button"
+      >
+        <span className={cn(dragActive ? "text-primary" : "")}>
+          Drag image or click to upload
+        </span>
+        <FolderUp size={18} className={cn("ml-2 flex-shrink-0", dragActive ? "text-primary" : "text-muted-foreground/70")} />
+      </Button>
     </div>
   );
 } 

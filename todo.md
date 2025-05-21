@@ -129,3 +129,8 @@
 # Have a look
 
 - It orders them with newest first and limits to 50 images (to keep things fast)
+
+# References
+
+- Use samples
+- Once webhook on model training is ready, it sends a request to generate the image reference examples

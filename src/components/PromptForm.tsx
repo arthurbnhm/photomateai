@@ -168,6 +168,7 @@ export function PromptForm({
   const [selectedGender, setSelectedGender] = useState<string | null>(null);
   const [uploadedImageDataUrl, setUploadedImageDataUrl] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState("prompt"); // To track active tab
+  const [showReferenceGuideline, setShowReferenceGuideline] = useState(true); // New state for guideline overlay
 
   const placeholderExamples = useMemo(() => [
     "A woman portrait on studio grey background, smiling",
@@ -700,7 +701,7 @@ export function PromptForm({
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
               <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
                 <TabsList className="grid w-full grid-cols-2 mb-4">
-                  <TabsTrigger value="prompt">Prompt</TabsTrigger>
+                  <TabsTrigger value="prompt">Create Image</TabsTrigger>
                   <TabsTrigger value="reference">Reference Image</TabsTrigger>
                 </TabsList>
 
@@ -906,23 +907,83 @@ export function PromptForm({
                 </TabsContent>
 
                 <TabsContent value="reference">
-                  <div className="space-y-6">
-                    <ImageUpload 
-                      onImageChange={handleImageChange} 
-                      currentImageUrl={uploadedImageDataUrl} // Pass current image URL
-                      className="w-full"
-                    />
+                  {showReferenceGuideline ? (
+                    <div className="w-full bg-card border border-border rounded-xl overflow-hidden shadow-lg p-5 space-y-4 mb-6">
+                      <div className="text-center">
+                        <h2 className="text-xl font-semibold">Quick Tips for Reference Images!</h2>
+                        <p className="text-sm text-muted-foreground mt-1">
+                          Use an existing image to guide the AI. Keep the composition, colors, and other elements while applying your trained model&rsquo;s style.
+                        </p>
+                      </div>
+                      <div className="space-y-3 py-3">
+                        <ul className="space-y-2 text-sm text-muted-foreground">
+                          <li className="flex items-start">
+                            <svg className="w-5 h-5 text-green-500 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"></path></svg>
+                            <span><strong>Keep Composition:</strong> The AI will try to match the layout and arrangement of your reference image.</span>
+                          </li>
+                          <li className="flex items-start">
+                            <svg className="w-5 h-5 text-green-500 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"></path></svg>
+                            <span><strong>Transfer Colors & Style:</strong> The model will adapt its output to the color palette and artistic style of your reference.</span>
+                          </li>
+                           <li className="flex items-start">
+                            <svg className="w-5 h-5 text-green-500 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"></path></svg>
+                            <span><strong>Apply Your Model:</strong> The selected trained model will be used to generate the new image, influenced by your reference.</span>
+                          </li>
+                        </ul>
+                      </div>
+                      <Button
+                        onClick={() => setShowReferenceGuideline(false)}
+                        className="w-full py-3"
+                      >
+                        Got it, Let&rsquo;s Upload an Image!
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
+                      {/* Image Uploader */}
+                      <div className="md:col-span-5">
+                        <ImageUpload 
+                          onImageChange={handleImageChange} 
+                          currentImageUrl={uploadedImageDataUrl}
+                          className="w-full"
+                        />
+                      </div>
 
-                    {/* Add Model and Format selectors here */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
+                      {/* Output Format Selector (moved before Model Selector) */}
+                      <FormField
+                        control={form.control}
+                        name="outputFormat"
+                        render={({ field }) => (
+                          <FormItem className="md:col-span-2">
+                            <Select 
+                              onValueChange={field.onChange} 
+                              defaultValue={field.value}
+                            >
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Select format" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                <SelectItem value="png">PNG</SelectItem>
+                                <SelectItem value="jpg">JPG</SelectItem>
+                                <SelectItem value="webp">WebP</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      {/* Model Selector (moved after Output Format Selector) */}
                       <FormField
                         control={form.control}
                         name="modelId"
                         render={({ field }) => (
-                          <FormItem className="md:col-span-1">
+                          <FormItem className="md:col-span-3">
                             <Select 
                               onValueChange={field.onChange} 
-                              value={field.value} // Use value to ensure it reflects form state
+                              value={field.value}
                               disabled={loadingModels || models.length === 0}
                             >
                               <FormControl>
@@ -942,49 +1003,26 @@ export function PromptForm({
                           </FormItem>
                         )}
                       />
-                      <FormField
-                        control={form.control}
-                        name="outputFormat"
-                        render={({ field }) => (
-                          <FormItem className="md:col-span-1">
-                            <Select 
-                              onValueChange={field.onChange} 
-                              defaultValue={field.value} // Or value={field.value} if you want it strictly controlled
-                            >
-                              <FormControl>
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Select format" />
-                                </SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                                <SelectItem value="png">PNG</SelectItem>
-                                <SelectItem value="jpg">JPG</SelectItem>
-                                <SelectItem value="webp">WebP</SelectItem>
-                              </SelectContent>
-                            </Select>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    </div>
 
-                    <div className="flex justify-end">
-                      <Button 
-                        type="button"
-                        onClick={handleReferenceImageGeneration}
-                        className={cn(
-                          "w-full md:w-auto px-8 py-2.5 font-medium text-base transition-all duration-300",
-                          creditDeducting 
-                            ? "bg-primary border-amber-500/30 shadow-[0_0_0_1px_rgba(245,158,11,0.1)]" 
-                            : "bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm"
-                        )}
-                        disabled={loadingModels || !uploadedImageDataUrl} // Disable if no image or models loading
-                        aria-label="Generate image from reference"
-                      >
-                        Generate with Image
-                      </Button>
+                      {/* Generate Button */}
+                      <div className="md:col-span-2">
+                        <Button 
+                          type="button"
+                          onClick={handleReferenceImageGeneration}
+                          className={cn(
+                            "w-full font-medium transition-all duration-300",
+                            creditDeducting 
+                              ? "bg-primary border-amber-500/30 shadow-[0_0_0_1px_rgba(245,158,11,0.1)]" 
+                              : "bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm"
+                          )}
+                          disabled={loadingModels || !uploadedImageDataUrl}
+                          aria-label="Generate image from reference"
+                        >
+                          Generate
+                        </Button>
+                      </div>
                     </div>
-                  </div>
+                  )}
                 </TabsContent>
               </Tabs>
             </form>
