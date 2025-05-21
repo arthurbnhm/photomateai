@@ -8,6 +8,8 @@ import { createBrowserSupabaseClient } from "@/lib/supabase"
 import { creditEvents } from "./CreditCounter"
 import { cn } from "@/lib/utils"
 import TextareaAutosize from 'react-textarea-autosize'
+import Image from 'next/image'
+import { Plus, UserSquare2 } from 'lucide-react'
 
 import { Button } from "@/components/ui/button"
 import {
@@ -168,7 +170,6 @@ export function PromptForm({
   const [selectedGender, setSelectedGender] = useState<string | null>(null);
   const [uploadedImageDataUrl, setUploadedImageDataUrl] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState("prompt"); // To track active tab
-  const [showReferenceGuideline, setShowReferenceGuideline] = useState(true); // New state for guideline overlay
 
   const placeholderExamples = useMemo(() => [
     "A woman portrait on studio grey background, smiling",
@@ -907,122 +908,138 @@ export function PromptForm({
                 </TabsContent>
 
                 <TabsContent value="reference">
-                  {showReferenceGuideline ? (
-                    <div className="w-full bg-card border border-border rounded-xl overflow-hidden shadow-lg p-5 space-y-4 mb-6">
-                      <div className="text-center">
-                        <h2 className="text-xl font-semibold">Quick Tips for Reference Images!</h2>
-                        <p className="text-sm text-muted-foreground mt-1">
-                          Use an existing image to guide the AI. Keep the composition, colors, and other elements while applying your trained model&rsquo;s style.
-                        </p>
+                  <div className="mb-4 p-4 text-sm text-muted-foreground flex flex-col items-start gap-4">
+                    {/* Visual Explanation Row - Now with responsive justification */}
+                    <div className="flex items-center justify-center md:justify-start gap-3 flex-wrap w-full">
+                      {/* Reference Images Block (with text below for alignment) */}
+                      <div className="flex flex-col items-center text-center">
+                        <div className="flex items-center gap-2 pl-1"> {/* Container for the two disordered images */}
+                          <div className="transform -rotate-3">
+                            <Image 
+                              src="/references/lavander.webp"
+                              alt="Reference photo example - lavender field"
+                              width={64} 
+                              height={64}
+                              className="rounded-lg object-cover shadow-sm border-4 border-white"
+                              priority
+                            />
+                          </div>
+                          <div className="transform rotate-3 translate-y-1">
+                            <Image
+                              src="/references/acacia.webp"
+                              alt="Reference photo example - acacia tree"
+                              width={64}
+                              height={64}
+                              className="rounded-lg object-cover shadow-sm border-4 border-white"
+                              priority
+                            />
+                          </div>
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-2">Reference Photo</p>
                       </div>
-                      <div className="space-y-3 py-3">
-                        <ul className="space-y-2 text-sm text-muted-foreground">
-                          <li className="flex items-start">
-                            <svg className="w-5 h-5 text-green-500 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"></path></svg>
-                            <span><strong>Keep Composition:</strong> The AI will try to match the layout and arrangement of your reference image.</span>
-                          </li>
-                          <li className="flex items-start">
-                            <svg className="w-5 h-5 text-green-500 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"></path></svg>
-                            <span><strong>Transfer Colors & Style:</strong> The model will adapt its output to the color palette and artistic style of your reference.</span>
-                          </li>
-                           <li className="flex items-start">
-                            <svg className="w-5 h-5 text-green-500 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"></path></svg>
-                            <span><strong>Apply Your Model:</strong> The selected trained model will be used to generate the new image, influenced by your reference.</span>
-                          </li>
-                        </ul>
+
+                      <Plus size={24} className="text-muted-foreground shrink-0" strokeWidth={3} />
+
+                      {/* "Your Model" Placeholder with disorder and size adjustment */}
+                      <div className="flex flex-col items-center text-center">
+                        <div className="transform -rotate-3 p-1 border-4 border-dashed border-muted-foreground/50 rounded-lg flex items-center justify-center w-16 h-16">
+                          <UserSquare2 size={32} className="text-primary/80" />
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-2">Your Model</p>
                       </div>
-                      <Button
-                        onClick={() => setShowReferenceGuideline(false)}
-                        className="w-full py-3"
+                    </div>
+                    
+                    {/* Explanatory Text */}
+                    <div className="mt-3 w-full">
+                      <p className="text-sm">
+                        Combine any <strong className="text-primary">reference photo</strong> (for its style, colors, and composition) with <strong className="text-primary">your trained AI model</strong> (featuring your unique look or subject).<br className="md:hidden" /><br className="md:hidden" /> The AI will craft a new image blending the reference&rsquo;s atmosphere with your model&rsquo;s distinct characteristics!
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
+                    {/* Image Uploader */}
+                    <div className="md:col-span-5">
+                      <ImageUpload 
+                        onImageChange={handleImageChange} 
+                        currentImageUrl={uploadedImageDataUrl}
+                        className="w-full"
+                      />
+                    </div>
+
+                    {/* Output Format Selector (moved before Model Selector) */}
+                    <FormField
+                      control={form.control}
+                      name="outputFormat"
+                      render={({ field }) => (
+                        <FormItem className="md:col-span-2">
+                          <Select 
+                            onValueChange={field.onChange} 
+                            defaultValue={field.value}
+                          >
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Select format" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="png">PNG</SelectItem>
+                              <SelectItem value="jpg">JPG</SelectItem>
+                              <SelectItem value="webp">WebP</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    {/* Model Selector (moved after Output Format Selector) */}
+                    <FormField
+                      control={form.control}
+                      name="modelId"
+                      render={({ field }) => (
+                        <FormItem className="md:col-span-3">
+                          <Select 
+                            onValueChange={field.onChange} 
+                            value={field.value}
+                            disabled={loadingModels || models.length === 0}
+                          >
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Select model" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {models.map((model) => (
+                                <SelectItem key={model.id} value={model.id}>
+                                  {model.display_name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    {/* Generate Button */}
+                    <div className="md:col-span-2">
+                      <Button 
+                        type="button"
+                        onClick={handleReferenceImageGeneration}
+                        className={cn(
+                          "w-full font-medium transition-all duration-300",
+                          creditDeducting 
+                            ? "bg-primary border-amber-500/30 shadow-[0_0_0_1px_rgba(245,158,11,0.1)]" 
+                            : "bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm"
+                        )}
+                        disabled={loadingModels || !uploadedImageDataUrl}
+                        aria-label="Generate image from reference"
                       >
-                        Got it, Let&rsquo;s Upload an Image!
+                        Generate
                       </Button>
                     </div>
-                  ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
-                      {/* Image Uploader */}
-                      <div className="md:col-span-5">
-                        <ImageUpload 
-                          onImageChange={handleImageChange} 
-                          currentImageUrl={uploadedImageDataUrl}
-                          className="w-full"
-                        />
-                      </div>
-
-                      {/* Output Format Selector (moved before Model Selector) */}
-                      <FormField
-                        control={form.control}
-                        name="outputFormat"
-                        render={({ field }) => (
-                          <FormItem className="md:col-span-2">
-                            <Select 
-                              onValueChange={field.onChange} 
-                              defaultValue={field.value}
-                            >
-                              <FormControl>
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Select format" />
-                                </SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                                <SelectItem value="png">PNG</SelectItem>
-                                <SelectItem value="jpg">JPG</SelectItem>
-                                <SelectItem value="webp">WebP</SelectItem>
-                              </SelectContent>
-                            </Select>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-
-                      {/* Model Selector (moved after Output Format Selector) */}
-                      <FormField
-                        control={form.control}
-                        name="modelId"
-                        render={({ field }) => (
-                          <FormItem className="md:col-span-3">
-                            <Select 
-                              onValueChange={field.onChange} 
-                              value={field.value}
-                              disabled={loadingModels || models.length === 0}
-                            >
-                              <FormControl>
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Select model" />
-                                </SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                                {models.map((model) => (
-                                  <SelectItem key={model.id} value={model.id}>
-                                    {model.display_name}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-
-                      {/* Generate Button */}
-                      <div className="md:col-span-2">
-                        <Button 
-                          type="button"
-                          onClick={handleReferenceImageGeneration}
-                          className={cn(
-                            "w-full font-medium transition-all duration-300",
-                            creditDeducting 
-                              ? "bg-primary border-amber-500/30 shadow-[0_0_0_1px_rgba(245,158,11,0.1)]" 
-                              : "bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm"
-                          )}
-                          disabled={loadingModels || !uploadedImageDataUrl}
-                          aria-label="Generate image from reference"
-                        >
-                          Generate
-                        </Button>
-                      </div>
-                    </div>
-                  )}
+                  </div>
                 </TabsContent>
               </Tabs>
             </form>

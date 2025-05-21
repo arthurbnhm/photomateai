@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, ChangeEvent, useEffect, DragEvent } from 'react';
-import Image from 'next/image';
+import NextImage from 'next/image';
 import { X, FolderUp } from 'lucide-react';
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -14,8 +14,8 @@ interface ImageUploadProps {
 
 export function ImageUpload({ onImageChange, currentImageUrl, className }: ImageUploadProps) {
   const [dragActive, setDragActive] = useState(false);
+  const [uploadedFileName, setUploadedFileName] = useState<string | null>(null);
 
-  // Reset input when currentImageUrl is cleared externally
   useEffect(() => {
     if (!currentImageUrl) {
       const input = document.getElementById('imageUploadInput') as HTMLInputElement;
@@ -31,14 +31,16 @@ export function ImageUpload({ onImageChange, currentImageUrl, className }: Image
       reader.onloadend = () => {
         const result = reader.result as string;
         onImageChange(result);
+        setUploadedFileName(file.name);
       };
       reader.readAsDataURL(file);
     } else if (file) {
-      // Handle non-image file type if needed, e.g., show an error
       console.warn("Attempted to upload non-image file:", file.name);
-      onImageChange(null); // Clear any existing image
+      onImageChange(null); 
+      setUploadedFileName(null);
     } else {
       onImageChange(null);
+      setUploadedFileName(null);
     }
   }, [onImageChange]);
 
@@ -46,10 +48,10 @@ export function ImageUpload({ onImageChange, currentImageUrl, className }: Image
     processFile(event.target.files?.[0] || null);
   }, [processFile]);
 
-  const handleRemoveImage = useCallback((e?: React.MouseEvent<HTMLButtonElement>) => {
-    e?.stopPropagation(); // Prevent click from triggering file input if 'x' is over dropzone
+  const handleRemoveImage = useCallback((e?: React.MouseEvent<HTMLDivElement | HTMLButtonElement> | React.KeyboardEvent<HTMLDivElement>) => {
+    e?.stopPropagation(); 
     onImageChange(null);
-    // Input value is cleared by the useEffect hook when currentImageUrl becomes null
+    setUploadedFileName(null);
   }, [onImageChange]);
 
   const handleDrop = useCallback((event: DragEvent<HTMLButtonElement>) => {
@@ -74,31 +76,8 @@ export function ImageUpload({ onImageChange, currentImageUrl, className }: Image
     }
   };
 
-
-  if (currentImageUrl) {
-    return (
-      <div className={cn("relative group w-full max-w-md mx-auto aspect-square", className)}>
-        <Image
-          src={currentImageUrl}
-          alt="Uploaded image"
-          fill
-          sizes="(max-width: 768px) 100vw, (max-width: 1024px) 50vw, 33vw"
-          className="object-contain rounded-lg shadow-md"
-        />
-        <button
-          type="button"
-          onClick={handleRemoveImage}
-          className="absolute top-2 right-2 bg-background/70 hover:bg-background/90 text-foreground rounded-full p-1.5 opacity-0 group-hover:opacity-100 transition-opacity focus:opacity-100"
-          aria-label="Remove image"
-        >
-          <X size={18} />
-        </button>
-      </div>
-    );
-  }
-
   return (
-    <div className={cn("w-full", className)}>
+    <div className={cn("w-full", className)}> 
       <input
         id="imageUploadInput"
         type="file"
@@ -109,8 +88,11 @@ export function ImageUpload({ onImageChange, currentImageUrl, className }: Image
       <Button
         variant="outline"
         className={cn(
-          "w-full h-10 flex items-center justify-between text-muted-foreground font-normal",
-          dragActive ? "ring-2 ring-primary border-primary bg-primary/5" : "hover:border-muted-foreground/70"
+          "w-full h-9 flex items-center justify-between",
+          "font-normal",
+          dragActive
+            ? "ring-2 ring-primary border-primary bg-primary/5 text-primary"
+            : "text-muted-foreground"
         )}
         onClick={() => document.getElementById('imageUploadInput')?.click()}
         onDragEnter={handleDragEvent}
@@ -119,10 +101,45 @@ export function ImageUpload({ onImageChange, currentImageUrl, className }: Image
         onDrop={handleDrop}
         type="button"
       >
-        <span className={cn(dragActive ? "text-primary" : "")}>
-          Drag image or click to upload
+        <span>
+          {currentImageUrl && uploadedFileName 
+            ? (uploadedFileName.length > 25 ? uploadedFileName.substring(0, 22) + "..." : uploadedFileName)
+            : "Choose or drag an image"}
         </span>
-        <FolderUp size={18} className={cn("ml-2 flex-shrink-0", dragActive ? "text-primary" : "text-muted-foreground/70")} />
+        
+        <div className="ml-2 flex-shrink-0 flex items-center gap-1.5"> 
+          {currentImageUrl ? (
+            <>
+              <NextImage
+                src={currentImageUrl}
+                alt="Uploaded thumbnail"
+                width={24} 
+                height={24}
+                className="object-contain rounded bg-muted/30" 
+              />
+              <div
+                role="button"
+                tabIndex={0}
+                onClick={handleRemoveImage}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    handleRemoveImage(e);
+                  }
+                }}
+                className="p-0.5 bg-transparent hover:bg-muted rounded-full text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                aria-label="Remove image"
+              >
+                <X size={14} />
+              </div>
+            </>
+          ) : (
+            <FolderUp
+              size={18}
+              className={cn(dragActive ? "" : "opacity-70")} 
+            />
+          )}
+        </div>
       </Button>
     </div>
   );
