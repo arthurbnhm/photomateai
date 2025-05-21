@@ -393,7 +393,7 @@ export function PromptForm({
 
       const supabase = getSupabase();
       const abortController = new AbortController();
-      const timeoutId = setTimeout(() => abortController.abort(), 15000);
+      const timeoutId = setTimeout(() => abortController.abort(), 30000);
       let authHeader = {};
       if (userId) {
         const { data: { session } } = await supabase.auth.getSession();
