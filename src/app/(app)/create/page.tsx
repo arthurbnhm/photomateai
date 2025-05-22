@@ -96,7 +96,15 @@ function CreatePageContent() {
   
   // State for user models
   const [userModels, setUserModels] = useState<Model[]>([]);
-  const [isLoadingUserModels, setIsLoadingUserModels] = useState(true);
+  const [isLoadingUserModels, setIsLoadingUserModels] = useState(true); // Initialize to true
+
+  // State to control the initial model loading screen
+  const [allowModelLoadingScreen, setAllowModelLoadingScreen] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('photomate_hasShownModelsOnce') !== 'true';
+    }
+    return true; // Default to true if localStorage is not available (e.g., SSR)
+  });
 
   const [isMounted, setIsMounted] = useState(false);
   const { user } = useAuth();
@@ -110,9 +118,8 @@ function CreatePageContent() {
   useEffect(() => {
     if (isMounted && user) {
       const fetchModels = async () => {
-        setIsLoadingUserModels(true);
+        // setIsLoadingUserModels(true); // No longer needed here, initialized to true
         try {
-          // Fetch models with status "succeeded" and not deleted
           const response = await fetch(`/api/model/list?is_cancelled=false&is_deleted=false&status=succeeded`);
           if (!response.ok) {
             throw new Error('Failed to fetch models');
@@ -120,25 +127,36 @@ function CreatePageContent() {
           const data = await response.json();
           if (data.success && data.models) {
             setUserModels(data.models);
+            if (typeof window !== 'undefined') {
+              localStorage.setItem('photomate_hasShownModelsOnce', 'true');
+            }
+            setAllowModelLoadingScreen(false);
           } else {
-            setUserModels([]); // Ensure it's an empty array if fetch fails or no models
+            setUserModels([]);
+            if (typeof window !== 'undefined') {
+              localStorage.setItem('photomate_hasShownModelsOnce', 'true');
+            }
+            setAllowModelLoadingScreen(false);
           }
         } catch (err) {
           console.error('Error fetching user models:', err);
-          setUserModels([]); // Set to empty on error
+          setUserModels([]);
         } finally {
           setIsLoadingUserModels(false);
         }
       };
       fetchModels();
     } else if (!user && isMounted) {
-      // If no user, no models to load, and not loading
       setUserModels([]);
-      setIsLoadingUserModels(false);
+      setIsLoadingUserModels(false); // Set to false if no user
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('photomate_hasShownModelsOnce');
+      }
+      setAllowModelLoadingScreen(true);
     }
   }, [isMounted, user]);
 
-  // Separate Supabase fetch logic (moved from ImageHistory)
+  // Separate Supabase fetch logic for image history
   const fetchFromSupabase = useCallback(async (silentUpdate: boolean = false) => {
     const abortController = new AbortController();
     const timeoutId = setTimeout(() => abortController.abort(), 10000);
@@ -217,7 +235,7 @@ function CreatePageContent() {
     }
   }, [user?.id, supabaseClient]);
 
-  // Load generations from Supabase (moved from ImageHistory)
+  // Load generations from Supabase
   const loadGenerations = useCallback(async (silentUpdate: boolean = false) => {
     try {
       if (!silentUpdate) {
@@ -230,7 +248,7 @@ function CreatePageContent() {
     }
   }, [fetchFromSupabase]);
 
-  // Initial data load for image history (moved from ImageHistory)
+  // Initial data load for image history
   useEffect(() => {
     if (isMounted && user) {
       loadGenerations(false);
@@ -240,7 +258,7 @@ function CreatePageContent() {
     }
   }, [isMounted, user, loadGenerations]);
 
-  // Keep the visibility change effect to reload when the tab becomes visible again
+  // Visibility change effect for image history
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible' && isMounted && user) {
@@ -255,7 +273,8 @@ function CreatePageContent() {
   }, [loadGenerations, isMounted, user]);
 
   const selectedHeaderImages = useMemo(() => {
-    if (isLoadingHistory && isLoadingUserModels) { // Consider both loading states
+    // Show default images if either history or user models are still in their initial loading phase controlled by allowModelLoadingScreen
+    if (isLoadingHistory || (isLoadingUserModels && allowModelLoadingScreen)) {
       return DEFAULT_HEADER_IMAGES;
     }
 
@@ -269,10 +288,11 @@ function CreatePageContent() {
       }
     }
     return DEFAULT_HEADER_IMAGES;
-  }, [generations, isLoadingHistory, isLoadingUserModels]);
+  }, [generations, isLoadingHistory, isLoadingUserModels, allowModelLoadingScreen]);
 
 
-  if (isLoadingUserModels) {
+  // Conditional rendering for the initial model loading screen
+  if (isLoadingUserModels && allowModelLoadingScreen) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] p-4 text-center">
         <p>Checking your AI models...</p>
@@ -280,7 +300,9 @@ function CreatePageContent() {
     );
   }
 
-  if (!userModels || userModels.length === 0) {
+  // Conditional rendering for "no models" screen
+  // This shows if loading is complete AND there are no models.
+  if (!isLoadingUserModels && (!userModels || userModels.length === 0)) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[calc(100vh-200px)] sm:min-h-[60vh] p-4 text-center">
         <div className="max-w-xl">
@@ -310,11 +332,16 @@ function CreatePageContent() {
     );
   }
 
+  // Main content (PromptForm, ImageHistory)
+  // This is reached if:
+  // 1. !isLoadingUserModels && userModels.length > 0 (models loaded and exist)
+  // 2. isLoadingUserModels && !allowModelLoadingScreen (models loading in background after initial check)
   return (
     <div className="max-w-4xl mx-auto p-4 sm:p-8 md:p-12">
       <div className="mb-8 hidden sm:flex items-center justify-center space-x-4">
         <div className="flex items-center cursor-default">
-          {isLoadingHistory ? (
+          { /* Loading state for header images based on selectedHeaderImages logic */ }
+          {selectedHeaderImages === DEFAULT_HEADER_IMAGES && (isLoadingHistory || (isLoadingUserModels && allowModelLoadingScreen)) ? (
             <>
               <div className="relative w-8 h-8 rounded-md overflow-hidden shadow-sm border-2 border-white transform -rotate-6 mr-[-10px]">
                 <div className="w-full h-full bg-gray-300 animate-pulse"></div>
@@ -330,11 +357,7 @@ function CreatePageContent() {
             selectedHeaderImages.map((src: string, index: number) => (
               <div 
                 key={src || index}
-                className={`relative w-8 h-8 rounded-md overflow-hidden shadow-sm border-2 border-white transition-all duration-300 ease-out hover:-translate-y-1 hover:z-20 ${
-                  index === 0 ? 'transform -rotate-6 mr-[-10px] hover:rotate-[-10deg] hover:scale-110' :
-                  index === 1 ? 'z-10 transform scale-110 hover:scale-125' :
-                  'transform rotate-6 ml-[-10px] hover:rotate-[10deg] hover:scale-110'
-                }`}
+                className={`relative w-8 h-8 rounded-md overflow-hidden shadow-sm border-2 border-white transition-all duration-300 ease-out hover:-translate-y-1 hover:z-20 ${index === 0 ? 'transform -rotate-6 mr-[-10px] hover:rotate-[-10deg] hover:scale-110' : index === 1 ? 'z-10 transform scale-110 hover:scale-125' : 'transform rotate-6 ml-[-10px] hover:rotate-[10deg] hover:scale-110'}`}
               >
                 <Image src={src} alt={`Header image ${index + 1}`} fill className="object-cover" sizes="32px" unoptimized={!src.startsWith("/landing/")} />
               </div>
@@ -354,7 +377,7 @@ function CreatePageContent() {
         <ImageHistory 
           generations={generations}
           setGenerations={setGenerations}
-          isLoading={isLoadingHistory}
+          isLoading={isLoadingHistory} // This is for ImageHistory's own loading state
           error={errorHistory}
           loadGenerations={loadGenerations}
           pendingGenerations={pendingGenerations}

@@ -267,7 +267,6 @@ export async function POST(request: Request) {
         completed_at?: string | null;
         predict_time?: number | null;
         cost?: number | null;
-        new_model_version?: string | null;
         replicate_raw_output?: Record<string, unknown>;
       } = {
         status: webhookData.status,
@@ -276,7 +275,6 @@ export async function POST(request: Request) {
         completed_at: completedAt,
         predict_time: predictTime,
         cost: cost,
-        new_model_version: finalModelVersionToStore,
         replicate_raw_output: webhookData.output,
       };
 
@@ -297,8 +295,7 @@ export async function POST(request: Request) {
         const { error: modelUpdateError } = await supabase
           .from('models')
           .update({ 
-            latest_version_id: finalModelVersionToStore,
-            last_trained_at: completedAt || new Date().toISOString(),
+            version: finalModelVersionToStore,
             status: 'trained' // Mark the model as trained
           })
           .eq('id', training.model_id);
