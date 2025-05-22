@@ -2,10 +2,12 @@
 
 import { useState, Suspense, useEffect, useCallback, useRef, useMemo } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import { PromptForm } from "@/components/PromptForm";
 import { ImageHistory } from "@/components/ImageHistory";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { Button } from "@/components/ui/button";
 
 // Define the PendingGeneration type
 type PendingGeneration = {
@@ -60,6 +62,14 @@ type PredictionData = {
   } | null
 }
 
+// Define the Model interface (similar to PromptForm)
+interface Model {
+  id: string;
+  model_id: string;
+  display_name: string;
+  // Add other fields if necessary, matching the API response
+}
+
 // Simplified processOutput (moved from ImageHistory)
 const processOutput = (storageUrls: string[] | null): ImageWithStatus[] => {
   if (!storageUrls || !Array.isArray(storageUrls)) {
@@ -83,6 +93,11 @@ function CreatePageContent() {
   const [generations, setGenerations] = useState<ImageGeneration[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
   const [errorHistory, setErrorHistory] = useState<string | null>(null);
+  
+  // State for user models
+  const [userModels, setUserModels] = useState<Model[]>([]);
+  const [isLoadingUserModels, setIsLoadingUserModels] = useState(true);
+
   const [isMounted, setIsMounted] = useState(false);
   const { user } = useAuth();
   const supabaseClient = useRef(createSupabaseBrowserClient());
@@ -91,14 +106,45 @@ function CreatePageContent() {
     setIsMounted(true);
   }, []);
 
+  // Fetch user models
+  useEffect(() => {
+    if (isMounted && user) {
+      const fetchModels = async () => {
+        setIsLoadingUserModels(true);
+        try {
+          // Fetch models with status "succeeded" and not deleted
+          const response = await fetch(`/api/model/list?is_cancelled=false&is_deleted=false&status=succeeded`);
+          if (!response.ok) {
+            throw new Error('Failed to fetch models');
+          }
+          const data = await response.json();
+          if (data.success && data.models) {
+            setUserModels(data.models);
+          } else {
+            setUserModels([]); // Ensure it's an empty array if fetch fails or no models
+          }
+        } catch (err) {
+          console.error('Error fetching user models:', err);
+          setUserModels([]); // Set to empty on error
+        } finally {
+          setIsLoadingUserModels(false);
+        }
+      };
+      fetchModels();
+    } else if (!user && isMounted) {
+      // If no user, no models to load, and not loading
+      setUserModels([]);
+      setIsLoadingUserModels(false);
+    }
+  }, [isMounted, user]);
+
   // Separate Supabase fetch logic (moved from ImageHistory)
   const fetchFromSupabase = useCallback(async (silentUpdate: boolean = false) => {
     const abortController = new AbortController();
     const timeoutId = setTimeout(() => abortController.abort(), 10000);
 
     if (!silentUpdate) {
-      // Set loading true only if it's not a silent update at the beginning of the try block
-      // setIsLoadingHistory(true); // Already set by loadGenerations
+      // setIsLoadingHistory(true); // Already set by loadGenerations caller
     }
 
     try {
@@ -123,8 +169,6 @@ function CreatePageContent() {
       clearTimeout(timeoutId);
       
       if (error) {
-        // Even if 'error' is not an Error instance, throw it to be caught below.
-        // The catch block will provide more details.
         throw error; 
       }
       
@@ -147,10 +191,6 @@ function CreatePageContent() {
         setGenerations(processedData);
       }
       
-      // This was inside the try block, move to finally or ensure it's called in catch too
-      // if (!silentUpdate) {
-      //   setIsLoadingHistory(false);
-      // }
     } catch (fetchError: unknown) { 
       clearTimeout(timeoutId);
       console.error("Full error object in fetchFromSupabase catch:", JSON.stringify(fetchError, null, 2));
@@ -158,13 +198,11 @@ function CreatePageContent() {
       if (fetchError instanceof Error) {
         if (fetchError.name === 'AbortError') {
           console.warn('Fetch generations aborted due to timeout');
-          // setErrorHistory('Failed to load image history: Request timed out.'); // setErrorHistory is handled by loadGenerations caller
         } else {
           console.error('Error fetching generations (Error instance):', fetchError);
           setErrorHistory(`Failed to load image history: ${fetchError.message}`);
         }
       } else {
-        // Handle non-Error objects thrown (e.g., plain objects from Supabase client)
         let errorMessage = 'An unknown error occurred while loading image history.';
         if (typeof fetchError === 'object' && fetchError !== null && 'message' in fetchError) {
           errorMessage = `Failed to load image history: ${(fetchError as { message: string }).message}`;
@@ -177,7 +215,7 @@ function CreatePageContent() {
         setIsLoadingHistory(false);
       }
     }
-  }, [user?.id, supabaseClient, setErrorHistory, setIsLoadingHistory]); // Added supabaseClient, setErrorHistory, setIsLoadingHistory
+  }, [user?.id, supabaseClient]);
 
   // Load generations from Supabase (moved from ImageHistory)
   const loadGenerations = useCallback(async (silentUpdate: boolean = false) => {
@@ -189,15 +227,16 @@ function CreatePageContent() {
       await fetchFromSupabase(silentUpdate);
     } catch {
       // Error handling is now within fetchFromSupabase
-      // setErrorHistory is set there if needed.
-      // setIsLoadingHistory(false) is also handled in fetchFromSupabase's finally block.
     }
   }, [fetchFromSupabase]);
 
-  // Initial data load (moved from ImageHistory)
+  // Initial data load for image history (moved from ImageHistory)
   useEffect(() => {
     if (isMounted && user) {
       loadGenerations(false);
+    } else if (!user && isMounted) {
+        setIsLoadingHistory(false); // Not loading if no user
+        setGenerations([]);
     }
   }, [isMounted, user, loadGenerations]);
 
@@ -216,7 +255,7 @@ function CreatePageContent() {
   }, [loadGenerations, isMounted, user]);
 
   const selectedHeaderImages = useMemo(() => {
-    if (isLoadingHistory) {
+    if (isLoadingHistory && isLoadingUserModels) { // Consider both loading states
       return DEFAULT_HEADER_IMAGES;
     }
 
@@ -230,7 +269,46 @@ function CreatePageContent() {
       }
     }
     return DEFAULT_HEADER_IMAGES;
-  }, [generations, isLoadingHistory]);
+  }, [generations, isLoadingHistory, isLoadingUserModels]);
+
+
+  if (isLoadingUserModels) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] p-4 text-center">
+        <p>Checking your AI models...</p>
+      </div>
+    );
+  }
+
+  if (!userModels || userModels.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[calc(100vh-200px)] sm:min-h-[60vh] p-4 text-center">
+        <div className="max-w-xl">
+          <div className="mb-8 flex items-center justify-center space-x-4">
+            <div className="flex items-center cursor-default">
+              {DEFAULT_HEADER_IMAGES.map((src, index) => (
+                <div 
+                  key={src || index}
+                  className={`relative w-10 h-10 sm:w-12 sm:h-12 rounded-lg overflow-hidden shadow-md border-2 border-white transition-all duration-300 ease-out hover:-translate-y-1 hover:z-20 ${index === 0 ? 'transform -rotate-6 mr-[-12px] sm:mr-[-15px] hover:rotate-[-10deg] hover:scale-110' : index === 1 ? 'z-10 transform scale-110 hover:scale-125' : 'transform rotate-6 ml-[-12px] sm:ml-[-15px] hover:rotate-[10deg] hover:scale-110'}`}
+                >
+                  <Image src={src} alt={`Illustrative image ${index + 1}`} fill className="object-cover" sizes="(max-width: 640px) 40px, 48px" />
+                </div>
+              ))}
+            </div>
+          </div>
+          <h1 className="text-3xl font-semibold mb-4">Create Your First AI Model</h1>
+          <p className="text-muted-foreground mb-6">
+            You haven&apos;t trained any AI models yet. Train a model with your photos to start generating unique images of yourself!
+          </p>
+          <Link href="/train" passHref>
+            <Button size="lg" variant="default">
+              Train Your Model
+            </Button>
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-4xl mx-auto p-4 sm:p-8 md:p-12">
