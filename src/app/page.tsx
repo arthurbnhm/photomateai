@@ -342,10 +342,10 @@ export default function Home() {
                       <Check className="h-4 w-4 text-green-500 flex-shrink-0" />
                       <span>Create 1 AI avatar model</span>
                     </li>
-                    <li className="flex items-center gap-2">
+                    {/* <li className="flex items-center gap-2">
                       <Check className="h-4 w-4 text-green-500 flex-shrink-0" />
-                      <span>Flux™ 1.1 photorealistic model</span>
-                    </li>
+                      <span>Photorealistic</span>
+                    </li> */}
                     <li className="flex items-center gap-2">
                       <Check className="h-4 w-4 text-green-500 flex-shrink-0" />
                       <span>Image Reference</span>
@@ -380,10 +380,10 @@ export default function Home() {
                       <Check className="h-4 w-4 text-green-500 flex-shrink-0" />
                       <span>Create 3 AI avatar models</span>
                     </li>
-                    <li className="flex items-center gap-2">
+                    {/* <li className="flex items-center gap-2">
                       <Check className="h-4 w-4 text-green-500 flex-shrink-0" />
-                      <span>Flux™ 1.1 photorealistic model</span>
-                    </li>
+                      <span>Photorealistic</span>
+                    </li> */}
                     <li className="flex items-center gap-2">
                       <Check className="h-4 w-4 text-green-500 flex-shrink-0" />
                       <span>Image Reference</span>
@@ -423,10 +423,10 @@ export default function Home() {
                       <Check className="h-4 w-4 text-green-500 flex-shrink-0" />
                       <span>Create 10 AI avatar models</span>
                     </li>
-                    <li className="flex items-center gap-2">
+                    {/* <li className="flex items-center gap-2">
                       <Check className="h-4 w-4 text-green-500 flex-shrink-0" />
-                      <span>Flux™ 1.1 photorealistic model</span>
-                    </li>
+                      <span>Photorealistic</span>
+                    </li> */}
                     <li className="flex items-center gap-2">
                       <Check className="h-4 w-4 text-green-500 flex-shrink-0" />
                       <span>Image Reference</span>

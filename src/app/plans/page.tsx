@@ -62,10 +62,10 @@ export default async function PlansPage() {
                       <Check className="h-4 w-4 text-green-500" />
                       <span>Create 1 AI Model per month</span>
                     </span>
-                    <span className="flex items-center gap-x-2">
+                    {/* <span className="flex items-center gap-x-2">
                       <Check className="h-4 w-4 text-green-500" />
-                      <span>Flux™ 1.1 photorealistic model</span>
-                    </span>
+                      <span>Photorealistic</span>
+                    </span> */}
                     <span className="flex items-center gap-x-2">
                       <Check className="h-4 w-4 text-green-500" />
                       <span>Image Reference</span>
@@ -95,10 +95,10 @@ export default async function PlansPage() {
                       <Check className="h-4 w-4 text-green-500" />
                       <span>Create 3 AI Models per month</span>
                     </span>
-                    <span className="flex items-center gap-x-2">
+                    {/* <span className="flex items-center gap-x-2">
                       <Check className="h-4 w-4 text-green-500" />
-                      <span>Flux™ 1.1 photorealistic model</span>
-                    </span>
+                      <span>Photorealistic</span>
+                    </span> */}
                     <span className="flex items-center gap-x-2">
                       <Check className="h-4 w-4 text-green-500" />
                       <span>Image Reference</span>
@@ -119,47 +119,9 @@ export default async function PlansPage() {
               </CardFooter>
             </Card>
 
-            {/* Executive Plan */}
+            {/* Executive Plan - Temporarily simplified for debugging */}
             {/*
-            <Card className="flex flex-col">
-              <CardHeader>
-                <CardTitle className="flex items-baseline gap-x-2">
-                  <span className="text-2xl font-bold">$79</span>
-                  <span className="text-sm text-muted-foreground">• Executive</span>
-                </CardTitle>
-                <CardDescription className="space-y-2">
-                  <span className="block space-y-2">
-                    <span className="flex items-center gap-x-2">
-                      <Check className="h-4 w-4 text-green-500" />
-                      <span>Take 3,000 AI Photos (credits)</span>
-                    </span>
-                    <span className="flex items-center gap-x-2">
-                      <Check className="h-4 w-4 text-green-500" />
-                      <span>Create 10 AI Models per month</span>
-                    </span>
-                    <span className="flex items-center gap-x-2">
-                      <Check className="h-4 w-4 text-green-500" />
-                      <span>Flux™ 1.1 photorealistic model</span>
-                    </span>
-                    <span className="flex items-center gap-x-2">
-                      <Check className="h-4 w-4 text-green-500" />
-                      <span>Image Reference</span>
-                    </span>
-                    <span className="flex items-center gap-x-2">
-                      <Check className="h-4 w-4 text-green-500" />
-                      <span>Upscaler (coming soon)</span>
-                    </span>
-                    <span className="flex items-center gap-x-2">
-                      <Check className="h-4 w-4 text-green-500" />
-                      <span>Animate Images (coming soon)</span>
-                    </span>
-                  </span>
-                </CardDescription>
-              </CardHeader>
-              <CardFooter className="mt-auto flex justify-end">
-                <SubscriptionButton plan="executive" className="w-full sm:w-32" />
-              </CardFooter>
-            </Card>
+              <div>Executive Plan Content Placeholder</div>
             */}
           </div>
         </div>
