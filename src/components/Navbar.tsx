@@ -196,26 +196,45 @@ export function Navbar({
           </Link>
           
           {/* Desktop Navigation */}
-          <nav className="hidden md:flex items-center">
+          <nav className="hidden md:flex items-center gap-2">
             {showLandingLinks && (
-              <ul className="flex space-x-8 mr-8">
+              <ul className="flex space-x-2">
                 <li>
-                  <a 
-                    href="#features" 
-                    className="hover:text-blue-500"
-                    onClick={(e) => handleAnchorClick(e, '#features')}
+                  <Button 
+                    variant="ghost" 
+                    className="h-9 w-auto px-3"
+                    asChild
                   >
-                    Features
-                  </a>
+                    <a 
+                      href="#features" 
+                      onClick={(e) => handleAnchorClick(e, '#features')}
+                    >
+                      Features
+                    </a>
+                  </Button>
                 </li>
                 <li>
-                  <a 
-                    href="#pricing" 
-                    className="hover:text-blue-500"
-                    onClick={(e) => handleAnchorClick(e, '#pricing')}
+                  <Button 
+                    variant="ghost" 
+                    className="h-9 w-auto px-3"
+                    asChild
                   >
-                    Pricing
-                  </a>
+                    <a 
+                      href="#pricing" 
+                      onClick={(e) => handleAnchorClick(e, '#pricing')}
+                    >
+                      Pricing
+                    </a>
+                  </Button>
+                </li>
+                <li>
+                  <Button 
+                    variant="ghost" 
+                    className="h-9 w-auto px-3"
+                    asChild
+                  >
+                    <a href="mailto:arthurbnhm@gmail.com">Contact</a>
+                  </Button>
                 </li>
               </ul>
             )}
@@ -252,6 +271,13 @@ export function Navbar({
                           className="h-9 w-auto px-3"
                           asChild
                         >
+                          <a href="mailto:arthurbnhm@gmail.com">Contact</a>
+                        </Button>
+                        <Button 
+                          variant="ghost" 
+                          className="h-9 w-auto px-3"
+                          asChild
+                        >
                           <Link href="https://billing.stripe.com/p/login/6oE14c04k7BpeFGfYY" target="_blank" rel="noopener noreferrer">
                             Billing
                           </Link>
@@ -278,6 +304,13 @@ export function Navbar({
                           asChild
                         >
                           <Link href="/create">Create</Link>
+                        </Button>
+                        <Button 
+                          variant="ghost" 
+                          className="h-9 w-auto px-3"
+                          asChild
+                        >
+                          <a href="mailto:arthurbnhm@gmail.com">Contact</a>
                         </Button>
                         <Button 
                           variant="ghost" 
@@ -391,6 +424,15 @@ export function Navbar({
                       Pricing
                     </a>
                   </li>
+                  <li className="menu-item">
+                    <a 
+                      href="mailto:arthurbnhm@gmail.com" 
+                      className="hover:text-blue-500 font-bold"
+                      onClick={() => setMobileMenuOpen(false)}
+                    >
+                      Contact
+                    </a>
+                  </li>
                 </>
               )}
               
@@ -427,15 +469,13 @@ export function Navbar({
                         </Link>
                       </li>
                       <li className="menu-item">
-                        <Link 
-                          href="https://billing.stripe.com/p/login/6oE14c04k7BpeFGfYY" 
-                          target="_blank" 
-                          rel="noopener noreferrer" 
+                        <a 
+                          href="mailto:arthurbnhm@gmail.com" 
                           className="hover:text-blue-500 font-bold"
                           onClick={() => setMobileMenuOpen(false)}
                         >
-                          Billing
-                        </Link>
+                          Contact
+                        </a>
                       </li>
                     </>
                   ) : isTrainPage ? (
@@ -457,15 +497,13 @@ export function Navbar({
                         </Link>
                       </li>
                       <li className="menu-item">
-                        <Link 
-                          href="https://billing.stripe.com/p/login/6oE14c04k7BpeFGfYY" 
-                          target="_blank" 
-                          rel="noopener noreferrer" 
+                        <a 
+                          href="mailto:arthurbnhm@gmail.com" 
                           className="hover:text-blue-500 font-bold"
                           onClick={() => setMobileMenuOpen(false)}
                         >
-                          Billing
-                        </Link>
+                          Contact
+                        </a>
                       </li>
                     </>
                   ) : null}
