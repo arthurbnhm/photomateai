@@ -294,14 +294,36 @@ export async function POST(request: NextRequest) {
     if (image_data_url) {
       // Image is provided, prepare it for Replicate
       try {
+        // Validate data URL format first
+        const dataUrlRegex = /^data:image\/[a-zA-Z]*;base64,([A-Za-z0-9+/]+=*)?$/;
+        if (!dataUrlRegex.test(image_data_url)) {
+          throw new Error("Invalid image data URL format. Expected format: data:image/[type];base64,[data]");
+        }
+        
         // Convert base64 data URL to Buffer
         // Expected format: "data:[<mediatype>];base64,<data>"
         const base64Data = image_data_url.split(',')[1];
         if (!base64Data) {
-          throw new Error("Invalid image data URL format.");
+          throw new Error("No base64 data found in image data URL.");
         }
-        const imageBuffer = Buffer.from(base64Data, 'base64');
-        inputParams.image = imageBuffer;
+        
+        // Validate base64 format
+        try {
+          const imageBuffer = Buffer.from(base64Data, 'base64');
+          
+          // Validate that we got a reasonable buffer size (not empty, not too large)
+          if (imageBuffer.length === 0) {
+            throw new Error("Empty image data");
+          }
+          if (imageBuffer.length > 10 * 1024 * 1024) { // 10MB limit
+            throw new Error("Image data too large");
+          }
+          
+          inputParams.image = imageBuffer;
+        } catch (bufferError) {
+          throw new Error(`Invalid base64 data: ${bufferError instanceof Error ? bufferError.message : 'Unknown error'}`);
+        }
+        
         // Prompt strength is more relevant for img2img
         inputParams.prompt_strength = 0.8; // Or make this configurable
         // Remove aspectRatio as it's ignored by Replicate when an image is provided

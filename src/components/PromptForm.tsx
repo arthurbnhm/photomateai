@@ -428,10 +428,30 @@ export function PromptForm({
         requestBody.image_data_url = imageDataUrl;
       }
 
+      // Validate and sanitize the request body before sending
+      let requestBodyString: string;
+      try {
+        // Additional validation for image data URL if present
+        if (requestBody.image_data_url) {
+          const dataUrlRegex = /^data:image\/[a-zA-Z]*;base64,([A-Za-z0-9+/]+=*)?$/;
+          if (!dataUrlRegex.test(requestBody.image_data_url)) {
+            throw new Error('Invalid image data URL format');
+          }
+        }
+        
+        requestBodyString = JSON.stringify(requestBody);
+      } catch (jsonError) {
+        console.error('Error stringifying request body:', jsonError);
+        setError('Invalid image data. Please try uploading a different image.');
+        removePendingGeneration(tempId);
+        onGenerationComplete?.();
+        return;
+      }
+
       const response = await fetch('/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...authHeader },
-        body: JSON.stringify(requestBody),
+        body: requestBodyString,
         signal: abortController.signal
       });
       clearTimeout(timeoutId);

@@ -7,6 +7,18 @@ import imageCompression from 'browser-image-compression';
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 
+// Utility function to validate base64 data
+const isValidBase64 = (str: string): boolean => {
+  try {
+    // Check if string is valid base64
+    const decoded = atob(str);
+    // Re-encode and compare to check for padding issues
+    return btoa(decoded) === str;
+  } catch {
+    return false;
+  }
+};
+
 interface ImageUploadProps {
   onImageChange: (imageDataUrl: string | null) => void;
   currentImageUrl: string | null;
@@ -40,9 +52,52 @@ export function ImageUpload({ onImageChange, currentImageUrl, className }: Image
         const reader = new FileReader();
         reader.onloadend = () => {
           const result = reader.result as string;
-          onImageChange(result);
-          setUploadedFileName(file.name);
+          
+          // Validate data URL format
+          if (!result || typeof result !== 'string') {
+            console.error('Invalid FileReader result');
+            onImageChange(null);
+            setUploadedFileName(null);
+            return;
+          }
+          
+          // Check if it's a valid data URL format
+          const dataUrlRegex = /^data:image\/[a-zA-Z]*;base64,([A-Za-z0-9+/]+=*)?$/;
+          if (!dataUrlRegex.test(result)) {
+            console.error('Invalid data URL format:', result.substring(0, 100) + '...');
+            onImageChange(null);
+            setUploadedFileName(null);
+            return;
+          }
+          
+          // Validate base64 portion
+          try {
+            const base64Data = result.split(',')[1];
+            if (!base64Data) {
+              throw new Error('No base64 data found');
+            }
+            
+            // Test if base64 is valid using our utility function
+            if (!isValidBase64(base64Data)) {
+              throw new Error('Invalid base64 encoding');
+            }
+            
+            // If we get here, the data URL is valid
+            onImageChange(result);
+            setUploadedFileName(file.name);
+          } catch (error) {
+            console.error('Invalid base64 data in data URL:', error);
+            onImageChange(null);
+            setUploadedFileName(null);
+          }
         };
+        
+        reader.onerror = () => {
+          console.error('FileReader error');
+          onImageChange(null);
+          setUploadedFileName(null);
+        };
+        
         reader.readAsDataURL(compressedFile);
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
       } catch (_error) { 
