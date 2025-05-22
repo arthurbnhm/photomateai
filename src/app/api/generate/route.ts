@@ -294,51 +294,42 @@ export async function POST(request: NextRequest) {
     if (image_data_url) {
       // Image is provided, prepare it for Replicate
       try {
-        // Validate data URL format first
-        const dataUrlRegex = /^data:image\/[a-zA-Z]*;base64,([A-Za-z0-9+/]+=*)?$/;
-        if (!dataUrlRegex.test(image_data_url)) {
-          throw new Error("Invalid image data URL format. Expected format: data:image/[type];base64,[data]");
+        // Basic validation - check if it starts with data:image
+        if (!image_data_url.startsWith('data:image/')) {
+          throw new Error("Invalid image data URL format");
         }
         
-        // Convert base64 data URL to Buffer
-        // Expected format: "data:[<mediatype>];base64,<data>"
-        const base64Data = image_data_url.split(',')[1];
-        if (!base64Data) {
-          throw new Error("No base64 data found in image data URL.");
+        // Extract base64 data
+        const base64Part = image_data_url.split(',')[1];
+        if (!base64Part) {
+          throw new Error("No base64 data found in image data URL");
         }
         
-        // Validate base64 format
-        try {
-          const imageBuffer = Buffer.from(base64Data, 'base64');
-          
-          // Validate that we got a reasonable buffer size (not empty, not too large)
-          if (imageBuffer.length === 0) {
-            throw new Error("Empty image data");
-          }
-          if (imageBuffer.length > 10 * 1024 * 1024) { // 10MB limit
-            throw new Error("Image data too large");
-          }
-          
-          inputParams.image = imageBuffer;
-        } catch (bufferError) {
-          throw new Error(`Invalid base64 data: ${bufferError instanceof Error ? bufferError.message : 'Unknown error'}`);
+        // Convert to Buffer
+        const imageBuffer = Buffer.from(base64Part, 'base64');
+        
+        // Basic size check
+        if (imageBuffer.length === 0) {
+          throw new Error("Empty image data");
+        }
+        if (imageBuffer.length > 10 * 1024 * 1024) { // 10MB limit
+          throw new Error("Image too large (max 10MB)");
         }
         
-        // Prompt strength is more relevant for img2img
-        inputParams.prompt_strength = 0.8; // Or make this configurable
-        // Remove aspectRatio as it's ignored by Replicate when an image is provided
+        inputParams.image = imageBuffer;
+        inputParams.prompt_strength = 0.8;
         delete inputParams.aspect_ratio;
 
       } catch (e) {
         console.error("Error processing image data URL:", e);
         return NextResponse.json(
-          { error: 'Invalid image data provided.', details: e instanceof Error ? e.message : "Unknown error processing image" },
+          { error: 'Failed to process image. Please try a different image.', details: e instanceof Error ? e.message : "Unknown error" },
           { status: 400 }
         );
       }
     } else {
       // No image provided, use aspectRatio
-      inputParams.aspect_ratio = aspectRatio || "1:1"; // Provide default if undefined
+      inputParams.aspect_ratio = aspectRatio || "1:1";
     }
     
     try {

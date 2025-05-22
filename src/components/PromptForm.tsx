@@ -428,32 +428,25 @@ export function PromptForm({
         requestBody.image_data_url = imageDataUrl;
       }
 
-      // Validate and sanitize the request body before sending
-      let requestBodyString: string;
+      let response;
       try {
-        // Additional validation for image data URL if present
-        if (requestBody.image_data_url) {
-          const dataUrlRegex = /^data:image\/[a-zA-Z]*;base64,([A-Za-z0-9+/]+=*)?$/;
-          if (!dataUrlRegex.test(requestBody.image_data_url)) {
-            throw new Error('Invalid image data URL format');
-          }
+        response = await fetch('/api/generate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...authHeader },
+          body: JSON.stringify(requestBody),
+          signal: abortController.signal
+        });
+      } catch (err) {
+        console.error('Error sending request:', err);
+        if (err instanceof Error && err.message.includes('string did not match')) {
+          setError('Failed to process image. The image format may be unsupported. Please try a different image.');
+        } else {
+          setError('Failed to send request. Please try again.');
         }
-        
-        requestBodyString = JSON.stringify(requestBody);
-      } catch (jsonError) {
-        console.error('Error stringifying request body:', jsonError);
-        setError('Invalid image data. Please try uploading a different image.');
         removePendingGeneration(tempId);
         onGenerationComplete?.();
         return;
       }
-
-      const response = await fetch('/api/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...authHeader },
-        body: requestBodyString,
-        signal: abortController.signal
-      });
       clearTimeout(timeoutId);
 
       if (!response.ok) {
