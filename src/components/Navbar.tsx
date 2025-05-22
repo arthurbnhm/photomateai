@@ -233,7 +233,7 @@ export function Navbar({
                     className="h-9 w-auto px-3"
                     asChild
                   >
-                    <a href="mailto:arthurbnhm@gmail.com">Contact</a>
+                    <a href="mailto:arthurbnhm@gmail.com?subject=PhotomateAI">Contact</a>
                   </Button>
                 </li>
               </ul>
@@ -271,7 +271,7 @@ export function Navbar({
                           className="h-9 w-auto px-3"
                           asChild
                         >
-                          <a href="mailto:arthurbnhm@gmail.com">Contact</a>
+                          <a href="mailto:arthurbnhm@gmail.com?subject=PhotomateAI">Contact</a>
                         </Button>
                         <Button 
                           variant="ghost" 
@@ -310,7 +310,7 @@ export function Navbar({
                           className="h-9 w-auto px-3"
                           asChild
                         >
-                          <a href="mailto:arthurbnhm@gmail.com">Contact</a>
+                          <a href="mailto:arthurbnhm@gmail.com?subject=PhotomateAI">Contact</a>
                         </Button>
                         <Button 
                           variant="ghost" 
@@ -426,7 +426,7 @@ export function Navbar({
                   </li>
                   <li className="menu-item">
                     <a 
-                      href="mailto:arthurbnhm@gmail.com" 
+                      href="mailto:arthurbnhm@gmail.com?subject=PhotomateAI" 
                       className="hover:text-blue-500 font-bold"
                       onClick={() => setMobileMenuOpen(false)}
                     >
@@ -470,7 +470,7 @@ export function Navbar({
                       </li>
                       <li className="menu-item">
                         <a 
-                          href="mailto:arthurbnhm@gmail.com" 
+                          href="mailto:arthurbnhm@gmail.com?subject=PhotomateAI" 
                           className="hover:text-blue-500 font-bold"
                           onClick={() => setMobileMenuOpen(false)}
                         >
@@ -498,7 +498,7 @@ export function Navbar({
                       </li>
                       <li className="menu-item">
                         <a 
-                          href="mailto:arthurbnhm@gmail.com" 
+                          href="mailto:arthurbnhm@gmail.com?subject=PhotomateAI" 
                           className="hover:text-blue-500 font-bold"
                           onClick={() => setMobileMenuOpen(false)}
                         >
