@@ -1,8 +1,9 @@
 import { Card, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Check } from "lucide-react";
+import { Check, Star } from "lucide-react";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import SubscriptionButton from "./SubscriptionButton";
+import { AnimatedTrainingImages } from "@/components/AnimatedTrainingImages";
 
 export default async function PlansPage() {
   const supabase = await createSupabaseServerClient();
@@ -34,11 +35,7 @@ export default async function PlansPage() {
     <div className="flex flex-col min-h-[calc(100vh-72px)] justify-center py-8 md:py-12">
       <div className="max-w-5xl mx-auto p-4 sm:p-8">
         <div className="flex flex-col items-center space-y-4 text-center mb-12">
-          <div className="flex space-x-2">
-            <div className="h-2 w-16 rounded bg-green-500"></div>
-            <div className="h-2 w-16 rounded bg-green-500"></div>
-            <div className="h-2 w-16 rounded bg-gray-200"></div>
-          </div>
+          <AnimatedTrainingImages />
           <h1 className="text-4xl font-bold tracking-tight">Select a plan</h1>
           <p className="text-muted-foreground max-w-md">
             Subscribe monthly to create unlimited professional headshots.
@@ -68,6 +65,10 @@ export default async function PlansPage() {
                     <Check className="h-4 w-4 text-green-500" />
                     <span>Flux™ 1.1 photorealistic model</span>
                   </span>
+                  <span className="flex items-center gap-x-2">
+                    <Check className="h-4 w-4 text-green-500" />
+                    <span>Image Reference</span>
+                  </span>
                 </span>
               </CardDescription>
             </CardHeader>
@@ -96,6 +97,10 @@ export default async function PlansPage() {
                   <span className="flex items-center gap-x-2">
                     <Check className="h-4 w-4 text-green-500" />
                     <span>Flux™ 1.1 photorealistic model</span>
+                  </span>
+                  <span className="flex items-center gap-x-2">
+                    <Check className="h-4 w-4 text-green-500" />
+                    <span>Image Reference</span>
                   </span>
                   <span className="flex items-center gap-x-2">
                     <Check className="h-4 w-4 text-green-500" />
@@ -136,6 +141,10 @@ export default async function PlansPage() {
                   </span>
                   <span className="flex items-center gap-x-2">
                     <Check className="h-4 w-4 text-green-500" />
+                    <span>Image Reference</span>
+                  </span>
+                  <span className="flex items-center gap-x-2">
+                    <Check className="h-4 w-4 text-green-500" />
                     <span>Upscaler (coming soon)</span>
                   </span>
                   <span className="flex items-center gap-x-2">
@@ -150,6 +159,66 @@ export default async function PlansPage() {
             </CardFooter>
           </Card>
         </div>
+
+        {/* Testimonials Section START */}
+        <div className="mt-16 mb-12">
+          <h2 className="text-3xl font-bold text-center mb-8 md:mb-12">
+            What Our Users Say
+          </h2>
+          <div className="grid gap-6 md:grid-cols-3">
+            {/* Testimonial 1 */}
+            <Card className="flex flex-col">
+              <CardHeader>
+                <div className="flex mb-2">
+                  {[...Array(5)].map((_, i) => (
+                    <Star key={i} className="h-5 w-5 text-yellow-400 fill-yellow-400" />
+                  ))}
+                </div>
+                <CardDescription className="italic text-base">
+                  &quot;My LinkedIn engagement soared after using PhotomateAI! The app is so intuitive, and Image Reference helped nail my professional style. A must-have for branding!&quot;
+                </CardDescription>
+              </CardHeader>
+              <CardFooter>
+                <p className="text-sm font-semibold">- Sarah L., Business Consultant</p>
+              </CardFooter>
+            </Card>
+
+            {/* Testimonial 2 */}
+            <Card className="flex flex-col">
+              <CardHeader>
+                <div className="flex mb-2">
+                  {[...Array(5)].map((_, i) => (
+                    <Star key={i} className="h-5 w-5 text-yellow-400 fill-yellow-400" />
+                  ))}
+                </div>
+                <CardDescription className="italic text-base">
+                  &quot;I saved so much time and money compared to a traditional photoshoot. The quality is outstanding. Highly recommend!&quot;
+                </CardDescription>
+              </CardHeader>
+              <CardFooter>
+                <p className="text-sm font-semibold">- Jessica M., Startup Founder</p>
+              </CardFooter>
+            </Card>
+
+            {/* Testimonial 3 */}
+            <Card className="flex flex-col">
+              <CardHeader>
+                <div className="flex mb-2">
+                  {[...Array(5)].map((_, i) => (
+                    <Star key={i} className="h-5 w-5 text-yellow-400 fill-yellow-400" />
+                  ))}
+                </div>
+                <CardDescription className="italic text-base">
+                  &quot;Training my own AI model on PhotomateAI was surprisingly simple. Now I can generate unique, on-brand visuals for my content strategy in minutes. It&apos;s a total game-changer!&quot;
+                </CardDescription>
+              </CardHeader>
+              <CardFooter>
+                <p className="text-sm font-semibold">- Mike P., Content Strategist</p>
+              </CardFooter>
+            </Card>
+          </div>
+        </div>
+        {/* Testimonials Section END */}
 
         <div className="text-center text-sm text-muted-foreground">
           Used by 10,000+ happy customers

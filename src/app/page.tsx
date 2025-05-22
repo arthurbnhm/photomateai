@@ -345,6 +345,10 @@ export default function Home() {
                       <Check className="h-4 w-4 text-green-500 flex-shrink-0" />
                       <span>Flux™ 1.1 photorealistic model</span>
                     </li>
+                    <li className="flex items-center gap-2">
+                      <Check className="h-4 w-4 text-green-500 flex-shrink-0" />
+                      <span>Image Reference</span>
+                    </li>
                   </ul>
                 </div>
                 <div className="mt-auto p-6">
@@ -378,6 +382,10 @@ export default function Home() {
                     <li className="flex items-center gap-2">
                       <Check className="h-4 w-4 text-green-500 flex-shrink-0" />
                       <span>Flux™ 1.1 photorealistic model</span>
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <Check className="h-4 w-4 text-green-500 flex-shrink-0" />
+                      <span>Image Reference</span>
                     </li>
                     <li className="flex items-center gap-2">
                       <Check className="h-4 w-4 text-green-500 flex-shrink-0" />
@@ -417,6 +425,10 @@ export default function Home() {
                     <li className="flex items-center gap-2">
                       <Check className="h-4 w-4 text-green-500 flex-shrink-0" />
                       <span>Flux™ 1.1 photorealistic model</span>
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <Check className="h-4 w-4 text-green-500 flex-shrink-0" />
+                      <span>Image Reference</span>
                     </li>
                     <li className="flex items-center gap-2">
                       <Check className="h-4 w-4 text-green-500 flex-shrink-0" />
