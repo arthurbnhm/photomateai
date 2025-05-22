@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase-server'
+import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { SupabaseClient } from '@supabase/supabase-js'
 
 type Subscription = {
@@ -22,9 +22,62 @@ const PROTECTED_ROUTES = {
 } as const
 
 export async function middleware(request: NextRequest) {
-  const pathname = request.nextUrl.pathname
+  let response = NextResponse.next({
+    request: {
+      headers: request.headers,
+    },
+  })
+
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        get(name: string) {
+          return request.cookies.get(name)?.value
+        },
+        set(name: string, value: string, options: CookieOptions) {
+          request.cookies.set({
+            name,
+            value,
+            ...options,
+          })
+          response = NextResponse.next({
+            request: {
+              headers: request.headers,
+            },
+          })
+          response.cookies.set({
+            name,
+            value,
+            ...options,
+          })
+        },
+        remove(name: string, options: CookieOptions) {
+          request.cookies.set({
+            name,
+            value: '',
+            ...options,
+          })
+          response = NextResponse.next({
+            request: {
+              headers: request.headers,
+            },
+          })
+          response.cookies.set({
+            name,
+            value: '',
+            ...options,
+          })
+        },
+      },
+    }
+  )
   
-  const supabase = await createClient()
+  // It's important to run `getUser` in the middleware to refresh the session cookie.
+  const { data: { user: middlewareUser } } = await supabase.auth.getUser() 
+
+  const pathname = request.nextUrl.pathname
   
   // Find matching protected route
   const protectedRoute = Object.entries(PROTECTED_ROUTES).find(([route]) => 
@@ -33,16 +86,16 @@ export async function middleware(request: NextRequest) {
   
   // If not a protected route, allow access
   if (!protectedRoute) {
-    return NextResponse.next()
+    return response
   }
 
   const [, requirements] = protectedRoute
   
-  // Get the authenticated user
-  const { data: { user }, error: userError } = await supabase.auth.getUser()
-  
+  // Get the authenticated user - use middlewareUser obtained above
+  const user = middlewareUser
+
   // Check authentication requirement
-  if (requirements.requiresAuth && (!user || userError)) {
+  if (requirements.requiresAuth && !user) {
     const redirectUrl = new URL('/auth/login', request.url)
     return NextResponse.redirect(redirectUrl)
   }
@@ -94,7 +147,7 @@ export async function middleware(request: NextRequest) {
     }
   }
   
-  return NextResponse.next()
+  return response
 }
 
 async function checkResourceLimits(

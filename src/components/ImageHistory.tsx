@@ -7,7 +7,7 @@ import { toast } from "sonner"
 import { Toaster } from "@/components/ui/sonner"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Badge } from "@/components/ui/badge"
-import { createBrowserSupabaseClient } from "@/lib/supabase"
+import { createSupabaseBrowserClient } from "@/lib/supabase/client"
 import { MediaFocus } from "@/components/MediaFocus"
 
 // Define the type for image generation (now passed as prop)
@@ -98,7 +98,7 @@ export function ImageHistory({
   const [elapsedTimes, setElapsedTimes] = useState<Record<string, number>>({}) 
   const [isMounted, setIsMounted] = useState(false)
   
-  const supabaseClient = useRef(createBrowserSupabaseClient()); // Still needed for polling and delete/cancel
+  const supabaseClient = useRef(createSupabaseBrowserClient()); // Still needed for polling and delete/cancel
   
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);

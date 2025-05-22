@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient } from '@/lib/supabase-server';
+import { createSupabaseServerClient } from '@/lib/supabase/server';
 
 // Define maximum total file size (100MB)
 const MAX_TOTAL_SIZE = 100 * 1024 * 1024; // 100MB in bytes
@@ -7,7 +7,7 @@ const MAX_TOTAL_SIZE = 100 * 1024 * 1024; // 100MB in bytes
 export async function POST(request: NextRequest) {
   try {
     // Initialize Supabase client with user session
-    const supabase = createServerClient();
+    const supabase = await createSupabaseServerClient();
     
     // Get the current user
     const { data, error: userError } = await supabase.auth.getUser();

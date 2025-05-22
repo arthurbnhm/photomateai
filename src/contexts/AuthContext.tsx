@@ -1,17 +1,16 @@
 "use client"
 
-import React, { createContext, useContext, ReactNode, useState, useEffect, useCallback, useRef } from 'react'
+import React, { createContext, useContext, ReactNode, useState, useEffect, useCallback } from 'react'
 import { User } from '@supabase/supabase-js'
 import { AuthResponse, OAuthResponse } from '@supabase/supabase-js'
 import { useRouter, usePathname } from 'next/navigation'
-import { createBrowserSupabaseClient } from '@/lib/supabase'
+import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 
 // Define the shape of the auth context
 type AuthContextType = {
   user: User | null
   isLoading: boolean
   isAuthenticated: boolean
-  isAuthReady: boolean
   mounted: boolean
   signOut: () => Promise<void>
   signIn: (email: string, password: string) => Promise<AuthResponse>
@@ -20,15 +19,6 @@ type AuthContextType = {
   getUser: () => Promise<{ data: { user: User | null } }>
 }
 
-// Global auth state that persists between renders/components
-let globalAuthState: {
-  user: User | null;
-  initialized: boolean;
-} = {
-  user: null,
-  initialized: false
-};
-
 // Create the context with a default value
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
@@ -36,134 +26,80 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined)
 function useAuthImplementation() {
   const router = useRouter()
   const pathname = usePathname()
-  const [user, setUser] = useState<User | null>(() => globalAuthState.initialized ? globalAuthState.user : null)
-  const [isLoading, setIsLoading] = useState(!globalAuthState.initialized)
+  const [user, setUser] = useState<User | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
   const [mounted, setMounted] = useState(false)
-  const supabase = createBrowserSupabaseClient()
+  const supabase = createSupabaseBrowserClient()
   const isHomePage = pathname === '/'
-  const isAuthPage = pathname === '/auth/login'
-  const initialStateChecked = useRef(globalAuthState.initialized)
 
   // Initialize authentication state
   useEffect(() => {
-    // Set mounted state immediately
     setMounted(true)
-    
-    // Skip initialization if already done globally
-    if (initialStateChecked.current) {
-      return;
-    }
-    
-    initialStateChecked.current = true;
-    
-    // Try to get user from localStorage first for immediate UI rendering
-    const getUserFromLocalStorage = () => {
-      try {
-        if (typeof window !== 'undefined') {
-          const storedSession = localStorage.getItem('supabase.auth.token')
-          if (storedSession) {
-            try {
-              const parsedSession = JSON.parse(storedSession)
-              if (parsedSession?.currentSession?.user) {
-                return parsedSession.currentSession.user;
-              }
-            } catch {
-              // Ignore JSON parse errors
-            }
-          }
-        }
-      } catch {
-        // Ignore localStorage errors
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (_event, session) => {
+        const newUser = session?.user ?? null
+        setUser(newUser)
+        setIsLoading(false)
       }
-      return null;
-    };
-    
-    // Try to get user from localStorage first
-    const storedUser = getUserFromLocalStorage();
-    if (storedUser) {
-      setUser(storedUser);
-      globalAuthState = { user: storedUser, initialized: true };
-      setIsLoading(false);
-      return; // Skip API call if we have a valid user
-    }
-    
-    // Otherwise fetch from API
-    const getUser = async () => {
+    )
+
+    // Perform initial user fetch. onAuthStateChange might not fire immediately
+    // or if the user is already authenticated on page load.
+    const getCurrentUser = async () => {
       try {
-        const { data: { user } } = await supabase.auth.getUser()
-        setUser(user)
-        globalAuthState = { user, initialized: true };
-        
-        // Redirect to login page if needed
-        if (!user && !isAuthPage && !isHomePage) {
-          router.push('/auth/login')
-        }
+        const { data: { user: currentUser } } = await supabase.auth.getUser()
+        setUser(currentUser)
       } catch (error) {
-        console.error('Error fetching user:', error)
-        globalAuthState = { user: null, initialized: true };
+        console.error('Error fetching initial user:', error)
+        setUser(null)
       } finally {
         setIsLoading(false)
       }
     }
-
-    getUser()
-
-    // Set up auth state change listener
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        const newUser = session?.user ?? null;
-        setUser(newUser)
-        globalAuthState = { user: newUser, initialized: true };
-        
-        // Redirect to login page if user signs out and not on the homepage
-        if (event === 'SIGNED_OUT' && !isHomePage) {
-          router.push('/auth/login')
-        }
-      }
-    )
+    getCurrentUser()
 
     return () => {
       subscription.unsubscribe()
     }
-  }, [supabase.auth, router, isAuthPage, isHomePage])
+  }, [supabase, router, isHomePage])
 
   // Auth action handlers with memoization for performance
-  const signOut = useCallback(() => {
-    return supabase.auth.signOut().then(() => {
-      globalAuthState = { user: null, initialized: true };
-      router.refresh()
-      if (!isHomePage) {
-        router.push('/auth/login')
-      }
-    })
-  }, [supabase.auth, router, isHomePage])
+  const signOut = useCallback(async () => {
+    await supabase.auth.signOut()
+    setUser(null)
+    router.refresh()
+    if (!isHomePage) {
+      router.push('/auth/login')
+    }
+  }, [supabase, router, isHomePage])
 
   const signIn = useCallback((email: string, password: string) => {
     return supabase.auth.signInWithPassword({ email, password })
-  }, [supabase.auth])
+  }, [supabase])
 
   const signUp = useCallback((email: string, password: string) => {
     return supabase.auth.signUp({
       email,
       password,
       options: {
-        emailRedirectTo: `${window.location.origin}/auth/callback`,
+        emailRedirectTo: `${typeof window !== 'undefined' ? window.location.origin : ''}/auth/callback`,
       },
     })
-  }, [supabase.auth])
+  }, [supabase])
 
   const signInWithOAuth = useCallback((provider: 'google') => {
     return supabase.auth.signInWithOAuth({
       provider,
       options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
+        redirectTo: `${typeof window !== 'undefined' ? window.location.origin : ''}/auth/callback`,
       },
     })
-  }, [supabase.auth])
+  }, [supabase])
 
   const getUser = useCallback(async () => {
     return supabase.auth.getUser()
-  }, [supabase.auth])
+  }, [supabase])
 
   // Return the auth context
   return {
@@ -176,7 +112,6 @@ function useAuthImplementation() {
     signInWithOAuth,
     getUser,
     isAuthenticated: !!user,
-    isAuthReady: globalAuthState.initialized
   }
 }
 

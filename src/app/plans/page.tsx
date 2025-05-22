@@ -1,11 +1,11 @@
 import { Card, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Check } from "lucide-react";
-import { createClient } from "@/lib/supabase-server";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import SubscriptionButton from "./SubscriptionButton";
 
 export default async function PlansPage() {
-  const supabase = await createClient();
+  const supabase = await createSupabaseServerClient();
   const { data: { user }, error: userError } = await supabase.auth.getUser();
 
   if (userError) {

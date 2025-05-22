@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from 'react'
-import { createBrowserSupabaseClient } from '@/lib/supabase'
+import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import { AnimatedCounter } from 'react-animated-counter'
 import { Coins } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
@@ -40,7 +40,7 @@ export function CreditCounter() {
       return
     }
 
-    const supabase = createBrowserSupabaseClient()
+    const supabase = createSupabaseBrowserClient()
     let mounted = true
     let previousCredits: number | null = null
 

@@ -1,5 +1,5 @@
 import Stripe from 'stripe';
-import { createSupabaseAdmin } from './supabase-server';
+import { createSupabaseAdminClient } from '@/lib/supabase/server';
 
 // Initialize Stripe with the secret key
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
@@ -15,7 +15,7 @@ export const PRICE_IDS = {
 
 // Get or create a Stripe customer for a user
 export async function getOrCreateStripeCustomer(userId: string, email: string): Promise<string> {
-  const supabase = createSupabaseAdmin();
+  const supabase = createSupabaseAdminClient();
   
   // Check if user already has a Stripe customer ID
   const { data: subscription } = await supabase

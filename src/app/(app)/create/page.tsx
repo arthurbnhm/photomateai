@@ -4,7 +4,7 @@ import { useState, Suspense, useEffect, useCallback, useRef, useMemo } from "rea
 import Image from "next/image";
 import { PromptForm } from "@/components/PromptForm";
 import { ImageHistory } from "@/components/ImageHistory";
-import { createBrowserSupabaseClient } from "@/lib/supabase";
+import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 
 // Define the PendingGeneration type
@@ -85,7 +85,7 @@ function CreatePageContent() {
   const [errorHistory, setErrorHistory] = useState<string | null>(null);
   const [isMounted, setIsMounted] = useState(false);
   const { user } = useAuth();
-  const supabaseClient = useRef(createBrowserSupabaseClient());
+  const supabaseClient = useRef(createSupabaseBrowserClient());
 
   useEffect(() => {
     setIsMounted(true);

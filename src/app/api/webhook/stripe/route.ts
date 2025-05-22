@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { stripe } from '@/lib/stripe';
-import { createSupabaseAdmin } from '@/lib/supabase-server';
+import { createSupabaseAdminClient } from '@/lib/supabase/server';
 import Stripe from 'stripe';
 import { SupabaseClient } from '@supabase/supabase-js';
 
@@ -24,7 +24,7 @@ export async function POST(req: NextRequest) {
   }
 
   // Initialize Supabase admin client
-  const supabase = createSupabaseAdmin();
+  const supabase = createSupabaseAdminClient();
 
   // Process different event types
   try {

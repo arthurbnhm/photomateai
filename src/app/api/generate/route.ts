@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Replicate from 'replicate';
-import { createServerClient } from '@/lib/supabase-server';
+import { createSupabaseServerClient } from '@/lib/supabase/server';
 import OpenAI from "openai";
 
 // Initialize Replicate with API token
@@ -16,7 +16,7 @@ replicate.fetch = (url, options) => {
 export async function POST(request: NextRequest) {
   try {
     // Create Supabase client
-    const supabase = createServerClient();
+    const supabase = await createSupabaseServerClient();
     
     // Get authenticated user
     const { data: { user }, error: userError } = await supabase.auth.getUser();

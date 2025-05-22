@@ -34,7 +34,7 @@ export function Navbar({
   const [isMenuButtonDisabled, setIsMenuButtonDisabled] = useState(false);
   
   // Get auth context, router and pathname
-  const { user, isAuthReady, signOut } = useAuth();
+  const { user, isLoading, signOut } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
   const isHomePage = pathname === '/';
@@ -221,7 +221,7 @@ export function Navbar({
             )}
           
             {/* Auth/Navigation Buttons */}
-            {isAuthReady && (
+            {!isLoading && (
               <>
                 {user ? (
                   <>
@@ -395,7 +395,7 @@ export function Navbar({
               )}
               
               {/* Auth/Navigation Buttons - exactly matching desktop */}
-              {isAuthReady && user ? (
+              {!isLoading && user ? (
                 <>
                   {/* Home page shows Go to App */}
                   {isHomePage ? (

@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { Analytics } from "@vercel/analytics/react";
@@ -12,10 +12,6 @@ export const metadata: Metadata = {
   title: "Photomate AI",
   description: "Transform your selfies into professional portraits",
   metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL!),
-  themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "white" },
-    { media: "(prefers-color-scheme: dark)", color: "#121212" }, // More accurate approximation of oklch(0.145 0 0)
-  ],
   openGraph: {
     title: "Photomate AI",
     description: "Transform your selfies into professional portraits",
@@ -28,6 +24,13 @@ export const metadata: Metadata = {
       },
     ],
   },
+};
+
+export const viewport: Viewport = {
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "white" },
+    { media: "(prefers-color-scheme: dark)", color: "#121212" },
+  ],
 };
 
 export default function RootLayout({

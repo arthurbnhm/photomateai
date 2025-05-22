@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useMemo, useCallback } from "react"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import * as z from "zod"
-import { createBrowserSupabaseClient } from "@/lib/supabase"
+import { createSupabaseBrowserClient } from "@/lib/supabase/client"
 import { creditEvents } from "./CreditCounter"
 import { cn } from "@/lib/utils"
 import TextareaAutosize from 'react-textarea-autosize'
@@ -146,7 +146,7 @@ export function PromptForm({
   onGenerationComplete // Destructure new props
 }: PromptFormProps) { // Use the new interface here
   // Initialize Supabase client with useRef for stability
-  const supabaseRef = useRef(createBrowserSupabaseClient());
+  const supabaseRef = useRef(createSupabaseBrowserClient());
   const getSupabase = useCallback(() => supabaseRef.current, []);
   
   // Create ref for AdvancedSettings component

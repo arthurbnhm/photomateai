@@ -10,7 +10,7 @@ import Image from "next/image";
 import { v4 as uuidv4 } from 'uuid';
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
-import { createBrowserSupabaseClient } from "@/lib/supabase";
+import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { useTheme } from "next-themes";
 import JSZip from 'jszip';
 import { ModelListTable } from "@/components/ModelListTable";
@@ -187,7 +187,7 @@ const createThumbnail = async (file: File, maxWidth = 500, maxHeight = 500): Pro
 
 export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormProps) {
   // Initialize Supabase client
-  const supabaseRef = useRef(createBrowserSupabaseClient());
+  const supabaseRef = useRef(createSupabaseBrowserClient());
   const getSupabase = useCallback(() => supabaseRef.current, []);
   
   // State variables

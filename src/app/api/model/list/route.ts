@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient } from '@/lib/supabase-server';
+import { createSupabaseServerClient } from '@/lib/supabase/server';
 
 // Define types for the database entities
 interface Training {
@@ -51,7 +51,7 @@ export async function GET(request: NextRequest) {
     // }
 
     // Initialize Supabase client with user session
-    const supabase = createServerClient();
+    const supabase = await createSupabaseServerClient();
     
     // Get the authenticated user
     const { data: { user }, error: userError } = await supabase.auth.getUser();
@@ -264,7 +264,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     
     // Initialize Supabase client with user session
-    const supabase = createServerClient();
+    const supabase = await createSupabaseServerClient();
     
     // Get the authenticated user
     const { data: { user }, error: userError } = await supabase.auth.getUser();

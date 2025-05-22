@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Replicate from 'replicate';
-import { createServerClient } from '@/lib/supabase-server';
+import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { SupabaseClient } from '@supabase/supabase-js';
 
 // Initialize Replicate with API token
@@ -11,7 +11,7 @@ const replicate = new Replicate({
 export async function POST(request: NextRequest) {
   try {
     // Initialize Supabase client with user session
-    const supabase = createServerClient();
+    const supabase = await createSupabaseServerClient();
     
     // Get the current user
     const { data, error: userError } = await supabase.auth.getUser();

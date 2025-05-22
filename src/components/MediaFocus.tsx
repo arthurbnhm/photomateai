@@ -8,7 +8,7 @@ import { toast } from "sonner"
 import { motion, AnimatePresence } from "framer-motion"
 import { X, Download, ChevronLeft, ChevronRight } from "lucide-react"
 import { AspectRatio } from "@/components/ui/aspect-ratio"
-import { createBrowserSupabaseClient } from "@/lib/supabase"
+import { createSupabaseBrowserClient } from "@/lib/supabase/client"
 
 // Define the types needed for the component
 export type ImageWithStatus = {
@@ -42,7 +42,7 @@ export function MediaFocus({
   onNavigate
 }: MediaFocusProps) {
   const [mounted, setMounted] = React.useState(false)
-  const supabase = createBrowserSupabaseClient()
+  const supabase = createSupabaseBrowserClient()
   const activeTouchesRef = useRef<number>(0); // Added to track active touches
   
   // Handle mounting for portal
