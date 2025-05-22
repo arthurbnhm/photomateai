@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
-import { AnimatedCounter } from 'react-animated-counter'
 import { Coins } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
@@ -192,17 +191,7 @@ export function CreditCounter() {
               )} 
             />
             <span className="text-sm font-medium flex items-center text-foreground">
-              <AnimatedCounter 
-                value={credits} 
-                color="inherit" 
-                fontSize="14px" 
-                includeCommas={true}
-                incrementColor="inherit" 
-                decrementColor="inherit"
-                containerStyles={{ color: 'inherit', fontVariantNumeric: 'tabular-nums' }}
-                digitStyles={{ fontWeight: 500 }}
-                decimalPrecision={0}
-              />
+              {credits.toLocaleString()}
             </span>
           </div>
         </TooltipTrigger>

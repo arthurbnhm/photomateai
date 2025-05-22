@@ -96,6 +96,11 @@ function CreatePageContent() {
     const abortController = new AbortController();
     const timeoutId = setTimeout(() => abortController.abort(), 10000);
 
+    if (!silentUpdate) {
+      // Set loading true only if it's not a silent update at the beginning of the try block
+      // setIsLoadingHistory(true); // Already set by loadGenerations
+    }
+
     try {
       let query = supabaseClient.current
         .from('predictions')
@@ -118,7 +123,9 @@ function CreatePageContent() {
       clearTimeout(timeoutId);
       
       if (error) {
-        throw error;
+        // Even if 'error' is not an Error instance, throw it to be caught below.
+        // The catch block will provide more details.
+        throw error; 
       }
       
       if (data) {
@@ -140,26 +147,37 @@ function CreatePageContent() {
         setGenerations(processedData);
       }
       
-      if (!silentUpdate) {
-        setIsLoadingHistory(false);
-      }
-    } catch (fetchError: unknown) {
-      clearTimeout(timeoutId); // Ensure timeout is cleared on error
-      if (fetchError instanceof Error && fetchError.name === 'AbortError') {
-        console.warn('Fetch generations aborted due to timeout');
-        // setErrorHistory('Failed to load image history: Request timed out.');
-      } else if (fetchError instanceof Error) {
-        console.error('Error fetching generations:', fetchError);
-        setErrorHistory(`Failed to load image history: ${fetchError.message}`);
+      // This was inside the try block, move to finally or ensure it's called in catch too
+      // if (!silentUpdate) {
+      //   setIsLoadingHistory(false);
+      // }
+    } catch (fetchError: unknown) { 
+      clearTimeout(timeoutId);
+      console.error("Full error object in fetchFromSupabase catch:", JSON.stringify(fetchError, null, 2));
+
+      if (fetchError instanceof Error) {
+        if (fetchError.name === 'AbortError') {
+          console.warn('Fetch generations aborted due to timeout');
+          // setErrorHistory('Failed to load image history: Request timed out.'); // setErrorHistory is handled by loadGenerations caller
+        } else {
+          console.error('Error fetching generations (Error instance):', fetchError);
+          setErrorHistory(`Failed to load image history: ${fetchError.message}`);
+        }
       } else {
-        console.error('Unknown error fetching generations:', fetchError);
-        setErrorHistory('An unknown error occurred while loading image history.');
+        // Handle non-Error objects thrown (e.g., plain objects from Supabase client)
+        let errorMessage = 'An unknown error occurred while loading image history.';
+        if (typeof fetchError === 'object' && fetchError !== null && 'message' in fetchError) {
+          errorMessage = `Failed to load image history: ${(fetchError as { message: string }).message}`;
+        }
+        console.error('Unknown error object fetching generations:', fetchError);
+        setErrorHistory(errorMessage);
       }
+    } finally {
       if (!silentUpdate) {
         setIsLoadingHistory(false);
       }
     }
-  }, [user?.id]);
+  }, [user?.id, supabaseClient, setErrorHistory, setIsLoadingHistory]); // Added supabaseClient, setErrorHistory, setIsLoadingHistory
 
   // Load generations from Supabase (moved from ImageHistory)
   const loadGenerations = useCallback(async (silentUpdate: boolean = false) => {
@@ -220,13 +238,13 @@ function CreatePageContent() {
         <div className="flex items-center cursor-default">
           {isLoadingHistory ? (
             <>
-              <div className="relative w-8 h-8 rounded-md overflow-hidden shadow-sm border-2 border-background transform -rotate-6 mr-[-10px]">
+              <div className="relative w-8 h-8 rounded-md overflow-hidden shadow-sm border-2 border-white transform -rotate-6 mr-[-10px]">
                 <div className="w-full h-full bg-gray-300 animate-pulse"></div>
               </div>
-              <div className="relative w-8 h-8 rounded-md overflow-hidden shadow-sm border-2 border-background z-10 transform scale-110">
+              <div className="relative w-8 h-8 rounded-md overflow-hidden shadow-sm border-2 border-white z-10 transform scale-110">
                 <div className="w-full h-full bg-gray-300 animate-pulse"></div>
               </div>
-              <div className="relative w-8 h-8 rounded-md overflow-hidden shadow-sm border-2 border-background transform rotate-6 ml-[-10px]">
+              <div className="relative w-8 h-8 rounded-md overflow-hidden shadow-sm border-2 border-white transform rotate-6 ml-[-10px]">
                 <div className="w-full h-full bg-gray-300 animate-pulse"></div>
               </div>
             </>
@@ -234,7 +252,7 @@ function CreatePageContent() {
             selectedHeaderImages.map((src: string, index: number) => (
               <div 
                 key={src || index}
-                className={`relative w-8 h-8 rounded-md overflow-hidden shadow-sm border-2 border-background transition-all duration-300 ease-out hover:-translate-y-1 hover:z-20 ${
+                className={`relative w-8 h-8 rounded-md overflow-hidden shadow-sm border-2 border-white transition-all duration-300 ease-out hover:-translate-y-1 hover:z-20 ${
                   index === 0 ? 'transform -rotate-6 mr-[-10px] hover:rotate-[-10deg] hover:scale-110' :
                   index === 1 ? 'z-10 transform scale-110 hover:scale-125' :
                   'transform rotate-6 ml-[-10px] hover:rotate-[10deg] hover:scale-110'

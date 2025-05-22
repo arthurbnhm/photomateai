@@ -864,12 +864,9 @@ export function PromptForm({
                       <div className="md:col-span-2 flex items-end"> {/* Aligns with other form items in the grid */}
                         <Button 
                           type="submit" 
-                          className={cn(
-                            "w-full font-medium transition-all duration-300",
-                            creditDeducting 
-                              ? "bg-primary border-amber-500/30 shadow-[0_0_0_1px_rgba(245,158,11,0.1)]" 
-                              : "bg-primary hover:bg-primary/90 text-primary-foreground"
-                          )}
+                          variant="outline"
+                          status={creditDeducting ? "deducting" : "default"}
+                          className="w-full px-3"
                           disabled={loadingModels}
                           aria-label="Generate image from prompt"
                         >
@@ -884,6 +881,7 @@ export function PromptForm({
                     ref={advancedSettingsRef} 
                     form={form} 
                     onOpenChange={setIsAdvancedSettingsOpen} 
+                    isOpen={isAdvancedSettingsOpen}
                     onGenderChange={setSelectedGender}
                   />
 
@@ -892,12 +890,9 @@ export function PromptForm({
                     <div className="flex justify-end mt-6">
                       <Button 
                         type="submit" 
-                        className={cn(
-                          "w-full md:w-auto px-8 py-2.5 font-medium text-base transition-all duration-300",
-                          creditDeducting 
-                            ? "bg-primary border-amber-500/30 shadow-[0_0_0_1px_rgba(245,158,11,0.1)]" 
-                            : "bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm"
-                        )}
+                        variant="outline"
+                        status={creditDeducting ? "deducting" : "default"}
+                        className="w-full px-3"
                         disabled={loadingModels}
                         aria-label="Generate image from prompt"
                       >
@@ -1026,13 +1021,10 @@ export function PromptForm({
                     <div className="md:col-span-2">
                       <Button 
                         type="button"
+                        variant="outline"
+                        status={creditDeducting ? "deducting" : "default"}
                         onClick={handleReferenceImageGeneration}
-                        className={cn(
-                          "w-full font-medium transition-all duration-300",
-                          creditDeducting 
-                            ? "bg-primary border-amber-500/30 shadow-[0_0_0_1px_rgba(245,158,11,0.1)]" 
-                            : "bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm"
-                        )}
+                        className="w-full px-3"
                         disabled={loadingModels || !uploadedImageDataUrl}
                         aria-label="Generate image from reference"
                       >

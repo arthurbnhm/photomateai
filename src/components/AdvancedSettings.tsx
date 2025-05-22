@@ -447,7 +447,8 @@ interface FormFields {
 
 interface AdvancedSettingsProps {
   form: UseFormReturn<FormFields>;
-  onOpenChange?: (isOpen: boolean) => void;
+  isOpen: boolean;
+  onOpenChange: (isOpen: boolean) => void;
   onGenderChange?: (gender: string | null) => void;
 }
 
@@ -459,9 +460,7 @@ export type AdvancedSettingsRefType = {
 };
 
 export const AdvancedSettings = forwardRef<AdvancedSettingsRefType, AdvancedSettingsProps>(
-  ({ form, onOpenChange, onGenderChange }, ref) => {
-    // State variables
-    const [showAdvancedSettings, setShowAdvancedSettings] = useState(false);
+  ({ form, isOpen, onOpenChange, onGenderChange }, ref) => {
     const [selectedBgColor, setSelectedBgColor] = useState<string | null>(null);
     const [selectedExpression, setSelectedExpression] = useState<string | null>(null);
     const [selectedAccessory, setSelectedAccessory] = useState<string[]>([]);
@@ -470,7 +469,6 @@ export const AdvancedSettings = forwardRef<AdvancedSettingsRefType, AdvancedSett
     const [selectedPreset, setSelectedPreset] = useState<string | null>(null);
     const [selectedLight, setSelectedLight] = useState<string | null>(null);
 
-    // Reset all selections
     const resetSelections = () => {
       setSelectedBgColor(null);
       setSelectedExpression(null);
@@ -481,21 +479,17 @@ export const AdvancedSettings = forwardRef<AdvancedSettingsRefType, AdvancedSett
       setSelectedLight(null);
     };
 
-    // Close the panel
     const closePanel = () => {
-      setShowAdvancedSettings(false);
       if (onOpenChange) onOpenChange(false);
     };
 
-    // Expose the methods to parent components
     useImperativeHandle(ref, () => ({
       resetSelections,
       closePanel,
-      isOpen: showAdvancedSettings,
+      isOpen: isOpen,
       handleGenderSelect
     }));
 
-    // Function to handle background color selection
     const handleBgColorSelect = (bgColorValue: string) => {
       const currentBgColor = selectedBgColor;
       const currentPrompt = form.getValues().prompt;
@@ -531,7 +525,6 @@ export const AdvancedSettings = forwardRef<AdvancedSettingsRefType, AdvancedSett
       }
     };
 
-    // Function to handle facial expression selection
     const handleExpressionSelect = (expressionValue: string) => {
       const currentExpression = selectedExpression;
       const currentPrompt = form.getValues().prompt;
@@ -567,7 +560,6 @@ export const AdvancedSettings = forwardRef<AdvancedSettingsRefType, AdvancedSett
       }
     };
 
-    // Function to handle accessory selection
     const handleAccessorySelect = (accessoryValue: string) => {
       const currentPrompt = form.getValues().prompt;
       
@@ -596,7 +588,6 @@ export const AdvancedSettings = forwardRef<AdvancedSettingsRefType, AdvancedSett
       }
     };
 
-    // Function to handle camera shot selection
     const handleCameraShotSelect = (shotValue: string) => {
       const currentShot = selectedCameraShot;
       const currentPrompt = form.getValues().prompt;
@@ -632,7 +623,6 @@ export const AdvancedSettings = forwardRef<AdvancedSettingsRefType, AdvancedSett
       }
     };
 
-    // Function to handle gender selection
     const handleGenderSelect = (genderValue: string) => {
       const currentGender = selectedGender;
       const currentPrompt = form.getValues().prompt;
@@ -670,40 +660,29 @@ export const AdvancedSettings = forwardRef<AdvancedSettingsRefType, AdvancedSett
       }
     };
 
-    // Added: Function to handle preset selection
     const handlePresetSelect = (presetValue: string) => {
       const isClearingPreset = presetValue === "__no_preset__";
       setSelectedPreset(isClearingPreset ? null : presetValue);
 
-      // Store current selections to be cleared
       const prevCameraShot = selectedCameraShot;
       const prevBgColor = selectedBgColor;
       const prevExpression = selectedExpression;
-      const prevAccessories = [...selectedAccessory]; // Clone for iteration
+      const prevAccessories = [...selectedAccessory];
       const prevGender = selectedGender;
 
-      // Clear all current selections from state and prompt by calling their respective handlers
-      // This triggers their deselection logic
       if (prevCameraShot) handleCameraShotSelect(prevCameraShot);
       if (prevBgColor) handleBgColorSelect(prevBgColor);
       if (prevExpression) handleExpressionSelect(prevExpression);
-      // For accessories, call handleAccessorySelect for each to remove them
-      // This relies on handleAccessorySelect to correctly remove the item from selectedAccessory state and prompt
       prevAccessories.forEach(accValue => {
-        // Ensure handleAccessorySelect is called in a way that it processes removal
-        // It checks selectedAccessory.includes(accessoryValue), so this should work if state is not cleared prematurely
-        if (selectedAccessory.includes(accValue)) { // Check if it's still in state before trying to remove
+        if (selectedAccessory.includes(accValue)) {
             handleAccessorySelect(accValue);
         }
       });
       if (prevGender) handleGenderSelect(prevGender);
-      // At this point, all individual selection states (selectedBgColor, etc.) should be null/empty
-      // and their corresponding texts removed from the prompt.
 
       const preset = presets.find(p => p.value === presetValue);
 
       if (preset) {
-        // Apply new settings from the preset
         if (preset.settings.cameraShot) handleCameraShotSelect(preset.settings.cameraShot);
         if (preset.settings.bgColor) handleBgColorSelect(preset.settings.bgColor);
         if (preset.settings.expression) handleExpressionSelect(preset.settings.expression);
@@ -714,7 +693,6 @@ export const AdvancedSettings = forwardRef<AdvancedSettingsRefType, AdvancedSett
       }
     };
 
-    // Function to handle light selection
     const handleLightSelect = (lightValue: string) => {
       const currentLight = selectedLight;
       const currentPrompt = form.getValues().prompt;
@@ -752,19 +730,15 @@ export const AdvancedSettings = forwardRef<AdvancedSettingsRefType, AdvancedSett
 
     return (
       <Collapsible
-        open={showAdvancedSettings}
-        onOpenChange={(open) => {
-          setShowAdvancedSettings(open);
-          // Notify parent component
-          if (onOpenChange) onOpenChange(open);
-        }}
+        open={isOpen}
+        onOpenChange={onOpenChange}
         className="border-t border-border pt-4 mt-4"
       >
         <div className="flex items-center justify-between">
           <CollapsibleTrigger asChild>
             <Button variant="ghost" size="sm" className="gap-1 text-muted-foreground hover:text-foreground">
               Advanced Settings
-              {showAdvancedSettings ? (
+              {isOpen ? (
                 <ChevronUp className="h-4 w-4" />
               ) : (
                 <ChevronDown className="h-4 w-4" />
@@ -772,7 +746,6 @@ export const AdvancedSettings = forwardRef<AdvancedSettingsRefType, AdvancedSett
             </Button>
           </CollapsibleTrigger>
 
-          {/* Gender Selection Icons - MOVED BACK HERE */}
           <div className="flex space-x-1">
             <div
               className={cn(
@@ -799,55 +772,11 @@ export const AdvancedSettings = forwardRef<AdvancedSettingsRefType, AdvancedSett
         <div 
           className={cn(
             "overflow-hidden transition-all duration-300 ease-in-out",
-            showAdvancedSettings ? "max-h-[2000px] opacity-100 transform-none" : "max-h-0 opacity-0 transform translate-y-[-8px]"
+            isOpen ? "max-h-[2000px] opacity-100 transform-none" : "max-h-0 opacity-0 transform translate-y-[-8px]"
           )}
         >
           <div className="pt-4">
             <div className="space-y-6">
-              {/* Gender Selection Section - REMOVED FROM HERE */}
-              {/* <div className="space-y-2">
-                <div className="flex items-center justify-between h-6">
-                  <h4 className="text-sm font-medium flex items-center">
-                    Gender
-                    <span className="ml-2 text-xs text-muted-foreground min-w-[80px]">
-                      {selectedGender && (
-                        <>({genders.find(g => g.value === selectedGender)?.label})</>
-                      )}
-                    </span>
-                  </h4>
-                  <div className="w-[60px] text-right">
-                    {selectedGender && (
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
-                        className="h-6 px-2 text-xs"
-                        onClick={() => handleGenderSelect(selectedGender)} // Clears by re-selecting
-                      >
-                        Clear
-                      </Button>
-                    )}
-                  </div>
-                </div>
-                <div className="flex space-x-2">
-                  {genders.map((gender) => (
-                    <div
-                      key={gender.value}
-                      className={cn(
-                        "h-10 flex-1 flex items-center justify-center px-3 py-2 rounded-md cursor-pointer border border-input transition-all duration-200 hover:bg-accent/10",
-                        selectedGender === gender.value 
-                          ? "ring-2 ring-inset ring-ring/50 bg-accent/20" 
-                          : "opacity-90 hover:opacity-100"
-                      )}
-                      onClick={() => handleGenderSelect(gender.value)}
-                      title={gender.label}
-                    >
-                      <div className="text-sm font-medium">{gender.label}</div>
-                    </div>
-                  ))}
-                </div>
-              </div> */}
-
-              {/* Added Preset Selection Section */}
               <div className="space-y-2">
                  <Label htmlFor="preset-select" className="text-sm font-medium">Style Preset</Label>
                  <Select value={selectedPreset ?? "__no_preset__"} onValueChange={handlePresetSelect}>
@@ -868,7 +797,6 @@ export const AdvancedSettings = forwardRef<AdvancedSettingsRefType, AdvancedSett
                  </Select>
               </div>
 
-              {/* Camera Shots Section */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between h-6">
                   <h4 className="text-sm font-medium flex items-center">
@@ -912,7 +840,6 @@ export const AdvancedSettings = forwardRef<AdvancedSettingsRefType, AdvancedSett
                 </div>
               </div>
 
-              {/* Background Colors Section */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between h-6">
                   <h4 className="text-sm font-medium flex items-center">
@@ -949,7 +876,6 @@ export const AdvancedSettings = forwardRef<AdvancedSettingsRefType, AdvancedSett
                       )}
                       onClick={() => handleBgColorSelect(bgColor.value)}
                     >
-                      {/* Color Circle */}
                       <div 
                         className="w-12 h-12 rounded-full mt-3 mb-1"
                         style={{
@@ -966,7 +892,6 @@ export const AdvancedSettings = forwardRef<AdvancedSettingsRefType, AdvancedSett
                 </div>
               </div>
 
-              {/* Facial Expressions Section */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between h-6">
                   <h4 className="text-sm font-medium flex items-center">
@@ -1010,7 +935,6 @@ export const AdvancedSettings = forwardRef<AdvancedSettingsRefType, AdvancedSett
                 </div>
               </div>
 
-              {/* Accessories Section */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between h-6">
                   <h4 className="text-sm font-medium flex items-center">
@@ -1028,9 +952,6 @@ export const AdvancedSettings = forwardRef<AdvancedSettingsRefType, AdvancedSett
                         size="sm" 
                         className="h-6 px-2 text-xs"
                         onClick={() => {
-                          // Call handleAccessorySelect for each selected accessory to remove it
-                          // This uses the existing logic in handleAccessorySelect for removal
-                          // Make a copy for iteration as selectedAccessory state will change
                           const accessoriesToClear = [...selectedAccessory];
                           accessoriesToClear.forEach(accValue => handleAccessorySelect(accValue));
                         }}
@@ -1060,7 +981,6 @@ export const AdvancedSettings = forwardRef<AdvancedSettingsRefType, AdvancedSett
                 </div>
               </div>
 
-              {/* Lights Section */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between h-6">
                   <h4 className="text-sm font-medium flex items-center">
@@ -1110,5 +1030,4 @@ export const AdvancedSettings = forwardRef<AdvancedSettingsRefType, AdvancedSett
   }
 );
 
-// Add display name
 AdvancedSettings.displayName = "AdvancedSettings"; 
