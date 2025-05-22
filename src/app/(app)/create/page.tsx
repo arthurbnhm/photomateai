@@ -99,12 +99,8 @@ function CreatePageContent() {
   const [isLoadingUserModels, setIsLoadingUserModels] = useState(true); // Initialize to true
 
   // State to control the initial model loading screen
-  const [allowModelLoadingScreen, setAllowModelLoadingScreen] = useState(() => {
-    if (typeof window !== 'undefined') {
-      return localStorage.getItem('photomate_hasShownModelsOnce') !== 'true';
-    }
-    return true; // Default to true if localStorage is not available (e.g., SSR)
-  });
+  // Initialize to true to match SSR, then update in useEffect
+  const [allowModelLoadingScreen, setAllowModelLoadingScreen] = useState(true);
 
   const [isMounted, setIsMounted] = useState(false);
   const { user } = useAuth();
@@ -112,6 +108,10 @@ function CreatePageContent() {
 
   useEffect(() => {
     setIsMounted(true);
+    // Update allowModelLoadingScreen based on localStorage after mounting
+    if (typeof window !== 'undefined') {
+      setAllowModelLoadingScreen(localStorage.getItem('photomate_hasShownModelsOnce') !== 'true');
+    }
   }, []);
 
   // Fetch user models
