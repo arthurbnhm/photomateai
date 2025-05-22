@@ -13,7 +13,7 @@
 - Delete training files
 - Find out about using client to upload the zip file (replicate.files.create)
 - Delete a model and its versions https://replicate.com/docs/reference/http#models.delete
-- Validation modal after a training starts and until terminal state
+- ✅ Validation modal after a training starts and until terminal state
 - ✅ Add model version in the table
 - ✅ Model bages do not update with pooling anymore
 
@@ -91,13 +91,13 @@
 
 - ✅ Stalled and Generations as a same design 
 - ✅ Beautiful landing page
-- Review all the columns
+- ✅ Review all the columns
 - ✅ Merge Trainings and Models
 - ✅ Better handle the webhooks status from predictions
 - ✅ Better handle the webhooks status from trainings
-- Many fetches happen at once
+- ✅ Many fetches happen at once
 - ✅ Add vercel analytics
-- Make all actions button with direct feedback and fallback behaviour
+- ✅ Make all actions button with direct feedback and fallback behaviour
 
 # Bugs
 
@@ -107,7 +107,7 @@
 - ✅ Remove steeled generation causing infinite pooling
 - ✅ Burger menu and close button are fucked
 - ✅ Images are no more deleted from supabase when marked as this
-- Many shit happen probably due to this: Remove the getUserId effect that calls this function
+- ✅ Many shit happen probably due to this: Remove the getUserId effect that calls this function
 - ✅ Model is not stored in local storage
 
 # Caching

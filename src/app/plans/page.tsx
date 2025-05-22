@@ -43,121 +43,125 @@ export default async function PlansPage() {
           </p>
         </div>
 
-        <div className="grid gap-6 md:grid-cols-3 mb-12">
-          {/* Basic Plan */}
-          <Card className="flex flex-col">
-            <CardHeader>
-              <CardTitle className="flex items-baseline gap-x-2">
-                <span className="text-2xl font-bold">$19</span>
-                <span className="text-sm text-muted-foreground">• Basic</span>
-              </CardTitle>
-              <CardDescription className="space-y-2">
-                <span className="block space-y-2">
-                  <span className="flex items-center gap-x-2">
-                    <Check className="h-4 w-4 text-green-500" />
-                    <span>Take 50 AI Photos (credits)</span>
+        <div className="max-w-xl mx-auto">
+          <div className="grid gap-6 md:grid-cols-2 mb-12">
+            {/* Basic Plan */}
+            <Card className="flex flex-col">
+              <CardHeader>
+                <CardTitle className="flex items-baseline gap-x-2">
+                  <span className="text-2xl font-bold">$19</span>
+                  <span className="text-sm text-muted-foreground">• Basic</span>
+                </CardTitle>
+                <CardDescription className="space-y-2">
+                  <span className="block space-y-2">
+                    <span className="flex items-center gap-x-2">
+                      <Check className="h-4 w-4 text-green-500" />
+                      <span>Take 50 AI Photos (credits)</span>
+                    </span>
+                    <span className="flex items-center gap-x-2">
+                      <Check className="h-4 w-4 text-green-500" />
+                      <span>Create 1 AI Model per month</span>
+                    </span>
+                    <span className="flex items-center gap-x-2">
+                      <Check className="h-4 w-4 text-green-500" />
+                      <span>Flux™ 1.1 photorealistic model</span>
+                    </span>
+                    <span className="flex items-center gap-x-2">
+                      <Check className="h-4 w-4 text-green-500" />
+                      <span>Image Reference</span>
+                    </span>
                   </span>
-                  <span className="flex items-center gap-x-2">
-                    <Check className="h-4 w-4 text-green-500" />
-                    <span>Create 1 AI Model per month</span>
-                  </span>
-                  <span className="flex items-center gap-x-2">
-                    <Check className="h-4 w-4 text-green-500" />
-                    <span>Flux™ 1.1 photorealistic model</span>
-                  </span>
-                  <span className="flex items-center gap-x-2">
-                    <Check className="h-4 w-4 text-green-500" />
-                    <span>Image Reference</span>
-                  </span>
-                </span>
-              </CardDescription>
-            </CardHeader>
-            <CardFooter className="mt-auto flex justify-end">
-              <SubscriptionButton plan="basic" className="w-full sm:w-32" />
-            </CardFooter>
-          </Card>
+                </CardDescription>
+              </CardHeader>
+              <CardFooter className="mt-auto flex justify-end">
+                <SubscriptionButton plan="basic" className="w-full sm:w-32" />
+              </CardFooter>
+            </Card>
 
-          {/* Professional Plan */}
-          <Card className="flex flex-col">
-            <CardHeader>
-              <CardTitle className="flex items-baseline gap-x-2">
-                <span className="text-2xl font-bold">$49</span>
-                <span className="text-sm text-muted-foreground">• Professional</span>
-              </CardTitle>
-              <CardDescription className="space-y-2">
-                <span className="block space-y-2">
-                  <span className="flex items-center gap-x-2">
-                    <Check className="h-4 w-4 text-green-500" />
-                    <span>Take 1,000 AI Photos (credits)</span>
+            {/* Professional Plan */}
+            <Card className="flex flex-col">
+              <CardHeader>
+                <CardTitle className="flex items-baseline gap-x-2">
+                  <span className="text-2xl font-bold">$49</span>
+                  <span className="text-sm text-muted-foreground">• Professional</span>
+                </CardTitle>
+                <CardDescription className="space-y-2">
+                  <span className="block space-y-2">
+                    <span className="flex items-center gap-x-2">
+                      <Check className="h-4 w-4 text-green-500" />
+                      <span>Take 200 AI Photos (credits)</span>
+                    </span>
+                    <span className="flex items-center gap-x-2">
+                      <Check className="h-4 w-4 text-green-500" />
+                      <span>Create 3 AI Models per month</span>
+                    </span>
+                    <span className="flex items-center gap-x-2">
+                      <Check className="h-4 w-4 text-green-500" />
+                      <span>Flux™ 1.1 photorealistic model</span>
+                    </span>
+                    <span className="flex items-center gap-x-2">
+                      <Check className="h-4 w-4 text-green-500" />
+                      <span>Image Reference</span>
+                    </span>
+                    <span className="flex items-center gap-x-2">
+                      <Check className="h-4 w-4 text-green-500" />
+                      <span>Upscaler (coming soon)</span>
+                    </span>
+                    <span className="flex items-center gap-x-2">
+                      <Check className="h-4 w-4 text-green-500" />
+                      <span>Animate Images (coming soon)</span>
+                    </span>
                   </span>
-                  <span className="flex items-center gap-x-2">
-                    <Check className="h-4 w-4 text-green-500" />
-                    <span>Create 3 AI Models per month</span>
-                  </span>
-                  <span className="flex items-center gap-x-2">
-                    <Check className="h-4 w-4 text-green-500" />
-                    <span>Flux™ 1.1 photorealistic model</span>
-                  </span>
-                  <span className="flex items-center gap-x-2">
-                    <Check className="h-4 w-4 text-green-500" />
-                    <span>Image Reference</span>
-                  </span>
-                  <span className="flex items-center gap-x-2">
-                    <Check className="h-4 w-4 text-green-500" />
-                    <span>Upscaler (coming soon)</span>
-                  </span>
-                  <span className="flex items-center gap-x-2">
-                    <Check className="h-4 w-4 text-green-500" />
-                    <span>Animate Images (coming soon)</span>
-                  </span>
-                </span>
-              </CardDescription>
-            </CardHeader>
-            <CardFooter className="mt-auto flex justify-end">
-              <SubscriptionButton plan="professional" className="w-full sm:w-32" variant="default" />
-            </CardFooter>
-          </Card>
+                </CardDescription>
+              </CardHeader>
+              <CardFooter className="mt-auto flex justify-end">
+                <SubscriptionButton plan="professional" className="w-full sm:w-32" variant="default" />
+              </CardFooter>
+            </Card>
 
-          {/* Executive Plan */}
-          <Card className="flex flex-col">
-            <CardHeader>
-              <CardTitle className="flex items-baseline gap-x-2">
-                <span className="text-2xl font-bold">$79</span>
-                <span className="text-sm text-muted-foreground">• Executive</span>
-              </CardTitle>
-              <CardDescription className="space-y-2">
-                <span className="block space-y-2">
-                  <span className="flex items-center gap-x-2">
-                    <Check className="h-4 w-4 text-green-500" />
-                    <span>Take 3,000 AI Photos (credits)</span>
+            {/* Executive Plan */}
+            {/*
+            <Card className="flex flex-col">
+              <CardHeader>
+                <CardTitle className="flex items-baseline gap-x-2">
+                  <span className="text-2xl font-bold">$79</span>
+                  <span className="text-sm text-muted-foreground">• Executive</span>
+                </CardTitle>
+                <CardDescription className="space-y-2">
+                  <span className="block space-y-2">
+                    <span className="flex items-center gap-x-2">
+                      <Check className="h-4 w-4 text-green-500" />
+                      <span>Take 3,000 AI Photos (credits)</span>
+                    </span>
+                    <span className="flex items-center gap-x-2">
+                      <Check className="h-4 w-4 text-green-500" />
+                      <span>Create 10 AI Models per month</span>
+                    </span>
+                    <span className="flex items-center gap-x-2">
+                      <Check className="h-4 w-4 text-green-500" />
+                      <span>Flux™ 1.1 photorealistic model</span>
+                    </span>
+                    <span className="flex items-center gap-x-2">
+                      <Check className="h-4 w-4 text-green-500" />
+                      <span>Image Reference</span>
+                    </span>
+                    <span className="flex items-center gap-x-2">
+                      <Check className="h-4 w-4 text-green-500" />
+                      <span>Upscaler (coming soon)</span>
+                    </span>
+                    <span className="flex items-center gap-x-2">
+                      <Check className="h-4 w-4 text-green-500" />
+                      <span>Animate Images (coming soon)</span>
+                    </span>
                   </span>
-                  <span className="flex items-center gap-x-2">
-                    <Check className="h-4 w-4 text-green-500" />
-                    <span>Create 10 AI Models per month</span>
-                  </span>
-                  <span className="flex items-center gap-x-2">
-                    <Check className="h-4 w-4 text-green-500" />
-                    <span>Flux™ 1.1 photorealistic model</span>
-                  </span>
-                  <span className="flex items-center gap-x-2">
-                    <Check className="h-4 w-4 text-green-500" />
-                    <span>Image Reference</span>
-                  </span>
-                  <span className="flex items-center gap-x-2">
-                    <Check className="h-4 w-4 text-green-500" />
-                    <span>Upscaler (coming soon)</span>
-                  </span>
-                  <span className="flex items-center gap-x-2">
-                    <Check className="h-4 w-4 text-green-500" />
-                    <span>Animate Images (coming soon)</span>
-                  </span>
-                </span>
-              </CardDescription>
-            </CardHeader>
-            <CardFooter className="mt-auto flex justify-end">
-              <SubscriptionButton plan="executive" className="w-full sm:w-32" />
-            </CardFooter>
-          </Card>
+                </CardDescription>
+              </CardHeader>
+              <CardFooter className="mt-auto flex justify-end">
+                <SubscriptionButton plan="executive" className="w-full sm:w-32" />
+              </CardFooter>
+            </Card>
+            */}
+          </div>
         </div>
 
         {/* Testimonials Section START */}
