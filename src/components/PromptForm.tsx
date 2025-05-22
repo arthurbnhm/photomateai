@@ -482,8 +482,8 @@ export function PromptForm({
     });
   };
 
-  // Handler for the "Reference Image" tab's generate button
-  const handleReferenceImageGeneration = async () => {
+  // Handler for the "Image Reference" tab's generate button
+  const handleImageReferenceGeneration = async () => {
     if (!uploadedImageDataUrl) {
       setError("Please upload a reference image first.");
       return;
@@ -703,7 +703,7 @@ export function PromptForm({
               <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
                 <TabsList className="grid w-full grid-cols-2 mb-4">
                   <TabsTrigger value="prompt">Create Image</TabsTrigger>
-                  <TabsTrigger value="reference">Reference Image</TabsTrigger>
+                  <TabsTrigger value="reference">Image Reference</TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="prompt">
@@ -1020,10 +1020,10 @@ export function PromptForm({
                       <Button 
                         type="button"
                         variant="outline"
-                        onClick={handleReferenceImageGeneration}
+                        onClick={handleImageReferenceGeneration}
                         className="w-full px-3"
                         disabled={loadingModels || !uploadedImageDataUrl}
-                        aria-label="Generate image from reference"
+                        aria-label="Generate image from image reference"
                       >
                         Generate
                       </Button>

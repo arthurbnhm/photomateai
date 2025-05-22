@@ -356,25 +356,59 @@ export function ImageHistory({
   };
 
   const handleImageError = (generationId: string, imageIndex: number) => {
-    setGenerations(prevGens => prevGens.map(gen => {
-      if (gen.id !== generationId) return gen;
-      
-      const newImages = gen.images.map((img, idx) => {
-        if (idx !== imageIndex) return img;
-        // Only update if loadError is not already true, to prevent potential multiple calls for the same error
-        if (!img.loadError) {
-          console.warn(`Image failed to load: generation ${generationId}, image ${imageIndex}, URL: ${img.url}`);
-          return { ...img, loadError: true };
+    setGenerations(prevGens =>
+      prevGens.map(gen => {
+        if (gen.id !== generationId) {
+          return gen;
         }
-        return img; // Return original image if error already flagged
-      });
 
-      // Only update the generation if there was an actual change in image error states
-      if (newImages.some((img, idx) => gen.images[idx].loadError !== img.loadError)) {
-        return { ...gen, images: newImages };
-      }
-      return gen;
-    }));
+        const newImages = gen.images.map((img, idx) => {
+          if (idx !== imageIndex) {
+            return img;
+          }
+
+          // Guard against img being null or undefined
+          if (!img) {
+            console.error(
+              `Image object is null/undefined at index ${imageIndex} for generation ${generationId} during error handling.`
+            );
+            // Return a placeholder error object to maintain array structure and indicate error
+            return {
+              url: "", // Or a specific placeholder error image URL
+              isExpired: true, // Consistent with how other errors might be handled
+              loadError: true,
+            };
+          }
+
+          // If already marked as error, no change. Otherwise, mark it.
+          if (img.loadError) {
+            return img;
+          }
+
+          console.warn(
+            `Image failed to load: generation ${generationId}, image ${imageIndex}, URL: ${img.url}`
+          );
+          return { ...img, loadError: true };
+        });
+
+        // Check if there was an actual change to avoid unnecessary re-render.
+        // This comparison needs to be robust to null/undefined in old gen.images vs new placeholder.
+        const changed = gen.images.length !== newImages.length || gen.images.some((oldImg, idx) => {
+          const newImg = newImages[idx];
+          if (!oldImg && newImg) return true; // Old was null/undefined, new one (placeholder) exists
+          if (oldImg && !newImg) return true; // Old existed, new one is somehow gone (should not happen with map)
+          if (oldImg && newImg) { // Both exist, compare relevant property
+            return oldImg.loadError !== newImg.loadError;
+          }
+          return false; // Both null/undefined, no change
+        });
+
+        if (changed) {
+          return { ...gen, images: newImages };
+        }
+        return gen;
+      })
+    );
   };
 
   const handleDelete = async (id: string) => {
