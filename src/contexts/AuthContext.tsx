@@ -35,7 +35,7 @@ function useAuthImplementation() {
   // Initialize authentication state
   useEffect(() => {
     setMounted(true)
-
+    
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (_event, session) => {
         const newUser = session?.user ?? null
@@ -68,10 +68,10 @@ function useAuthImplementation() {
   const signOut = useCallback(async () => {
     await supabase.auth.signOut()
     setUser(null)
-    router.refresh()
-    if (!isHomePage) {
-      router.push('/auth/login')
-    }
+      router.refresh()
+      if (!isHomePage) {
+        router.push('/auth/login')
+      }
   }, [supabase, router, isHomePage])
 
   const signIn = useCallback((email: string, password: string) => {

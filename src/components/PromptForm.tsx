@@ -160,7 +160,7 @@ export function PromptForm({
   const [loadingModels, setLoadingModels] = useState(false);
   const [placeholderText, setPlaceholderText] = useState("");
   const [isAnimating, setIsAnimating] = useState(true);
-  const [creditDeducting, setCreditDeducting] = useState(false);
+  // const [creditDeducting, setCreditDeducting] = useState(false);
   const [isInputFocused, setIsInputFocused] = useState(false);
   const [isAdvancedSettingsOpen, setIsAdvancedSettingsOpen] = useState(false);
   
@@ -375,9 +375,9 @@ export function PromptForm({
           if (subscription) {
             currentCredits = subscription.credits_remaining;
             if (currentCredits > 0) {
-              setCreditDeducting(true);
+              // setCreditDeducting(true);
               creditEvents.update(currentCredits - 1);
-              setTimeout(() => setCreditDeducting(false), 2000);
+              // setTimeout(() => setCreditDeducting(false), 2000);
             }
           }
         }
@@ -865,7 +865,6 @@ export function PromptForm({
                         <Button 
                           type="submit" 
                           variant="outline"
-                          status={creditDeducting ? "deducting" : "default"}
                           className="w-full px-3"
                           disabled={loadingModels}
                           aria-label="Generate image from prompt"
@@ -891,7 +890,6 @@ export function PromptForm({
                       <Button 
                         type="submit" 
                         variant="outline"
-                        status={creditDeducting ? "deducting" : "default"}
                         className="w-full px-3"
                         disabled={loadingModels}
                         aria-label="Generate image from prompt"
@@ -1022,7 +1020,6 @@ export function PromptForm({
                       <Button 
                         type="button"
                         variant="outline"
-                        status={creditDeducting ? "deducting" : "default"}
                         onClick={handleReferenceImageGeneration}
                         className="w-full px-3"
                         disabled={loadingModels || !uploadedImageDataUrl}

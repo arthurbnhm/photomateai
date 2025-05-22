@@ -9,6 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Badge } from "@/components/ui/badge"
 import { createSupabaseBrowserClient } from "@/lib/supabase/client"
 import { MediaFocus } from "@/components/MediaFocus"
+import { AlertTriangle } from 'lucide-react';
 
 // Define the type for image generation (now passed as prop)
 export type ImageGeneration = {
@@ -37,6 +38,8 @@ export type PendingGeneration = {
 export type ImageWithStatus = {
   url: string
   isExpired: boolean
+  loadError?: boolean;
+  // errorCount?: number; // Alternative for controlled retries, not used in this version
 }
 
 // Define a type for prediction data from Supabase (used in polling logic)
@@ -353,28 +356,25 @@ export function ImageHistory({
   };
 
   const handleImageError = (generationId: string, imageIndex: number) => {
-    // Use setGenerations (the prop) to update parent state if needed
-    // Forcing a re-render here might be tricky if parent controls 'generations'
-    // This could be a candidate for local state override or a specific callback to parent.
-    // For now, let's assume parent re-fetch or cache-busting is preferred.
-    // console.warn("handleImageError needs review with lifted state.");
-    // The parent's `loadGenerations(true)` might be a way to refresh, or a more targeted update.
+    setGenerations(prevGens => prevGens.map(gen => {
+      if (gen.id !== generationId) return gen;
+      
+      const newImages = gen.images.map((img, idx) => {
+        if (idx !== imageIndex) return img;
+        // Only update if loadError is not already true, to prevent potential multiple calls for the same error
+        if (!img.loadError) {
+          console.warn(`Image failed to load: generation ${generationId}, image ${imageIndex}, URL: ${img.url}`);
+          return { ...img, loadError: true };
+        }
+        return img; // Return original image if error already flagged
+      });
 
-    // Simple cache-busting by updating setGenerations (prop from parent)
-    setGenerations(prevGens => 
-      prevGens.map(gen => 
-        gen.id === generationId
-          ? {
-              ...gen,
-              images: gen.images.map((img, idx) => 
-                idx === imageIndex
-                  ? { ...img, url: `${img.url}${img.url.includes('?') ? '&' : '?'}t=${Date.now()}` }
-                  : img
-              )
-            }
-          : gen
-      )
-    );
+      // Only update the generation if there was an actual change in image error states
+      if (newImages.some((img, idx) => gen.images[idx].loadError !== img.loadError)) {
+        return { ...gen, images: newImages };
+      }
+      return gen;
+    }));
   };
 
   const handleDelete = async (id: string) => {
@@ -674,7 +674,10 @@ export function ImageHistory({
                             key={`${generation.id}-img-${index}`}
                             className="aspect-square relative overflow-hidden rounded-lg shadow-sm hover:shadow-md transition-all duration-300 group cursor-pointer"
                             onClick={() => {
-                              if (!image.isExpired) {
+                              // Allow opening in viewer even if there was a loadError, 
+                              // as MediaFocus might have its own way of handling/displaying it.
+                              // Or prevent if image.loadError is true and image.isExpired is false.
+                              if (!image.isExpired) { 
                                 openImageViewer(generation, index);
                               }
                             }}
@@ -684,6 +687,11 @@ export function ImageHistory({
                               <div className="w-full h-full flex items-center justify-center bg-muted/30">
                                 <p className="text-sm text-muted-foreground">Image unavailable</p>
                               </div>
+                            ) : image.loadError ? (
+                              <div className="w-full h-full flex flex-col items-center justify-center bg-destructive/10">
+                                <AlertTriangle className="h-8 w-8 text-destructive/70" />
+                                <p className="text-xs text-destructive/90 mt-1">Load error</p>
+                              </div>
                             ) : (
                               <Image 
                                 src={image.url} 
@@ -692,8 +700,7 @@ export function ImageHistory({
                                 fill
                                 sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
                                 onError={() => handleImageError(generation.id, index)}
-                                priority={true} // Consider making this conditional based on visibility
-                                loading="eager" // Same as priority
+                                loading="lazy"
                                 unoptimized={true}
                               />
                             )}

@@ -93,7 +93,7 @@ export async function middleware(request: NextRequest) {
   
   // Get the authenticated user - use middlewareUser obtained above
   const user = middlewareUser
-
+  
   // Check authentication requirement
   if (requirements.requiresAuth && !user) {
     const redirectUrl = new URL('/auth/login', request.url)
