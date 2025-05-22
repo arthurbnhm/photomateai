@@ -3,13 +3,14 @@
 import Link from "next/link";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
-import { Check, X } from "lucide-react";
+import { Check, X, Star } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useRouter } from "next/navigation";
 import { Navbar } from "@/components/Navbar";
 import { motion } from "framer-motion";
 import { useTheme } from "next-themes";
+import { Card, CardDescription, CardFooter, CardHeader } from "@/components/ui/card";
 
 export default function Home() {
   // Create a fixed array of 4 images from the available ones
@@ -485,6 +486,68 @@ export default function Home() {
             </div>
           </div>
         </section>
+
+        {/* Testimonials Section START */}
+        <section id="testimonials" className="py-16 md:py-20 px-4 bg-background">
+          <div className="max-w-6xl mx-auto">
+            <h2 className="text-3xl md:text-4xl font-bold text-center mb-8 md:mb-12">
+              What Our Users Say
+            </h2>
+            <div className="grid gap-6 md:grid-cols-3">
+              {/* Testimonial 1 */}
+              <Card className="flex flex-col bg-card">
+                <CardHeader>
+                  <div className="flex mb-2">
+                    {[...Array(5)].map((_, i) => (
+                      <Star key={i} className="h-5 w-5 text-yellow-400 fill-yellow-400" />
+                    ))}
+                  </div>
+                  <CardDescription className="italic text-base text-card-foreground">
+                    &quot;My LinkedIn engagement soared after using PhotomateAI! The app is so intuitive, and Image Reference helped nail my professional style. A must-have for branding!&quot;
+                  </CardDescription>
+                </CardHeader>
+                <CardFooter>
+                  <p className="text-sm font-semibold text-card-foreground">- Sarah L., Business Consultant</p>
+                </CardFooter>
+              </Card>
+
+              {/* Testimonial 2 */}
+              <Card className="flex flex-col bg-card">
+                <CardHeader>
+                  <div className="flex mb-2">
+                    {[...Array(5)].map((_, i) => (
+                      <Star key={i} className="h-5 w-5 text-yellow-400 fill-yellow-400" />
+                    ))}
+                  </div>
+                  <CardDescription className="italic text-base text-card-foreground">
+                    &quot;I saved so much time and money compared to a traditional photoshoot. The quality is outstanding. Highly recommend!&quot;
+                  </CardDescription>
+                </CardHeader>
+                <CardFooter>
+                  <p className="text-sm font-semibold text-card-foreground">- Jessica M., Startup Founder</p>
+                </CardFooter>
+              </Card>
+
+              {/* Testimonial 3 */}
+              <Card className="flex flex-col bg-card">
+                <CardHeader>
+                  <div className="flex mb-2">
+                    {[...Array(5)].map((_, i) => (
+                      <Star key={i} className="h-5 w-5 text-yellow-400 fill-yellow-400" />
+                    ))}
+                  </div>
+                  <CardDescription className="italic text-base text-card-foreground">
+                    &quot;Training my own AI model on PhotomateAI was surprisingly simple. Now I can generate unique, on-brand visuals for my content strategy in minutes. It&apos;s a total game-changer!&quot;
+                  </CardDescription>
+                </CardHeader>
+                <CardFooter>
+                  <p className="text-sm font-semibold text-card-foreground">- Mike P., Content Strategist</p>
+                </CardFooter>
+              </Card>
+            </div>
+          </div>
+        </section>
+        {/* Testimonials Section END */}
 
         {/* Footer */}
         <footer className="py-12 px-4 bg-background border-t">
