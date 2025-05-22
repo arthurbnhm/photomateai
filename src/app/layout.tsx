@@ -45,6 +45,7 @@ export default function RootLayout({
           attribute="class"
           defaultTheme="system"
           enableSystem
+          disableTransitionOnChange
         >
           <AuthProvider>
             <main className="min-h-screen">
