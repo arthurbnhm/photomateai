@@ -39,6 +39,8 @@ export type ImageWithStatus = {
   url: string
   isExpired: boolean
   loadError?: boolean;
+  isLiked?: boolean; // Add liked status for individual images
+  generationId?: string; // Add generation ID for favorites page consistency
   // errorCount?: number; // Alternative for controlled retries, not used in this version
 }
 
@@ -51,6 +53,7 @@ type PredictionData = {
   aspect_ratio: string
   status: string
   storage_urls: string[] | null
+  liked_images?: string[] | null
   error: string | null
   created_at: string
   updated_at: string
@@ -411,6 +414,73 @@ export function ImageHistory({
     );
   };
 
+  const toggleImageFavorite = async (generationId: string, imageUrl: string, currentLikedStatus: boolean) => {
+    try {
+      const newLikedStatus = !currentLikedStatus;
+      
+      // Optimistic update
+      setGenerations(prevGens =>
+        prevGens.map(gen => {
+          if (gen.id !== generationId) {
+            return gen;
+          }
+          
+          const newImages = gen.images.map(img => {
+            if (img.url === imageUrl) {
+              return { ...img, isLiked: newLikedStatus };
+            }
+            return img;
+          });
+          
+          return { ...gen, images: newImages };
+        })
+      );
+
+      // API call
+      const response = await fetch('/api/favorite', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          predictionId: generationId,
+          imageUrl: imageUrl,
+          isLiked: newLikedStatus,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update favorite status')
+      }
+
+      // Show success toast
+      // toast.success(newLikedStatus ? 'Added to favorites' : 'Removed from favorites')
+
+    } catch (error) {
+      console.error('Error toggling favorite:', error)
+      
+      // Revert optimistic update on error
+      setGenerations(prevGens =>
+        prevGens.map(gen => {
+          if (gen.id !== generationId) {
+            return gen;
+          }
+          
+          const newImages = gen.images.map(img => {
+            if (img.url === imageUrl) {
+              return { ...img, isLiked: currentLikedStatus };
+            }
+            return img;
+          });
+          
+          return { ...gen, images: newImages };
+        })
+      );
+      
+      // toast.error('Failed to update favorite status')
+    }
+  };
+
   const handleDelete = async (id: string) => {
     const isPending = pendingGenerations.some(gen => gen.id === id);
     
@@ -553,6 +623,25 @@ export function ImageHistory({
         currentImageIndex={imageViewer.currentImageIndex}
         onClose={closeImageViewer}
         onNavigate={handleNavigate}
+        onUpdateGeneration={(updatedGeneration) => {
+          // Update the generation in our local state when favorites are toggled in MediaFocus
+          setGenerations(prevGens =>
+            prevGens.map(gen => 
+              gen.id === updatedGeneration.id ? updatedGeneration : gen
+            )
+          )
+          
+          // Also update the imageViewer if this is the currently viewed generation
+          setImageViewer(prev => {
+            if (prev.currentGeneration?.id === updatedGeneration.id) {
+              return {
+                ...prev,
+                currentGeneration: updatedGeneration
+              }
+            }
+            return prev
+          })
+        }}
       />
       
       {isLoading && generations.length === 0 && pendingGenerations.length === 0 ? (
@@ -717,6 +806,36 @@ export function ImageHistory({
                             }}
                           >
                             <div className="absolute inset-0 bg-gradient-to-br from-primary/10 to-primary/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-10"></div>
+                            
+                            {/* Heart Icon for Favorite */}
+                            <button
+                              className="absolute top-2 right-2 z-20 p-1.5 rounded-full bg-black/20 backdrop-blur-sm hover:bg-black/40 transition-all duration-200 group-hover:scale-110"
+                              onClick={(e) => {
+                                e.stopPropagation(); // Prevent opening the viewer
+                                toggleImageFavorite(generation.id, image.url, image.isLiked || false);
+                              }}
+                              aria-label={image.isLiked ? "Remove from favorites" : "Add to favorites"}
+                            >
+                              <svg 
+                                xmlns="http://www.w3.org/2000/svg" 
+                                width="16" 
+                                height="16" 
+                                viewBox="0 0 24 24" 
+                                fill={image.isLiked ? "currentColor" : "none"} 
+                                stroke="currentColor" 
+                                strokeWidth="2" 
+                                strokeLinecap="round" 
+                                strokeLinejoin="round" 
+                                className={`transition-colors duration-200 ${
+                                  image.isLiked 
+                                    ? "text-red-500" 
+                                    : "text-white hover:text-red-500"
+                                }`}
+                              >
+                                <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+                              </svg>
+                            </button>
+                            
                             {image.isExpired ? (
                               <div className="w-full h-full flex items-center justify-center bg-muted/30">
                                 <p className="text-sm text-muted-foreground">Image unavailable</p>

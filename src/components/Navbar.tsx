@@ -40,6 +40,7 @@ export function Navbar({
   const isHomePage = pathname === '/';
   const isCreatePage = pathname?.startsWith('/create');
   const isTrainPage = pathname?.startsWith('/train');
+  const isFavoritesPage = pathname?.startsWith('/favorites');
   const isPlansPage = pathname === '/plans';
   
   // Handle sign out with redirect
@@ -133,12 +134,25 @@ export function Navbar({
           100% { opacity: 0.2; r: 15; }
         }
         
+        @keyframes heartbeat {
+          0% { transform: scale(1); }
+          14% { transform: scale(1.1); }
+          28% { transform: scale(1); }
+          42% { transform: scale(1.1); }
+          70% { transform: scale(1); }
+          100% { transform: scale(1); }
+        }
+        
         .red-dot {
           animation: pulse 2s infinite ease-in-out;
         }
         
         .red-glow {
           animation: glow 2s infinite ease-in-out;
+        }
+        
+        .heart-beat {
+          animation: heartbeat 1.5s infinite ease-in-out;
         }
         
         /* Menu item staggered animation */
@@ -291,6 +305,27 @@ export function Navbar({
                             Sign Out
                           </Button>
                         )}
+                        <Button 
+                          variant="outline" 
+                          className="h-9 w-auto px-3 flex items-center gap-2"
+                          asChild
+                          title="Favorites"
+                        >
+                          <Link href="/favorites">
+                            <svg 
+                              xmlns="http://www.w3.org/2000/svg" 
+                              width="16" 
+                              height="16" 
+                              viewBox="0 0 24 24" 
+                              fill="currentColor" 
+                              stroke="none" 
+                              className="text-red-500"
+                            >
+                              <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+                            </svg>
+                            Favorites
+                          </Link>
+                        </Button>
                         <ModeToggle />
                       </div>
                     ) : isTrainPage ? (
@@ -330,6 +365,27 @@ export function Navbar({
                             Sign Out
                           </Button>
                         )}
+                        <Button 
+                          variant="outline" 
+                          className="h-9 w-auto px-3 flex items-center gap-2"
+                          asChild
+                          title="Favorites"
+                        >
+                          <Link href="/favorites">
+                            <svg 
+                              xmlns="http://www.w3.org/2000/svg" 
+                              width="16" 
+                              height="16" 
+                              viewBox="0 0 24 24" 
+                              fill="currentColor" 
+                              stroke="none" 
+                              className="text-red-500"
+                            >
+                              <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+                            </svg>
+                            Favorites
+                          </Link>
+                        </Button>
                         <ModeToggle />
                       </div>
                     ) : isPlansPage ? (
@@ -341,6 +397,49 @@ export function Navbar({
                         >
                           Sign out
                         </Button>
+                        <ModeToggle />
+                      </div>
+                    ) : isFavoritesPage ? (
+                      <div className="flex gap-2 items-center">
+                        <Button 
+                          variant="ghost" 
+                          className="h-9 w-auto px-3"
+                          asChild
+                        >
+                          <Link href="/create">Create</Link>
+                        </Button>
+                        <Button 
+                          variant="ghost" 
+                          className="h-9 w-auto px-3"
+                          asChild
+                        >
+                          <Link href="/train">Train</Link>
+                        </Button>
+                        <Button 
+                          variant="ghost" 
+                          className="h-9 w-auto px-3"
+                          asChild
+                        >
+                          <a href="mailto:arthurbnhm@gmail.com?subject=PhotomateAI">Contact</a>
+                        </Button>
+                        <Button 
+                          variant="ghost" 
+                          className="h-9 w-auto px-3"
+                          asChild
+                        >
+                          <Link href="https://billing.stripe.com/p/login/6oE14c04k7BpeFGfYY" target="_blank" rel="noopener noreferrer">
+                            Billing
+                          </Link>
+                        </Button>
+                        {(!isHomePage || !hideSignOutOnHomepage) && (
+                          <Button 
+                            variant="ghost" 
+                            className="h-9 w-auto px-3"
+                            onClick={handleSignOut}
+                          >
+                            Sign Out
+                          </Button>
+                        )}
                         <ModeToggle />
                       </div>
                     ) : (
@@ -477,6 +576,26 @@ export function Navbar({
                           Contact
                         </a>
                       </li>
+                      <li className="menu-item">
+                        <Link 
+                          href="/favorites" 
+                          className="hover:text-blue-500 font-bold flex items-center justify-center gap-2 group"
+                          onClick={() => setMobileMenuOpen(false)}
+                        >
+                          <svg 
+                            xmlns="http://www.w3.org/2000/svg" 
+                            width="18" 
+                            height="18" 
+                            viewBox="0 0 24 24" 
+                            fill="currentColor" 
+                            stroke="none" 
+                            className="text-red-500 group-hover:scale-110 transition-transform duration-200 heart-beat"
+                          >
+                            <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+                          </svg>
+                          Favorites
+                        </Link>
+                      </li>
                     </>
                   ) : isTrainPage ? (
                     <>
@@ -494,6 +613,56 @@ export function Navbar({
                           onClick={() => setMobileMenuOpen(false)}
                         >
                           Create
+                        </Link>
+                      </li>
+                      <li className="menu-item">
+                        <a 
+                          href="mailto:arthurbnhm@gmail.com?subject=PhotomateAI" 
+                          className="hover:text-blue-500 font-bold"
+                          onClick={() => setMobileMenuOpen(false)}
+                        >
+                          Contact
+                        </a>
+                      </li>
+                      <li className="menu-item">
+                        <Link 
+                          href="/favorites" 
+                          className="hover:text-blue-500 font-bold flex items-center justify-center gap-2 group"
+                          onClick={() => setMobileMenuOpen(false)}
+                        >
+                          <svg 
+                            xmlns="http://www.w3.org/2000/svg" 
+                            width="18" 
+                            height="18" 
+                            viewBox="0 0 24 24" 
+                            fill="currentColor" 
+                            stroke="none" 
+                            className="text-red-500 group-hover:scale-110 transition-transform duration-200 heart-beat"
+                          >
+                            <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+                          </svg>
+                          Favorites
+                        </Link>
+                      </li>
+                    </>
+                  ) : isFavoritesPage ? (
+                    <>
+                      <li className="menu-item">
+                        <Link 
+                          href="/create" 
+                          className="hover:text-blue-500 font-bold"
+                          onClick={() => setMobileMenuOpen(false)}
+                        >
+                          Create
+                        </Link>
+                      </li>
+                      <li className="menu-item">
+                        <Link 
+                          href="/train" 
+                          className="hover:text-blue-500 font-bold"
+                          onClick={() => setMobileMenuOpen(false)}
+                        >
+                          Train
                         </Link>
                       </li>
                       <li className="menu-item">

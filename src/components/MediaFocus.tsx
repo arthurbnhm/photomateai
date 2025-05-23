@@ -14,6 +14,8 @@ import { createSupabaseBrowserClient } from "@/lib/supabase/client"
 export type ImageWithStatus = {
   url: string
   isExpired: boolean
+  isLiked?: boolean // Add liked status for individual images
+  generationId?: string // Add generation ID for favorites page
 }
 
 export type ImageGeneration = {
@@ -32,6 +34,8 @@ type MediaFocusProps = {
   currentImageIndex: number
   onClose: () => void
   onNavigate: (newIndex: number) => void
+  onUpdateGeneration?: (updatedGeneration: ImageGeneration) => void // Add this for updating generation data
+  allImages?: ImageWithStatus[] // Add this for showing all favorite images in thumbnail strip
 }
 
 export function MediaFocus({
@@ -39,11 +43,14 @@ export function MediaFocus({
   currentGeneration,
   currentImageIndex,
   onClose,
-  onNavigate
+  onNavigate,
+  onUpdateGeneration,
+  allImages
 }: MediaFocusProps) {
   const [mounted, setMounted] = React.useState(false)
   const supabase = createSupabaseBrowserClient()
   const activeTouchesRef = useRef<number>(0); // Added to track active touches
+  const thumbnailContainerRef = useRef<HTMLDivElement>(null); // Ref for thumbnail container
   
   // Handle mounting for portal
   useEffect(() => {
@@ -121,15 +128,15 @@ export function MediaFocus({
   // Navigation
   const nextImage = useCallback(() => {
     if (!currentGeneration) return
-    const totalImages = currentGeneration.images.length
+    const totalImages = allImages ? allImages.length : currentGeneration.images.length
     onNavigate((currentImageIndex + 1) % totalImages)
-  }, [currentGeneration, currentImageIndex, onNavigate]);
+  }, [currentGeneration, currentImageIndex, onNavigate, allImages]);
 
   const prevImage = useCallback(() => {
     if (!currentGeneration) return
-    const totalImages = currentGeneration.images.length
+    const totalImages = allImages ? allImages.length : currentGeneration.images.length
     onNavigate((currentImageIndex - 1 + totalImages) % totalImages)
-  }, [currentGeneration, currentImageIndex, onNavigate]);
+  }, [currentGeneration, currentImageIndex, onNavigate, allImages]);
   
   // Simplified preloading that immediately preloads all images in the current generation
   useEffect(() => {
@@ -225,6 +232,111 @@ export function MediaFocus({
     }
   }
 
+  // Favorite toggle functionality
+  const toggleImageFavorite = async (e: React.MouseEvent) => {
+    e.stopPropagation()
+    
+    if (!currentGeneration) return
+    
+    const currentImage = allImages ? allImages[currentImageIndex] : currentGeneration.images[currentImageIndex]
+    if (!currentImage) return
+    
+    const currentLikedStatus = currentImage.isLiked || false
+    const newLikedStatus = !currentLikedStatus
+    
+    try {
+      // Optimistic update - update the local state immediately
+      const updatedImages = currentGeneration.images.map((img, index) => {
+        if (index === currentImageIndex) {
+          return { ...img, isLiked: newLikedStatus }
+        }
+        return img
+      })
+      
+      const updatedGeneration = { ...currentGeneration, images: updatedImages }
+      
+      // Update the parent component's state if callback is provided
+      if (onUpdateGeneration) {
+        onUpdateGeneration(updatedGeneration)
+      }
+
+      // API call
+      const response = await fetch('/api/favorite', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          predictionId: currentImage.generationId || currentGeneration.id,
+          imageUrl: currentImage.url,
+          isLiked: newLikedStatus,
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to update favorite status')
+      }
+
+      // Show success toast
+      // toast.success(newLikedStatus ? 'Added to favorites' : 'Removed from favorites')
+
+    } catch (error) {
+      console.error('Error toggling favorite:', error)
+      
+      // Revert optimistic update on error
+      const revertedImages = currentGeneration.images.map((img, index) => {
+        if (index === currentImageIndex) {
+          return { ...img, isLiked: currentLikedStatus }
+        }
+        return img
+      })
+      
+      const revertedGeneration = { ...currentGeneration, images: revertedImages }
+      
+      if (onUpdateGeneration) {
+        onUpdateGeneration(revertedGeneration)
+      }
+      
+      // toast.error('Failed to update favorite status')
+    }
+  }
+
+  // Auto-scroll thumbnails to keep current one in view
+  const scrollToCurrentThumbnail = useCallback(() => {
+    if (!thumbnailContainerRef.current) return
+    
+    const container = thumbnailContainerRef.current
+    const thumbnails = container.querySelectorAll('button')
+    const currentThumbnail = thumbnails[currentImageIndex]
+    
+    if (!currentThumbnail) return
+    
+    const containerRect = container.getBoundingClientRect()
+    const thumbnailRect = currentThumbnail.getBoundingClientRect()
+    
+    // Add padding to make scrolling more proactive
+    const padding = 60 // pixels
+    const isNearLeftEdge = thumbnailRect.left < containerRect.left + padding
+    const isNearRightEdge = thumbnailRect.right > containerRect.right - padding
+    
+    if (isNearLeftEdge || isNearRightEdge) {
+      // Calculate scroll position to center the current thumbnail
+      const thumbnailCenter = currentThumbnail.offsetLeft + currentThumbnail.offsetWidth / 2
+      const containerCenter = container.offsetWidth / 2
+      const scrollPosition = thumbnailCenter - containerCenter
+      
+      container.scrollTo({
+        left: Math.max(0, scrollPosition),
+        behavior: 'smooth'
+      })
+    }
+  }, [currentImageIndex])
+  
+  // Update scroll position when currentImageIndex changes
+  useEffect(() => {
+    scrollToCurrentThumbnail()
+  }, [currentImageIndex, scrollToCurrentThumbnail])
+
   // If not mounted or not open or no generation, return null
   if (!mounted || !isOpen || !currentGeneration) return null
 
@@ -258,7 +370,7 @@ export function MediaFocus({
               onClick={(e) => e.stopPropagation()}
             >
               <div className="bg-muted py-[1vh] px-4 rounded-full text-sm font-medium text-foreground">
-                {currentImageIndex + 1} / {currentGeneration.images.length}
+                {currentImageIndex + 1} / {allImages ? allImages.length : currentGeneration.images.length}
               </div>
               
               <div className="flex gap-[2vw]">
@@ -269,6 +381,31 @@ export function MediaFocus({
                   className="h-[5vh] w-[5vh] min-h-[2.5rem] min-w-[2.5rem]"
                 >
                   <Download className="h-[40%] w-[40%]" />
+                </Button>
+                
+                <Button 
+                  onClick={toggleImageFavorite}
+                  variant="outline"
+                  size="icon"
+                  className="h-[5vh] w-[5vh] min-h-[2.5rem] min-w-[2.5rem]"
+                  aria-label={allImages ? (allImages[currentImageIndex].isLiked ? "Remove from favorites" : "Add to favorites") : currentGeneration.images[currentImageIndex].isLiked ? "Remove from favorites" : "Add to favorites"}
+                >
+                  <svg 
+                    xmlns="http://www.w3.org/2000/svg" 
+                    width="40%" 
+                    height="40%" 
+                    viewBox="0 0 24 24" 
+                    fill={allImages ? (allImages[currentImageIndex].isLiked ? "currentColor" : "none") : (currentGeneration.images[currentImageIndex].isLiked ? "currentColor" : "none")} 
+                    stroke="currentColor" 
+                    strokeWidth="2" 
+                    strokeLinecap="round" 
+                    strokeLinejoin="round" 
+                    className={`transition-colors duration-200 ${
+                      allImages ? (allImages[currentImageIndex].isLiked ? "text-red-500" : "text-foreground hover:text-red-500") : (currentGeneration.images[currentImageIndex].isLiked ? "text-red-500" : "text-foreground hover:text-red-500")
+                    }`}
+                  >
+                    <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+                  </svg>
                 </Button>
                 
                 <Button 
@@ -300,7 +437,7 @@ export function MediaFocus({
                 onClick={(e) => e.stopPropagation()}
               >
                 <NextImage
-                  src={currentGeneration.images[currentImageIndex].url}
+                  src={allImages ? allImages[currentImageIndex].url : currentGeneration.images[currentImageIndex].url}
                   alt={`Generated image for "${currentGeneration.prompt}"`}
                   className="object-contain rounded-md"
                   width={1024}
@@ -313,7 +450,7 @@ export function MediaFocus({
                   }}
                   onError={(e) => {
                     console.error("Image failed to load:", e);
-                    toast.error("Image could not be loaded");
+                    // toast.error("Image could not be loaded");
                   }}
                   unoptimized={true}
                   priority={true}
@@ -350,8 +487,8 @@ export function MediaFocus({
               onClick={(e) => e.stopPropagation()}
             >
               <div className="mx-auto py-[2vh] rounded-lg overflow-x-auto">
-                <div className="flex items-center gap-[2vw] justify-center">
-                  {currentGeneration.images.map((image, index) => (
+                <div ref={thumbnailContainerRef} className="flex items-center gap-[2vw] justify-center">
+                  {(allImages || currentGeneration.images).map((image, index) => (
                     <button
                       key={index}
                       onClick={() => onNavigate(index)}

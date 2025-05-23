@@ -36,6 +36,8 @@ type ImageGeneration = {
 type ImageWithStatus = {
   url: string
   isExpired: boolean
+  isLiked?: boolean
+  generationId?: string
 }
 
 // Define a type for prediction data from Supabase (moved from ImageHistory)
@@ -46,6 +48,7 @@ type PredictionData = {
   aspect_ratio: string
   status: string
   storage_urls: string[] | null
+  liked_images?: string[] | null
   error: string | null
   created_at: string
   updated_at: string
@@ -71,13 +74,14 @@ interface Model {
 }
 
 // Simplified processOutput (moved from ImageHistory)
-const processOutput = (storageUrls: string[] | null): ImageWithStatus[] => {
+const processOutput = (storageUrls: string[] | null, likedImages: string[] | null = null): ImageWithStatus[] => {
   if (!storageUrls || !Array.isArray(storageUrls)) {
     return [];
   }
   return storageUrls.map(url => ({
     url,
-    isExpired: false
+    isExpired: false,
+    isLiked: likedImages ? likedImages.includes(url) : false
   }));
 };
 
@@ -200,7 +204,7 @@ function CreatePageContent() {
               replicate_id: item.replicate_id,
               prompt: item.prompt,
               timestamp: item.created_at,
-              images: processOutput(item.storage_urls),
+              images: processOutput(item.storage_urls, item.liked_images),
               aspectRatio: item.aspect_ratio,
               format: item.format || item.input?.output_format || 'webp',
               modelDisplayName: modelDisplayName
@@ -366,6 +370,7 @@ function CreatePageContent() {
         </div>
         <h1 className="text-3xl font-semibold">Create images of yourself</h1>
       </div>
+      
       <PromptForm 
         pendingGenerations={pendingGenerations}
         setPendingGenerations={setPendingGenerations}
