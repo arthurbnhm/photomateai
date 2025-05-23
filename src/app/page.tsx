@@ -321,7 +321,7 @@ export default function Home() {
               Choose your plan
             </h2>
             
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto">
               {/* Basic Plan */}
               <div className="border rounded-lg bg-card overflow-hidden flex flex-col">
                 <div className="p-6 pb-0">
@@ -358,11 +358,8 @@ export default function Home() {
               </div>
               
               {/* Professional Plan */}
-              <div className="border rounded-lg bg-card overflow-hidden relative flex flex-col">
-                <div className="absolute top-0 left-0 right-0 bg-blue-500 text-white text-center py-1 text-sm font-medium">
-                  Most Popular
-                </div>
-                <div className="p-6 pb-0 pt-8">
+              <div className="border rounded-lg bg-card overflow-hidden flex flex-col">
+                <div className="p-6 pb-0">
                   <h3 className="text-2xl font-bold mb-2">Professional</h3>
                   <div className="flex items-baseline gap-1 mb-4">
                     <span className="text-3xl md:text-4xl font-bold">$49</span>
@@ -400,49 +397,6 @@ export default function Home() {
                 </div>
                 <div className="mt-auto p-6">
                   <Button className="w-full" onClick={handleStartNow}>Buy Now</Button>
-                </div>
-              </div>
-              
-              {/* Executive Plan */}
-              <div className="border rounded-lg bg-card overflow-hidden flex flex-col">
-                <div className="p-6 pb-0">
-                  <h3 className="text-2xl font-bold mb-2">Executive</h3>
-                  <div className="flex items-baseline gap-1 mb-4">
-                    <span className="text-3xl md:text-4xl font-bold">$79</span>
-                    <span className="text-muted-foreground">/month</span>
-                  </div>
-                  <p className="mb-4">Best for teams or high-volume needs</p>
-                  <hr className="mb-4" />
-                  
-                  <ul className="space-y-3">
-                    <li className="flex items-center gap-2">
-                      <Check className="h-4 w-4 text-green-500 flex-shrink-0" />
-                      <span>Generate 3,000 AI portraits</span>
-                    </li>
-                    <li className="flex items-center gap-2">
-                      <Check className="h-4 w-4 text-green-500 flex-shrink-0" />
-                      <span>Create 10 AI avatar models</span>
-                    </li>
-                    {/* <li className="flex items-center gap-2">
-                      <Check className="h-4 w-4 text-green-500 flex-shrink-0" />
-                      <span>Photorealistic</span>
-                    </li> */}
-                    <li className="flex items-center gap-2">
-                      <Check className="h-4 w-4 text-green-500 flex-shrink-0" />
-                      <span>Image Reference</span>
-                    </li>
-                    <li className="flex items-center gap-2">
-                      <Check className="h-4 w-4 text-green-500 flex-shrink-0" />
-                      <span>Upscaler (coming soon)</span>
-                    </li>
-                    <li className="flex items-center gap-2">
-                      <Check className="h-4 w-4 text-green-500 flex-shrink-0" />
-                      <span>All available styles & backgrounds</span>
-                    </li>
-                  </ul>
-                </div>
-                <div className="mt-auto p-6">
-                  <Button className="w-full" variant="outline" onClick={handleStartNow}>Buy Now</Button>
                 </div>
               </div>
             </div>
