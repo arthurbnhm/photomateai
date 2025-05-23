@@ -153,6 +153,12 @@ export async function POST(request: Request) {
 
     // Parse the webhook data
     const webhookData = JSON.parse(bodyText);
+    
+    // 🚨 TEMPORARY: Log ALL webhook payloads for debugging
+    console.log('='.repeat(80));
+    console.log(`🔔 WEBHOOK RECEIVED - ID: ${webhookData.id}, Status: ${webhookData.status}`);
+    console.log('📦 Full Payload:', JSON.stringify(webhookData, null, 2));
+    console.log('='.repeat(80));
 
     // For webhook handling, we need to use the service role key
     // This is one of the few legitimate cases where we need admin access
@@ -180,6 +186,12 @@ export async function POST(request: Request) {
     }
     */
 
+    // 🚨 TEMPORARY: Quick test to verify webhook URL is accessible
+    if (webhookData.test === true) {
+      console.log('✅ Test webhook received successfully!');
+      return NextResponse.json({ message: 'Test webhook received', success: true });
+    }
+
     if (!replicate_id) {
       console.error('No replicate_id in webhook data');
       return NextResponse.json({ error: 'No replicate_id provided' }, { status: 400 });
@@ -199,63 +211,92 @@ export async function POST(request: Request) {
 
     // If found in trainings table, handle as a training webhook
     if (training) {
+      // Add comprehensive logging for debugging the new trainer's payload
+      console.log(`🔍 Training webhook received for training ID: ${replicate_id}`);
+      console.log(`📋 Webhook status: ${webhookData.status}`);
+      console.log(`📄 Full webhook payload:`, JSON.stringify(webhookData, null, 2));
+      console.log(`🎯 Webhook output:`, JSON.stringify(webhookData.output, null, 2));
+      console.log(`⏱️ Webhook metrics:`, JSON.stringify(webhookData.metrics, null, 2));
+      
       // Extract timing information from webhook payload
       const startedAt = webhookData.started_at || null;
       const completedAt = webhookData.completed_at || null;
       const predictTime = webhookData.metrics?.predict_time || null;
       
+      console.log(`⏰ Timing info - started_at: ${startedAt}, completed_at: ${completedAt}, predict_time: ${predictTime}`);
+      
       // Calculate cost based on predict time (if available)
-      // Cost rate is $0.001525 per second (same as predictions)
-      const costPerSecond = 0.001525;
+      // Cost rate is $0.0122 per second for training
+      const costPerSecond = 0.0122;
       const cost = predictTime ? predictTime * costPerSecond : null;
+      
+      console.log(`💰 Calculated cost: ${cost}`);
 
       // Extract the newly created model version identifier from the webhook.
-      // Replicate typically provides this in `output.version` for training webhooks.
-      // This might be in the format "owner/model:hash" or just "hash".
+      // For fast-flux-trainer, check multiple possible locations
       let rawModelVersionIdentifier: string | null = null;
-      if (webhookData.output && 
-          typeof webhookData.output === 'object' && 
-          webhookData.output.version && 
-          typeof webhookData.output.version === 'string') {
-        rawModelVersionIdentifier = webhookData.output.version;
-      } else if (webhookData.version && typeof webhookData.version === 'string') {
-        // Fallback to top-level version if output.version is not available/valid
+      
+      // Check various possible locations for the model version
+      if (webhookData.output && typeof webhookData.output === 'object') {
+        // Check output.version first (ostris format)
+        if (webhookData.output.version && typeof webhookData.output.version === 'string') {
+          rawModelVersionIdentifier = webhookData.output.version;
+          console.log(`✅ Found version in output.version: ${rawModelVersionIdentifier}`);
+        }
+        // Check if output itself is a string (might be the version for fast-flux-trainer)
+        else if (typeof webhookData.output === 'string') {
+          rawModelVersionIdentifier = webhookData.output;
+          console.log(`✅ Found version in output (string): ${rawModelVersionIdentifier}`);
+        }
+        // Check output.model_version (alternative field name)
+        else if (webhookData.output.model_version && typeof webhookData.output.model_version === 'string') {
+          rawModelVersionIdentifier = webhookData.output.model_version;
+          console.log(`✅ Found version in output.model_version: ${rawModelVersionIdentifier}`);
+        }
+        // Check output.destination (destination field)
+        else if (webhookData.output.destination && typeof webhookData.output.destination === 'string') {
+          rawModelVersionIdentifier = webhookData.output.destination;
+          console.log(`✅ Found version in output.destination: ${rawModelVersionIdentifier}`);
+        }
+      }
+      
+      // Fallback to top-level version if output checks didn't work
+      if (!rawModelVersionIdentifier && webhookData.version && typeof webhookData.version === 'string') {
         rawModelVersionIdentifier = webhookData.version;
-        console.warn(
-          `Training webhook for training ID ${replicate_id}: ` +
-          `Used top-level 'version' field ('${rawModelVersionIdentifier}') as model version identifier. ` +
-          `This might be the trainer version. Expected 'output.version'. ` +
-          `Webhook output was: ${JSON.stringify(webhookData.output)}`
-        );
-      } else {
-        console.error(
-            `Training webhook for training ID ${replicate_id}: ` +
-            `Could not determine new model version identifier from webhook. ` +
-            `webhookData.version: ${webhookData.version}, webhookData.output: ${JSON.stringify(webhookData.output)}`
-        );
+        console.log(`⚠️ Using top-level version field: ${rawModelVersionIdentifier} (might be trainer version)`);
+      }
+      
+      // Check model field as another fallback
+      if (!rawModelVersionIdentifier && webhookData.model && typeof webhookData.model === 'string') {
+        rawModelVersionIdentifier = webhookData.model;
+        console.log(`⚠️ Using model field: ${rawModelVersionIdentifier}`);
+      }
+      
+      if (!rawModelVersionIdentifier) {
+        console.error(`❌ Could not determine model version from webhook for training ${replicate_id}`);
+        console.error(`Available fields:`, Object.keys(webhookData));
+        if (webhookData.output) {
+          console.error(`Available output fields:`, Object.keys(webhookData.output));
+        }
       }
 
       // Parse the raw identifier to get just the version hash.
       let finalModelVersionToStore: string | null = null;
       if (rawModelVersionIdentifier) {
+        console.log(`🔄 Processing raw model version identifier: ${rawModelVersionIdentifier}`);
+        
         const parts = rawModelVersionIdentifier.split(':');
         if (parts.length === 2) {
           finalModelVersionToStore = parts[1]; // Assumes "owner/model:hash" format
+          console.log(`✅ Extracted version hash from owner/model:hash format: ${finalModelVersionToStore}`);
         } else if (parts.length === 1 && !rawModelVersionIdentifier.includes('/')) {
           // If it's already just a hash (no owner/model and no colon)
           finalModelVersionToStore = rawModelVersionIdentifier;
-          // console.log(
-          //   `Training webhook for training ID ${replicate_id}: ` +
-          //   `Using model version identifier '${rawModelVersionIdentifier}' directly as it appears to be a hash.`
-          // );
+          console.log(`✅ Using raw identifier as version hash: ${finalModelVersionToStore}`);
         } else {
-          // It's an unexpected format (e.g., just "owner/model" without a hash)
+          // It's an unexpected format, but store it anyway
           finalModelVersionToStore = rawModelVersionIdentifier;
-          console.error(
-            `Training webhook for training ID ${replicate_id}: ` +
-            `Model version identifier '${rawModelVersionIdentifier}' is not in 'owner/model:hash' or 'hash' format. ` +
-            `Storing the full string. Please verify webhook payload.`
-          );
+          console.warn(`⚠️ Unexpected version format, storing as-is: ${finalModelVersionToStore}`);
         }
       }
 
@@ -267,7 +308,6 @@ export async function POST(request: Request) {
         completed_at?: string | null;
         predict_time?: number | null;
         cost?: number | null;
-        replicate_raw_output?: Record<string, unknown>;
       } = {
         status: webhookData.status,
         error: webhookData.error,
@@ -275,8 +315,9 @@ export async function POST(request: Request) {
         completed_at: completedAt,
         predict_time: predictTime,
         cost: cost,
-        replicate_raw_output: webhookData.output,
       };
+
+      console.log(`📝 About to update training record with:`, updateData);
 
       // Update the training record
       const { error: updateError } = await supabase
@@ -285,33 +326,65 @@ export async function POST(request: Request) {
         .eq('training_id', replicate_id);
 
       if (updateError) {
-        console.error('Error updating training record:', updateError);
+        console.error('❌ Error updating training record:', updateError);
+        console.error('❌ Update data was:', JSON.stringify(updateData, null, 2));
+        console.error('❌ Training ID:', replicate_id);
         // Continue even if update fails, as we still need to update the model
+      } else {
+        console.log(`✅ Successfully updated training record for training ID: ${replicate_id}`);
+        
+        // Verify the update by fetching the record again
+        const { data: verifyData, error: verifyError } = await supabase
+          .from('trainings')
+          .select('status, started_at, completed_at, predict_time, cost')
+          .eq('training_id', replicate_id)
+          .single();
+          
+        if (verifyError) {
+          console.error('❌ Error verifying training update:', verifyError);
+        } else {
+          console.log('✅ Verified training record after update:', verifyData);
+        }
       }
 
       // If training succeeded and we have a model ID and the new version,
       // update the corresponding record in the 'models' table.
       if (webhookData.status === 'succeeded' && training.model_id && finalModelVersionToStore) {
+        console.log(`🎯 Updating model ${training.model_id} with version: ${finalModelVersionToStore}`);
+        
         const { error: modelUpdateError } = await supabase
           .from('models')
           .update({ 
-            version: finalModelVersionToStore,
-            status: 'trained' // Mark the model as trained
+            version: finalModelVersionToStore
           })
           .eq('id', training.model_id);
 
         if (modelUpdateError) {
-          console.error(`Error updating model ${training.model_id} to version ${finalModelVersionToStore}:`, modelUpdateError);
+          console.error(`❌ Error updating model ${training.model_id} to version ${finalModelVersionToStore}:`, modelUpdateError);
           // Continue even if model update fails
         } else {
-          // console.log(`Successfully updated model ${training.model_id} to version ${finalModelVersionToStore}.`);
+          console.log(`✅ Successfully updated model ${training.model_id} to version ${finalModelVersionToStore}`);
+          
+          // Verify the model update by fetching the record again
+          const { data: verifyModelData, error: verifyModelError } = await supabase
+            .from('models')
+            .select('version')
+            .eq('id', training.model_id)
+            .single();
+            
+          if (verifyModelError) {
+            console.error('❌ Error verifying model update:', verifyModelError);
+          } else {
+            console.log('✅ Verified model record after update:', verifyModelData);
+          }
         }
       } else if (webhookData.status === 'succeeded' && !finalModelVersionToStore && training.model_id) {
         console.error(
-            `Training webhook for training ID ${replicate_id} (model ID ${training.model_id}) succeeded, ` +
-            `but no valid model version hash could be determined/parsed from the webhook. Model version not updated.` +
-            `(Raw identifier was: ${rawModelVersionIdentifier})`
+            `❌ Training succeeded for ${replicate_id} (model ${training.model_id}) ` +
+            `but no valid model version could be determined. Raw identifier: ${rawModelVersionIdentifier}`
         );
+      } else if (webhookData.status === 'succeeded' && !training.model_id) {
+        console.error(`❌ Training succeeded but no model_id found in training record: ${replicate_id}`);
       }
 
       return NextResponse.json({ success: true, type: 'training' });

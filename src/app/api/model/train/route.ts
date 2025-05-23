@@ -8,22 +8,11 @@ const replicate = new Replicate({
   auth: process.env.REPLICATE_API_TOKEN,
 });
 
-// Define constant training parameters
+// Define constant training parameters for fast-flux-trainer
 const TRAINING_PARAMS = {
-  steps: 1000,
-  lora_rank: 16,
-  optimizer: "adamw8bit",
-  batch_size: 1,
-  resolution: "512,768,1024",
-  autocaption: true,
+  lora_type: "subject",
   trigger_word: "TOK",
-  learning_rate: 0.0004,
-  wandb_project: "flux_train_replicate",
-  wandb_save_interval: 100,
-  caption_dropout_rate: 0.05,
-  cache_latents_to_disk: false,
-  wandb_sample_interval: 100,
-  gradient_checkpointing: false
+  training_steps: 1000
 };
 
 export async function POST(request: NextRequest) {
@@ -104,11 +93,11 @@ async function trainModel(modelOwner: string, modelName: string, zipUrl: string,
 
     const webhookUrl = process.env.NEXT_PUBLIC_APP_URL && `${process.env.NEXT_PUBLIC_APP_URL}/api/webhook`;
 
-    // Create the training in Replicate
+    // Create the training in Replicate using fast-flux-trainer
     const training = await replicate.trainings.create(
-      "ostris",
-      "flux-dev-lora-trainer",
-      "b6af14222e6bd9be257cbc1ea4afda3cd0503e1133083b9d1de0364d8568e6ef",
+      "replicate",
+      "fast-flux-trainer",
+      "d0f6d9aa8257e0fd535c4d20b3dc4d91d26d6329a45c5ff5109c6fbff107efd8",
       {
         destination: `${modelOwner}/${modelName}`,
         input: { ...TRAINING_PARAMS, input_images: zipUrl },
