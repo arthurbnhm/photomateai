@@ -454,7 +454,7 @@ export function FavoritesHistory() {
                 
                 {/* Remove from Favorites Button */}
                 <button
-                  className="absolute top-2 right-2 z-20 p-1.5 rounded-full bg-black/20 backdrop-blur-sm hover:bg-black/40 transition-all duration-200 group-hover:scale-110"
+                  className="absolute top-2 right-2 z-20 p-1.5 transition-all duration-200 group-hover:scale-110"
                   onClick={(e) => {
                     e.stopPropagation()
                     removeFavorite(generation.id, image.url)
@@ -462,7 +462,12 @@ export function FavoritesHistory() {
                   aria-label="Remove from favorites"
                   title="Remove from favorites"
                 >
-                  <Heart className="h-4 w-4 text-red-500 fill-current" />
+                  <Heart 
+                    className="h-4 w-4 text-red-500 fill-current drop-shadow-[0_2px_4px_rgba(255,255,255,0.8)]" 
+                    style={{
+                      filter: 'drop-shadow(0 0 3px rgba(255, 255, 255, 0.7))'
+                    }}
+                  />
                 </button>
                 
                 {image.isExpired ? (

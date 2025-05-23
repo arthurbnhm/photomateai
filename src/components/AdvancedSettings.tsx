@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, forwardRef, useImperativeHandle } from "react"
-import { ChevronDown, ChevronUp } from "lucide-react"
+import { ChevronDown, ChevronUp, Palette, Camera, Smile, Crown, Lightbulb, Settings } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { UseFormReturn } from "react-hook-form"
 
@@ -10,14 +10,6 @@ import {
   Collapsible,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible"
-import { Label } from "@/components/ui/label"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 
 // Interface definitions
 interface BackgroundColor {
@@ -53,20 +45,6 @@ interface Gender {
   label: string;
   icon: string;
   promptText: string;
-}
-
-// Added Preset interface and data
-interface Preset {
-  value: string;
-  label: string;
-  description?: string;
-  settings: {
-    cameraShot?: string;
-    bgColor?: string;
-    expression?: string;
-    accessories?: string[];
-    gender?: string; // Allow presets to suggest gender
-  };
 }
 
 // Define background colors
@@ -391,52 +369,6 @@ const lightSettings: LightSetting[] = [
   }
 ];
 
-// Added Preset data
-const presets: Preset[] = [
-  {
-    value: "linkedin-profile",
-    label: "LinkedIn Profile",
-    description: "Professional headshot for LinkedIn.",
-    settings: {
-      cameraShot: "portrait",
-      bgColor: "white",
-      expression: "smile",
-      accessories: [], // Start with no accessories
-    }
-  },
-  {
-    value: "team-headshot",
-    label: "Team Headshot",
-    description: "Consistent look for team photos.",
-    settings: {
-      cameraShot: "medium",
-      bgColor: "gray",
-      expression: "smile",
-    }
-  },
-  {
-    value: "casual-avatar",
-    label: "Casual Avatar",
-    description: "Relaxed style for social media.",
-    settings: {
-      cameraShot: "closeup",
-      expression: "laugh",
-      accessories: ["beanie"],
-    }
-  },
-   {
-    value: "formal-portrait",
-    label: "Formal Portrait",
-    description: "Classic formal portrait style.",
-    settings: {
-      cameraShot: "portrait",
-      bgColor: "black",
-      expression: "serious",
-      accessories: ["suit"], // Suggests suit, user can add tie/bowtie
-    }
-  }
-];
-
 // Update the interface to match the form structure
 interface FormFields {
   prompt: string;
@@ -466,7 +398,6 @@ export const AdvancedSettings = forwardRef<AdvancedSettingsRefType, AdvancedSett
     const [selectedAccessory, setSelectedAccessory] = useState<string[]>([]);
     const [selectedCameraShot, setSelectedCameraShot] = useState<string | null>(null);
     const [selectedGender, setSelectedGender] = useState<string | null>(null);
-    const [selectedPreset, setSelectedPreset] = useState<string | null>(null);
     const [selectedLight, setSelectedLight] = useState<string | null>(null);
 
     const resetSelections = () => {
@@ -475,7 +406,6 @@ export const AdvancedSettings = forwardRef<AdvancedSettingsRefType, AdvancedSett
       setSelectedAccessory([]);
       setSelectedCameraShot(null);
       setSelectedGender(null);
-      setSelectedPreset(null);
       setSelectedLight(null);
     };
 
@@ -660,39 +590,6 @@ export const AdvancedSettings = forwardRef<AdvancedSettingsRefType, AdvancedSett
       }
     };
 
-    const handlePresetSelect = (presetValue: string) => {
-      const isClearingPreset = presetValue === "__no_preset__";
-      setSelectedPreset(isClearingPreset ? null : presetValue);
-
-      const prevCameraShot = selectedCameraShot;
-      const prevBgColor = selectedBgColor;
-      const prevExpression = selectedExpression;
-      const prevAccessories = [...selectedAccessory];
-      const prevGender = selectedGender;
-
-      if (prevCameraShot) handleCameraShotSelect(prevCameraShot);
-      if (prevBgColor) handleBgColorSelect(prevBgColor);
-      if (prevExpression) handleExpressionSelect(prevExpression);
-      prevAccessories.forEach(accValue => {
-        if (selectedAccessory.includes(accValue)) {
-            handleAccessorySelect(accValue);
-        }
-      });
-      if (prevGender) handleGenderSelect(prevGender);
-
-      const preset = presets.find(p => p.value === presetValue);
-
-      if (preset) {
-        if (preset.settings.cameraShot) handleCameraShotSelect(preset.settings.cameraShot);
-        if (preset.settings.bgColor) handleBgColorSelect(preset.settings.bgColor);
-        if (preset.settings.expression) handleExpressionSelect(preset.settings.expression);
-        if (preset.settings.accessories && preset.settings.accessories.length > 0) {
-          preset.settings.accessories.forEach(acc => handleAccessorySelect(acc));
-        }
-        if (preset.settings.gender) handleGenderSelect(preset.settings.gender);
-      }
-    };
-
     const handleLightSelect = (lightValue: string) => {
       const currentLight = selectedLight;
       const currentPrompt = form.getValues().prompt;
@@ -728,299 +625,335 @@ export const AdvancedSettings = forwardRef<AdvancedSettingsRefType, AdvancedSett
       }
     };
 
+    const getSelectedCount = () => {
+      let count = 0;
+      if (selectedBgColor) count++;
+      if (selectedExpression) count++;
+      if (selectedAccessory.length > 0) count++;
+      if (selectedCameraShot) count++;
+      if (selectedGender) count++;
+      if (selectedLight) count++;
+      return count;
+    };
+
     return (
       <Collapsible
         open={isOpen}
         onOpenChange={onOpenChange}
-        className="border-t border-border pt-4 mt-4"
+        className="border-t border-border/40 pt-6 mt-6"
       >
         <div className="flex items-center justify-between">
           <CollapsibleTrigger asChild>
-            <Button variant="ghost" size="sm" className="gap-1 text-muted-foreground hover:text-foreground">
-              Advanced Settings
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              className="group gap-2 text-muted-foreground hover:text-foreground bg-muted/20 hover:bg-muted/40 rounded-lg px-4 py-2 transition-all duration-200"
+            >
+              <Settings className="h-4 w-4 group-hover:rotate-90 transition-transform duration-300" />
+              <span className="font-medium">Advanced Settings</span>
+              {getSelectedCount() > 0 && (
+                <span className="bg-primary/20 text-primary text-xs px-2 py-0.5 rounded-full font-medium">
+                  {getSelectedCount()}
+                </span>
+              )}
               {isOpen ? (
-                <ChevronUp className="h-4 w-4" />
+                <ChevronUp className="h-4 w-4 transition-transform duration-200" />
               ) : (
-                <ChevronDown className="h-4 w-4" />
+                <ChevronDown className="h-4 w-4 transition-transform duration-200" />
               )}
             </Button>
           </CollapsibleTrigger>
-
-          <div className="flex space-x-1">
-            <div
-              className={cn(
-                "w-12 h-8 flex items-center justify-center rounded-md cursor-pointer border border-input transition-all duration-200 hover:bg-accent/10",
-                selectedGender === "male" ? "ring-2 ring-inset ring-ring/50 bg-accent/20" : "opacity-90 hover:opacity-100"
-              )}
-              onClick={() => handleGenderSelect("male")}
-              title="Male"
-            >
-              <div className="text-sm font-medium">Male</div>
-            </div>
-            <div
-              className={cn(
-                "w-16 h-8 flex items-center justify-center rounded-md cursor-pointer border border-input transition-all duration-200 hover:bg-accent/10",
-                selectedGender === "female" ? "ring-2 ring-inset ring-ring/50 bg-accent/20" : "opacity-90 hover:opacity-100"
-              )}
-              onClick={() => handleGenderSelect("female")}
-              title="Female"
-            >
-              <div className="text-sm font-medium">Female</div>
-            </div>
-          </div>
         </div>
         <div 
           className={cn(
-            "overflow-hidden transition-all duration-300 ease-in-out",
-            isOpen ? "max-h-[2000px] opacity-100 transform-none" : "max-h-0 opacity-0 transform translate-y-[-8px]"
+            "overflow-hidden transition-all duration-500 ease-in-out",
+            isOpen ? "max-h-[3000px] opacity-100 mt-6" : "max-h-0 opacity-0 mt-0"
           )}
         >
-          <div className="pt-4">
-            <div className="space-y-6">
-              <div className="space-y-2">
-                 <Label htmlFor="preset-select" className="text-sm font-medium">Style Preset</Label>
-                 <Select value={selectedPreset ?? "__no_preset__"} onValueChange={handlePresetSelect}>
-                   <SelectTrigger id="preset-select">
-                     <SelectValue placeholder="Select a preset..." />
-                   </SelectTrigger>
-                   <SelectContent>
-                     <SelectItem value="__no_preset__">-- No Preset --</SelectItem>
-                     {presets.map((preset) => (
-                       <SelectItem key={preset.value} value={preset.value}>
-                         {preset.label}
-                         {preset.description && (
-                            <span className="ml-2 text-xs text-muted-foreground">({preset.description})</span>
-                         )}
-                       </SelectItem>
-                     ))}
-                   </SelectContent>
-                 </Select>
+          <div className="bg-gradient-to-br from-muted/20 via-background/50 to-muted/10 border border-border/30 rounded-xl p-6 space-y-8 backdrop-blur-sm">
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h4 className="text-base font-semibold text-foreground flex items-center gap-2">
+                  <Camera className="w-5 h-5 text-primary" />
+                  Camera Shot
+                  <span className={cn(
+                    "text-sm font-normal bg-muted/50 px-2 py-1 rounded-md transition-opacity duration-200 min-w-[60px] text-center",
+                    selectedCameraShot 
+                      ? "text-muted-foreground opacity-100" 
+                      : "text-transparent opacity-0"
+                  )}>
+                    {selectedCameraShot 
+                      ? cameraShots.find(shot => shot.value === selectedCameraShot)?.label 
+                      : "Placeholder"}
+                  </span>
+                </h4>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  type="button"
+                  className={cn(
+                    "h-8 px-3 text-xs transition-opacity duration-200",
+                    selectedCameraShot 
+                      ? "text-muted-foreground hover:text-foreground opacity-100 cursor-pointer" 
+                      : "text-transparent opacity-0 cursor-default pointer-events-none"
+                  )}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (selectedCameraShot) handleCameraShotSelect(selectedCameraShot);
+                  }}
+                >
+                  Clear
+                </Button>
               </div>
-
-              <div className="space-y-2">
-                <div className="flex items-center justify-between h-6">
-                  <h4 className="text-sm font-medium flex items-center">
-                    Camera Shot
-                    <span className="ml-2 text-xs text-muted-foreground min-w-[80px]">
-                      {selectedCameraShot && (
-                        <>({cameraShots.find(shot => shot.value === selectedCameraShot)?.label})</>
-                      )}
-                    </span>
-                  </h4>
-                  <div className="w-[60px] text-right">
-                    {selectedCameraShot && (
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
-                        className="h-6 px-2 text-xs"
-                        onClick={() => handleCameraShotSelect(selectedCameraShot)}
-                      >
-                        Clear
-                      </Button>
+              
+              <div className="grid grid-cols-3 md:grid-cols-6 gap-3">
+                {cameraShots.map((shot) => (
+                  <div
+                    key={shot.value}
+                    className={cn(
+                      "group relative flex flex-col items-center justify-center p-4 rounded-xl cursor-pointer border-2 transition-all duration-300 hover:scale-105 backdrop-blur-sm",
+                      selectedCameraShot === shot.value 
+                        ? "border-slate-400 dark:border-slate-500 bg-slate-100 dark:bg-slate-800/50 shadow-lg" 
+                        : "border-border/40 hover:border-slate-300 dark:hover:border-slate-600 bg-background/50 hover:bg-background/80 shadow-sm"
                     )}
+                    onClick={() => handleCameraShotSelect(shot.value)}
+                  >
+                    <div className="text-2xl mb-2 group-hover:scale-110 transition-transform duration-200">{shot.icon}</div>
+                    <div className="text-xs font-medium text-center leading-tight">{shot.label}</div>
                   </div>
-                </div>
-                
-                <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
-                  {cameraShots.map((shot) => (
-                    <div
-                      key={shot.value}
-                      className={cn(
-                        "relative flex flex-col items-center justify-center px-2 py-3 rounded-md cursor-pointer border border-input transition-all duration-200 hover:bg-accent/10",
-                        selectedCameraShot === shot.value 
-                          ? "ring-2 ring-inset ring-ring/50 bg-accent/20" 
-                          : "opacity-90 hover:opacity-100"
-                      )}
-                      onClick={() => handleCameraShotSelect(shot.value)}
-                    >
-                      <div className="text-2xl mb-1">{shot.icon}</div>
-                      <div className="text-xs font-medium text-center">{shot.label}</div>
-                    </div>
-                  ))}
-                </div>
+                ))}
               </div>
+            </div>
 
-              <div className="space-y-2">
-                <div className="flex items-center justify-between h-6">
-                  <h4 className="text-sm font-medium flex items-center">
-                    Background Color
-                    <span className="ml-2 text-xs text-muted-foreground min-w-[80px]">
-                      {selectedBgColor && (
-                        <>({backgroundColors.find(bg => bg.value === selectedBgColor)?.label})</>
-                      )}
-                    </span>
-                  </h4>
-                  <div className="w-[60px] text-right">
-                    {selectedBgColor && (
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
-                        className="h-6 px-2 text-xs"
-                        onClick={() => handleBgColorSelect(selectedBgColor)}
-                      >
-                        Clear
-                      </Button>
-                    )}
-                  </div>
-                </div>
-                
-                <div className="grid grid-cols-4 md:grid-cols-6 gap-2">
-                  {backgroundColors.map((bgColor) => (
-                    <div
-                      key={bgColor.value}
-                      className={cn(
-                        "relative flex flex-col items-center justify-center rounded-md cursor-pointer border border-input transition-all duration-200 hover:bg-accent/10 overflow-hidden",
-                        selectedBgColor === bgColor.value 
-                          ? "ring-2 ring-inset ring-ring/50 bg-accent/20" 
-                          : "opacity-90 hover:opacity-100"
-                      )}
-                      onClick={() => handleBgColorSelect(bgColor.value)}
-                    >
-                      <div 
-                        className="w-12 h-12 rounded-full mt-3 mb-1"
-                        style={{
-                          background: bgColor.color,
-                          border: bgColor.value === "white" ? "1px solid #e5e7eb" : "none"
-                        }}
-                      />
-                      
-                      <div className="p-2 text-center">
-                        <div className="text-xs font-medium">{bgColor.label}</div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h4 className="text-base font-semibold text-foreground flex items-center gap-2">
+                  <Palette className="w-5 h-5 text-primary" />
+                  Background Color
+                  <span className={cn(
+                    "text-sm font-normal bg-muted/50 px-2 py-1 rounded-md transition-opacity duration-200 min-w-[60px] text-center",
+                    selectedBgColor 
+                      ? "text-muted-foreground opacity-100" 
+                      : "text-transparent opacity-0"
+                  )}>
+                    {selectedBgColor 
+                      ? backgroundColors.find(bg => bg.value === selectedBgColor)?.label 
+                      : "Placeholder"}
+                  </span>
+                </h4>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  type="button"
+                  className={cn(
+                    "h-8 px-3 text-xs transition-opacity duration-200",
+                    selectedBgColor 
+                      ? "text-muted-foreground hover:text-foreground opacity-100 cursor-pointer" 
+                      : "text-transparent opacity-0 cursor-default pointer-events-none"
+                  )}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (selectedBgColor) handleBgColorSelect(selectedBgColor);
+                  }}
+                >
+                  Clear
+                </Button>
               </div>
-
-              <div className="space-y-2">
-                <div className="flex items-center justify-between h-6">
-                  <h4 className="text-sm font-medium flex items-center">
-                    Facial Expressions
-                    <span className="ml-2 text-xs text-muted-foreground min-w-[80px]">
-                      {selectedExpression && (
-                        <>({facialExpressions.find(expr => expr.value === selectedExpression)?.label})</>
-                      )}
-                    </span>
-                  </h4>
-                  <div className="w-[60px] text-right">
-                    {selectedExpression && (
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
-                        className="h-6 px-2 text-xs"
-                        onClick={() => handleExpressionSelect(selectedExpression)}
-                      >
-                        Clear
-                      </Button>
+              
+              <div className="grid grid-cols-4 md:grid-cols-6 gap-3">
+                {backgroundColors.map((bgColor) => (
+                  <div
+                    key={bgColor.value}
+                    className={cn(
+                      "group relative flex flex-col items-center justify-center rounded-xl cursor-pointer border-2 transition-all duration-300 hover:scale-105 backdrop-blur-sm overflow-hidden",
+                      selectedBgColor === bgColor.value 
+                        ? "border-slate-400 dark:border-slate-500 bg-slate-100 dark:bg-slate-800/50 shadow-lg" 
+                        : "border-border/40 hover:border-slate-300 dark:hover:border-slate-600 bg-background/50 hover:bg-background/80 shadow-sm"
                     )}
-                  </div>
-                </div>
-                
-                <div className="grid grid-cols-4 md:grid-cols-8 gap-2">
-                  {facialExpressions.map((expression) => (
-                    <div
-                      key={expression.value}
-                      className={cn(
-                        "relative flex flex-col items-center justify-center px-2 py-3 rounded-md cursor-pointer border border-input transition-all duration-200 hover:bg-accent/10",
-                        selectedExpression === expression.value 
-                          ? "ring-2 ring-inset ring-ring/50 bg-accent/20" 
-                          : "opacity-90 hover:opacity-100"
-                      )}
-                      onClick={() => handleExpressionSelect(expression.value)}
-                    >
-                      <div className="text-2xl mb-1">{expression.emoji}</div>
-                      <div className="text-xs font-medium text-center">{expression.label}</div>
+                    onClick={() => handleBgColorSelect(bgColor.value)}
+                  >
+                    <div 
+                      className="w-12 h-12 rounded-full mt-4 mb-2 group-hover:scale-110 transition-transform duration-200 shadow-md"
+                      style={{
+                        background: bgColor.color,
+                        border: bgColor.value === "white" ? "2px solid #e5e7eb" : "none"
+                      }}
+                    />
+                    
+                    <div className="pb-3 text-center">
+                      <div className="text-xs font-medium">{bgColor.label}</div>
                     </div>
-                  ))}
-                </div>
+                  </div>
+                ))}
               </div>
+            </div>
 
-              <div className="space-y-2">
-                <div className="flex items-center justify-between h-6">
-                  <h4 className="text-sm font-medium flex items-center">
-                    Accessories
-                    <span className="ml-2 text-xs text-muted-foreground min-w-[80px]">
-                      {selectedAccessory.length > 0 && (
-                        <>({selectedAccessory.length} selected)</>
-                      )}
-                    </span>
-                  </h4>
-                  <div className="w-[60px] text-right">
-                    {selectedAccessory.length > 0 && (
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
-                        className="h-6 px-2 text-xs"
-                        onClick={() => {
-                          const accessoriesToClear = [...selectedAccessory];
-                          accessoriesToClear.forEach(accValue => handleAccessorySelect(accValue));
-                        }}
-                      >
-                        Clear All
-                      </Button>
-                    )}
-                  </div>
-                </div>
-                
-                <div className="grid grid-cols-4 md:grid-cols-6 gap-2">
-                  {accessories.map((accessory) => (
-                    <div
-                      key={accessory.value}
-                      className={cn(
-                        "relative flex flex-col items-center justify-center px-2 py-3 rounded-md cursor-pointer border border-input transition-all duration-200 hover:bg-accent/10",
-                        selectedAccessory.includes(accessory.value) 
-                          ? "ring-2 ring-inset ring-ring/50 bg-accent/20" 
-                          : "opacity-90 hover:opacity-100"
-                      )}
-                      onClick={() => handleAccessorySelect(accessory.value)}
-                    >
-                      <div className="text-2xl mb-1">{accessory.emoji}</div>
-                      <div className="text-xs font-medium text-center">{accessory.label}</div>
-                    </div>
-                  ))}
-                </div>
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h4 className="text-base font-semibold text-foreground flex items-center gap-2">
+                  <Smile className="w-5 h-5 text-primary" />
+                  Facial Expressions
+                  <span className={cn(
+                    "text-sm font-normal bg-muted/50 px-2 py-1 rounded-md transition-opacity duration-200 min-w-[60px] text-center",
+                    selectedExpression 
+                      ? "text-muted-foreground opacity-100" 
+                      : "text-transparent opacity-0"
+                  )}>
+                    {selectedExpression 
+                      ? facialExpressions.find(expr => expr.value === selectedExpression)?.label 
+                      : "Placeholder"}
+                  </span>
+                </h4>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  type="button"
+                  className={cn(
+                    "h-8 px-3 text-xs transition-opacity duration-200",
+                    selectedExpression 
+                      ? "text-muted-foreground hover:text-foreground opacity-100 cursor-pointer" 
+                      : "text-transparent opacity-0 cursor-default pointer-events-none"
+                  )}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (selectedExpression) handleExpressionSelect(selectedExpression);
+                  }}
+                >
+                  Clear
+                </Button>
               </div>
-
-              <div className="space-y-2">
-                <div className="flex items-center justify-between h-6">
-                  <h4 className="text-sm font-medium flex items-center">
-                    Lights
-                    <span className="ml-2 text-xs text-muted-foreground min-w-[80px]">
-                      {selectedLight && (
-                        <>({lightSettings.find(l => l.value === selectedLight)?.label})</>
-                      )}
-                    </span>
-                  </h4>
-                  <div className="w-[60px] text-right">
-                    {selectedLight && (
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
-                        className="h-6 px-2 text-xs"
-                        onClick={() => handleLightSelect(selectedLight)}
-                      >
-                        Clear
-                      </Button>
+              
+              <div className="grid grid-cols-4 md:grid-cols-8 gap-3">
+                {facialExpressions.map((expression) => (
+                  <div
+                    key={expression.value}
+                    className={cn(
+                      "group relative flex flex-col items-center justify-center p-3 rounded-xl cursor-pointer border-2 transition-all duration-300 hover:scale-105 backdrop-blur-sm",
+                      selectedExpression === expression.value 
+                        ? "border-slate-400 dark:border-slate-500 bg-slate-100 dark:bg-slate-800/50 shadow-lg" 
+                        : "border-border/40 hover:border-slate-300 dark:hover:border-slate-600 bg-background/50 hover:bg-background/80 shadow-sm"
                     )}
+                    onClick={() => handleExpressionSelect(expression.value)}
+                  >
+                    <div className="text-2xl mb-2 group-hover:scale-110 transition-transform duration-200">{expression.emoji}</div>
+                    <div className="text-xs font-medium text-center leading-tight">{expression.label}</div>
                   </div>
-                </div>
-                <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
-                  {lightSettings.map((light) => (
-                    <div
-                      key={light.value}
-                      className={cn(
-                        "relative flex flex-col items-center justify-center px-2 py-3 rounded-md cursor-pointer border border-input transition-all duration-200 hover:bg-accent/10",
-                        selectedLight === light.value 
-                          ? "ring-2 ring-inset ring-ring/50 bg-accent/20" 
-                          : "opacity-90 hover:opacity-100"
-                      )}
-                      onClick={() => handleLightSelect(light.value)}
-                    >
-                      <div className="text-2xl mb-1">{light.icon}</div>
-                      <div className="text-xs font-medium text-center">{light.label}</div>
-                    </div>
-                  ))}
-                </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h4 className="text-base font-semibold text-foreground flex items-center gap-2">
+                  <Crown className="w-5 h-5 text-primary" />
+                  Accessories
+                  <span className={cn(
+                    "text-sm font-normal bg-muted/50 px-2 py-1 rounded-md transition-opacity duration-200 min-w-[60px] text-center",
+                    selectedAccessory.length > 0 
+                      ? "text-muted-foreground opacity-100" 
+                      : "text-transparent opacity-0"
+                  )}>
+                    {selectedAccessory.length > 0 
+                      ? `${selectedAccessory.length} selected` 
+                      : "Placeholder"}
+                  </span>
+                </h4>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  type="button"
+                  className={cn(
+                    "h-8 px-3 text-xs transition-opacity duration-200",
+                    selectedAccessory.length > 0 
+                      ? "text-muted-foreground hover:text-foreground opacity-100 cursor-pointer" 
+                      : "text-transparent opacity-0 cursor-default pointer-events-none"
+                  )}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (selectedAccessory.length > 0) {
+                      const accessoriesToClear = [...selectedAccessory];
+                      accessoriesToClear.forEach(accValue => handleAccessorySelect(accValue));
+                    }
+                  }}
+                >
+                  Clear All
+                </Button>
+              </div>
+              
+              <div className="grid grid-cols-4 md:grid-cols-6 gap-3">
+                {accessories.map((accessory) => (
+                  <div
+                    key={accessory.value}
+                    className={cn(
+                      "group relative flex flex-col items-center justify-center p-3 rounded-xl cursor-pointer border-2 transition-all duration-300 hover:scale-105 backdrop-blur-sm",
+                      selectedAccessory.includes(accessory.value) 
+                        ? "border-slate-400 dark:border-slate-500 bg-slate-100 dark:bg-slate-800/50 shadow-lg" 
+                        : "border-border/40 hover:border-slate-300 dark:hover:border-slate-600 bg-background/50 hover:bg-background/80 shadow-sm"
+                    )}
+                    onClick={() => handleAccessorySelect(accessory.value)}
+                  >
+                    <div className="text-2xl mb-2 group-hover:scale-110 transition-transform duration-200">{accessory.emoji}</div>
+                    <div className="text-xs font-medium text-center leading-tight">{accessory.label}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h4 className="text-base font-semibold text-foreground flex items-center gap-2">
+                  <Lightbulb className="w-5 h-5 text-primary" />
+                  Lighting
+                  <span className={cn(
+                    "text-sm font-normal bg-muted/50 px-2 py-1 rounded-md transition-opacity duration-200 min-w-[60px] text-center",
+                    selectedLight 
+                      ? "text-muted-foreground opacity-100" 
+                      : "text-transparent opacity-0"
+                  )}>
+                    {selectedLight 
+                      ? lightSettings.find(l => l.value === selectedLight)?.label 
+                      : "Placeholder"}
+                  </span>
+                </h4>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  type="button"
+                  className={cn(
+                    "h-8 px-3 text-xs transition-opacity duration-200",
+                    selectedLight 
+                      ? "text-muted-foreground hover:text-foreground opacity-100 cursor-pointer" 
+                      : "text-transparent opacity-0 cursor-default pointer-events-none"
+                  )}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (selectedLight) handleLightSelect(selectedLight);
+                  }}
+                >
+                  Clear
+                </Button>
+              </div>
+              <div className="grid grid-cols-3 md:grid-cols-6 gap-3">
+                {lightSettings.map((light) => (
+                  <div
+                    key={light.value}
+                    className={cn(
+                      "group relative flex flex-col items-center justify-center p-4 rounded-xl cursor-pointer border-2 transition-all duration-300 hover:scale-105 backdrop-blur-sm",
+                      selectedLight === light.value 
+                        ? "border-slate-400 dark:border-slate-500 bg-slate-100 dark:bg-slate-800/50 shadow-lg" 
+                        : "border-border/40 hover:border-slate-300 dark:hover:border-slate-600 bg-background/50 hover:bg-background/80 shadow-sm"
+                    )}
+                    onClick={() => handleLightSelect(light.value)}
+                  >
+                    <div className="text-2xl mb-2 group-hover:scale-110 transition-transform duration-200">{light.icon}</div>
+                    <div className="text-xs font-medium text-center leading-tight">{light.label}</div>
+                  </div>
+                ))}
               </div>
             </div>
           </div>

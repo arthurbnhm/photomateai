@@ -9,7 +9,7 @@ import { creditEvents } from "./CreditCounter"
 import { cn } from "@/lib/utils"
 import TextareaAutosize from 'react-textarea-autosize'
 import Image from 'next/image'
-import { Plus, UserSquare2 } from 'lucide-react'
+import { Plus, UserSquare2, ImageIcon, Type } from 'lucide-react'
 
 import { Button } from "@/components/ui/button"
 import {
@@ -68,7 +68,7 @@ const AspectRatioFrame = ({ ratio, showLabel = true, isSelected = false }: { rat
   const [width, height] = ratio.split(':').map(Number);
   
   // Calculate dimensions while maintaining proportions
-  const maxSize = 24; // Maximum size for the frame
+  const maxSize = 24;
   let frameWidth, frameHeight;
   
   if (width >= height) {
@@ -80,27 +80,27 @@ const AspectRatioFrame = ({ ratio, showLabel = true, isSelected = false }: { rat
   }
   
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex items-center gap-3">
       <div 
         className={cn(
-          "border rounded-sm flex-shrink-0 overflow-hidden shadow-sm transition-all duration-200",
+          "rounded-md border transition-all duration-200",
           isSelected 
-            ? "border-primary/20 shadow-sm" 
-            : "border-primary/20 hover:border-primary/30"
+            ? "border-slate-400 dark:border-slate-500 bg-slate-100 dark:bg-slate-800/50" 
+            : "border-border bg-muted/30 hover:border-slate-300 dark:hover:border-slate-600"
         )}
         style={{ 
           width: `${frameWidth}px`, 
           height: `${frameHeight}px`,
         }}
-      >
-        <div className={cn(
-          "w-full h-full transition-all duration-300",
-          isSelected
-            ? "bg-gradient-to-br from-primary/10 via-primary/5 to-background/80 hover:from-primary/15"
-            : "bg-gradient-to-br from-primary/10 via-primary/5 to-background/80 hover:from-primary/15"
-        )} />
-      </div>
-      {showLabel && <span className="text-xs text-muted-foreground">{ratio.replace(':', '∶')}</span>}
+      />
+      {showLabel && (
+        <span className={cn(
+          "text-sm font-medium transition-colors duration-200",
+          isSelected ? "text-slate-700 dark:text-slate-300" : "text-muted-foreground"
+        )}>
+          {ratio.replace(':', '∶')}
+        </span>
+      )}
     </div>
   );
 };
@@ -709,40 +709,53 @@ export function PromptForm({
 
   return (
     <div className="w-full">
-      <div className="w-full bg-card border border-border rounded-xl overflow-hidden shadow-lg">
-        <div className="p-5">
+      <div className="w-full bg-gradient-to-br from-card/95 via-card to-card/90 border border-border/60 rounded-2xl overflow-hidden shadow-xl backdrop-blur-sm">
+        <div className="p-6">
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
               <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                <TabsList className="grid w-full grid-cols-2 mb-4">
-                  <TabsTrigger value="prompt">Create Image</TabsTrigger>
-                  <TabsTrigger value="reference">Image Reference</TabsTrigger>
+                <TabsList className="grid w-full grid-cols-2 mb-6 bg-muted/40 p-1 rounded-xl">
+                  <TabsTrigger 
+                    value="prompt" 
+                    className="flex items-center gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm rounded-lg transition-all duration-200"
+                  >
+                    <Type className="w-4 h-4" />
+                    <span className="font-medium">Text to Image</span>
+                  </TabsTrigger>
+                  <TabsTrigger 
+                    value="reference" 
+                    className="flex items-center gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm rounded-lg transition-all duration-200"
+                  >
+                    <ImageIcon className="w-4 h-4" />
+                    <span className="font-medium">Image Reference</span>
+                  </TabsTrigger>
                 </TabsList>
 
-                <TabsContent value="prompt">
-                  <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
+                <TabsContent value="prompt" className="space-y-6">
+                  <div className="space-y-4">
                     <FormField
                       control={form.control}
                       name="prompt"
                       render={({ field }) => (
-                        <FormItem className="md:col-span-12">
+                        <FormItem>
                           <FormControl>
                             <div 
                               className={cn(
-                                "transition-all duration-300 ease-in-out overflow-hidden",
-                                !isInputFocused && field.value && field.value.includes("\n") ? "max-h-[38px]" : "",
-                                isInputFocused && (field.value.includes("\n") || field.value.length > 60) ? "max-h-[150px]" : "max-h-[38px]"
+                                "relative bg-background/50 backdrop-blur-sm border border-border/60 rounded-xl p-4 transition-all duration-300 ease-in-out overflow-hidden hover:border-border",
+                                isInputFocused ? "ring-2 ring-primary/20 border-primary/30" : "",
+                                !isInputFocused && field.value && field.value.includes("\n") ? "max-h-[60px]" : "",
+                                isInputFocused && (field.value.includes("\n") || field.value.length > 60) ? "max-h-[180px]" : "max-h-[60px]"
                               )}
                             >
                               <TextareaAutosize
                                 {...field}
                                 placeholder={placeholderText}
                                 className={cn(
-                                  "w-full bg-transparent text-base resize-none focus:outline-none px-3 py-2 transition-all duration-200",
+                                  "w-full bg-transparent text-base resize-none focus:outline-none placeholder:text-muted-foreground/60 transition-all duration-200",
                                   !isInputFocused && field.value ? "truncate" : ""
                                 )}
                                 minRows={isInputFocused ? 2 : 1}
-                                maxRows={isInputFocused ? 5 : 1}
+                                maxRows={isInputFocused ? 6 : 1}
                                 onFocus={handleInputFocus}
                                 onBlur={handleInputBlur}
                                 onClick={handleInputClick}
@@ -754,139 +767,138 @@ export function PromptForm({
                       )}
                     />
                     
-                    <FormField
-                      control={form.control}
-                      name="aspectRatio"
-                      render={({ field }) => (
-                        <FormItem className="md:col-span-4">
-                          <Select 
-                            onValueChange={field.onChange} 
-                            defaultValue={field.value}
-                          >
-                            <FormControl>
-                              <SelectTrigger>
-                                <SelectValue placeholder="Select aspect ratio">
-                                  {field.value && (
-                                    <div className="flex items-center gap-2">
-                                      <AspectRatioFrame ratio={field.value} showLabel={false} isSelected={true} />
-                                      <span>
-                                        {field.value === "1:1" ? "Square (1:1)" :
-                                        field.value === "16:9" ? "Landscape (16:9)" :
-                                        field.value === "9:16" ? "Portrait (9:16)" :
-                                        field.value === "4:3" ? "Standard (4:3)" :
-                                        field.value === "3:2" ? "Classic (3:2)" : field.value}
-                                      </span>
-                                    </div>
-                                  )}
-                                </SelectValue>
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              <SelectItem value="1:1">
-                                <div className="flex items-center gap-2">
-                                  <AspectRatioFrame ratio="1:1" showLabel={false} isSelected={field.value === "1:1"} />
-                                  <span>Square (1:1)</span>
-                                </div>
-                              </SelectItem>
-                              <SelectItem value="16:9">
-                                <div className="flex items-center gap-2">
-                                  <AspectRatioFrame ratio="16:9" showLabel={false} isSelected={field.value === "16:9"} />
-                                  <span>Landscape (16:9)</span>
-                                </div>
-                              </SelectItem>
-                              <SelectItem value="9:16">
-                                <div className="flex items-center gap-2">
-                                  <AspectRatioFrame ratio="9:16" showLabel={false} isSelected={field.value === "9:16"} />
-                                  <span>Portrait (9:16)</span>
-                                </div>
-                              </SelectItem>
-                              <SelectItem value="4:3">
-                                <div className="flex items-center gap-2">
-                                  <AspectRatioFrame ratio="4:3" showLabel={false} isSelected={field.value === "4:3"} />
-                                  <span>Standard (4:3)</span>
-                                </div>
-                              </SelectItem>
-                              <SelectItem value="3:2">
-                                <div className="flex items-center gap-2">
-                                  <AspectRatioFrame ratio="3:2" showLabel={false} isSelected={field.value === "3:2"} />
-                                  <span>Classic (3:2)</span>
-                                </div>
-                              </SelectItem>
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    
-                    <FormField
-                      control={form.control}
-                      name="outputFormat"
-                      render={({ field }) => (
-                        <FormItem className="md:col-span-3">
-                          <Select 
-                            onValueChange={field.onChange} 
-                            defaultValue={field.value}
-                          >
-                            <FormControl>
-                              <SelectTrigger>
-                                <SelectValue placeholder="Select format" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              <SelectItem value="png">PNG</SelectItem>
-                              <SelectItem value="jpg">JPG</SelectItem>
-                              <SelectItem value="webp">WebP</SelectItem>
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={form.control}
-                      name="modelId"
-                      render={({ field }) => (
-                        <FormItem className="md:col-span-3">
-                          <Select 
-                            onValueChange={field.onChange} 
-                            value={field.value}
-                            disabled={loadingModels || models.length === 0}
-                          >
-                            <FormControl>
-                              <SelectTrigger>
-                                <SelectValue placeholder="Select model" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              {models.map((model) => (
-                                <SelectItem key={model.id} value={model.id}>
-                                  {model.display_name}
+                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+                      <FormField
+                        control={form.control}
+                        name="aspectRatio"
+                        render={({ field }) => (
+                          <FormItem className="lg:col-span-4">
+                            <Select 
+                              onValueChange={field.onChange} 
+                              defaultValue={field.value}
+                            >
+                              <FormControl>
+                                <SelectTrigger className="bg-background/50 backdrop-blur-sm border-border/60 hover:border-border transition-all duration-200">
+                                  <SelectValue placeholder="Select aspect ratio">
+                                    {field.value && (
+                                      <div className="flex items-center gap-3">
+                                        <AspectRatioFrame ratio={field.value} showLabel={false} isSelected={true} />
+                                        <span className="font-medium">
+                                          {field.value === "1:1" ? "Square" :
+                                          field.value === "16:9" ? "Landscape" :
+                                          field.value === "9:16" ? "Portrait" :
+                                          field.value === "4:3" ? "Standard" :
+                                          field.value === "3:2" ? "Classic" : field.value}
+                                        </span>
+                                      </div>
+                                    )}
+                                  </SelectValue>
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                <SelectItem value="1:1">
+                                  <div className="flex items-center gap-3">
+                                    <AspectRatioFrame ratio="1:1" showLabel={false} isSelected={field.value === "1:1"} />
+                                    <span>Square (1:1)</span>
+                                  </div>
                                 </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+                                <SelectItem value="16:9">
+                                  <div className="flex items-center gap-3">
+                                    <AspectRatioFrame ratio="16:9" showLabel={false} isSelected={field.value === "16:9"} />
+                                    <span>Landscape (16:9)</span>
+                                  </div>
+                                </SelectItem>
+                                <SelectItem value="9:16">
+                                  <div className="flex items-center gap-3">
+                                    <AspectRatioFrame ratio="9:16" showLabel={false} isSelected={field.value === "9:16"} />
+                                    <span>Portrait (9:16)</span>
+                                  </div>
+                                </SelectItem>
+                                <SelectItem value="4:3">
+                                  <div className="flex items-center gap-3">
+                                    <AspectRatioFrame ratio="4:3" showLabel={false} isSelected={field.value === "4:3"} />
+                                    <span>Standard (4:3)</span>
+                                  </div>
+                                </SelectItem>
+                                <SelectItem value="3:2">
+                                  <div className="flex items-center gap-3">
+                                    <AspectRatioFrame ratio="3:2" showLabel={false} isSelected={field.value === "3:2"} />
+                                    <span>Classic (3:2)</span>
+                                  </div>
+                                </SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      
+                      <FormField
+                        control={form.control}
+                        name="outputFormat"
+                        render={({ field }) => (
+                          <FormItem className="lg:col-span-3">
+                            <Select 
+                              onValueChange={field.onChange} 
+                              defaultValue={field.value}
+                            >
+                              <FormControl>
+                                <SelectTrigger className="bg-background/50 backdrop-blur-sm border-border/60 hover:border-border transition-all duration-200">
+                                  <SelectValue placeholder="Format" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                <SelectItem value="png">PNG</SelectItem>
+                                <SelectItem value="jpg">JPG</SelectItem>
+                                <SelectItem value="webp">WebP</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
 
-                    {/* Conditionally render Generate button inline if Advanced Settings are closed */}
-                    {!isAdvancedSettingsOpen && (
-                      <div className="md:col-span-2 flex items-end"> {/* Aligns with other form items in the grid */}
+                      <FormField
+                        control={form.control}
+                        name="modelId"
+                        render={({ field }) => (
+                          <FormItem className="lg:col-span-3">
+                            <Select 
+                              onValueChange={field.onChange} 
+                              value={field.value}
+                              disabled={loadingModels || models.length === 0}
+                            >
+                              <FormControl>
+                                <SelectTrigger className="bg-background/50 backdrop-blur-sm border-border/60 hover:border-border transition-all duration-200">
+                                  <SelectValue placeholder="Select model" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                {models.map((model) => (
+                                  <SelectItem key={model.id} value={model.id}>
+                                    {model.display_name}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      {/* Always show Generate button in consistent position - no conditional rendering */}
+                      <div className="lg:col-span-2 flex items-end">
                         <Button 
                           type="submit" 
-                          variant="outline"
-                          className="w-full px-3"
+                          className="w-full bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary/80 text-primary-foreground shadow-lg hover:shadow-xl transition-all duration-200 font-medium"
                           disabled={loadingModels}
                           aria-label="Generate image from prompt"
                         >
                           Generate
                         </Button>
                       </div>
-                    )}
-                  </div> {/* End of the main form grid */} 
+                    </div>
+                  </div>
                   
                   {/* Use the AdvancedSettings component with ref */}
                   <AdvancedSettings 
@@ -896,76 +908,70 @@ export function PromptForm({
                     isOpen={isAdvancedSettingsOpen}
                     onGenderChange={setSelectedGender}
                   />
-
-                  {/* Render Generate button at the bottom ONLY when Advanced Settings is open */}
-                  {isAdvancedSettingsOpen && (
-                    <div className="flex justify-end mt-6">
-                      <Button 
-                        type="submit" 
-                        variant="outline"
-                        className="w-full px-3"
-                        disabled={loadingModels}
-                        aria-label="Generate image from prompt"
-                      >
-                        Generate
-                      </Button>
-                    </div>
-                  )}
                 </TabsContent>
 
-                <TabsContent value="reference">
-                  <div className="mb-4 p-4 text-sm text-muted-foreground flex flex-col items-start gap-4">
-                    {/* Visual Explanation Row - Now with responsive justification */}
-                    <div className="flex items-center justify-center md:justify-start gap-3 flex-wrap w-full">
-                      {/* Reference Images Block (with text below for alignment) */}
-                      <div className="flex flex-col items-center text-center">
-                        <div className="flex items-center gap-2 pl-1"> {/* Container for the two disordered images */}
-                          <div className="transform -rotate-3">
+                <TabsContent value="reference" className="space-y-6">
+                  <div className="bg-gradient-to-br from-muted/30 via-muted/20 to-background/80 border border-border/40 rounded-xl p-6 space-y-6">
+                    {/* Visual Explanation Row */}
+                    <div className="flex items-center justify-center gap-3 md:gap-6">
+                      {/* Reference Images Block */}
+                      <div className="flex flex-col items-center text-center space-y-2 md:space-y-3">
+                        <div className="flex items-center gap-1.5 md:gap-3 pl-1">
+                          <div className="transform -rotate-3 transition-transform hover:rotate-0 duration-300">
                             <Image 
                               src="/references/lavander.webp"
                               alt="Reference photo example - lavender field"
-                              width={64} 
-                              height={64}
-                              className="rounded-lg object-cover shadow-sm border-4 border-white"
+                              width={80} 
+                              height={80}
+                              quality={100}
+                              sizes="(max-width: 768px) 64px, 80px"
+                              className="w-16 h-16 md:w-20 md:h-20 rounded-lg md:rounded-xl object-cover shadow-lg border-2 md:border-4 border-white hover:shadow-xl transition-shadow duration-300"
                               priority
                             />
                           </div>
-                          <div className="transform rotate-3 translate-y-1">
+                          <div className="transform rotate-3 translate-y-1 transition-transform hover:rotate-0 hover:translate-y-0 duration-300">
                             <Image
                               src="/references/acacia.webp"
                               alt="Reference photo example - acacia tree"
-                              width={64}
-                              height={64}
-                              className="rounded-lg object-cover shadow-sm border-4 border-white"
+                              width={80}
+                              height={80}
+                              quality={100}
+                              sizes="(max-width: 768px) 64px, 80px"
+                              className="w-16 h-16 md:w-20 md:h-20 rounded-lg md:rounded-xl object-cover shadow-lg border-2 md:border-4 border-white hover:shadow-xl transition-shadow duration-300"
                               priority
                             />
                           </div>
                         </div>
-                        <p className="text-xs text-muted-foreground mt-2">Reference Photo</p>
+                        <p className="text-xs md:text-sm font-medium text-muted-foreground">Reference Photo</p>
                       </div>
 
-                      <Plus size={24} className="text-muted-foreground shrink-0" strokeWidth={3} />
-
-                      {/* "Your Model" Placeholder with disorder and size adjustment */}
-                      <div className="flex flex-col items-center text-center">
-                        <div className="transform -rotate-3 p-1 border-4 border-dashed border-muted-foreground/50 rounded-lg flex items-center justify-center w-16 h-16">
-                          <UserSquare2 size={32} className="text-primary/80" />
+                      <div className="flex items-center justify-center flex-shrink-0">
+                        <div className="bg-gradient-to-r from-primary/20 to-primary/10 rounded-full p-2 md:p-3">
+                          <Plus size={20} className="md:w-7 md:h-7 text-primary" strokeWidth={2.5} />
                         </div>
-                        <p className="text-xs text-muted-foreground mt-2">Your Model</p>
+                      </div>
+
+                      {/* "Your Model" Placeholder */}
+                      <div className="flex flex-col items-center text-center space-y-2 md:space-y-3">
+                        <div className="transform -rotate-3 p-2 md:p-4 border-2 md:border-4 border-dashed border-primary/30 rounded-lg md:rounded-xl flex items-center justify-center w-16 h-16 md:w-20 md:h-20 bg-gradient-to-br from-primary/5 to-primary/10 hover:from-primary/10 hover:to-primary/15 transition-all duration-300">
+                          <UserSquare2 size={20} className="md:w-7 md:h-7 text-primary/70" />
+                        </div>
+                        <p className="text-xs md:text-sm font-medium text-muted-foreground">Your Model</p>
                       </div>
                     </div>
                     
                     {/* Explanatory Text */}
-                    <div className="mt-3 w-full">
-                      <p className="text-sm">
-                        Combine any <strong className="text-primary">reference photo</strong> (for its style, colors, and composition) with <strong className="text-primary">your trained AI model</strong> (featuring your unique look or subject).<br className="md:hidden" /><br className="md:hidden" /> The AI will craft a new image blending the reference&rsquo;s atmosphere with your model&rsquo;s distinct characteristics!
+                    <div className="text-center space-y-2">
+                      <h3 className="text-lg font-semibold text-foreground">Blend Reference Style with Your Model</h3>
+                      <p className="text-sm text-muted-foreground leading-relaxed max-w-2xl mx-auto">
+                        Combine any <span className="font-semibold text-primary">reference photo</span> (for its style, colors, and composition) with <span className="font-semibold text-primary">your trained AI model</span> (featuring your unique look or subject). The AI will craft a new image blending the reference&rsquo;s atmosphere with your model&rsquo;s distinct characteristics!
                       </p>
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
+                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
                     {/* Image Uploader */}
-                    <div className="md:col-span-5">
+                    <div className="lg:col-span-5">
                       <ImageUpload 
                         onImageChange={handleImageChange} 
                         currentImageUrl={uploadedImageDataUrl}
@@ -973,19 +979,19 @@ export function PromptForm({
                       />
                     </div>
 
-                    {/* Output Format Selector (moved before Model Selector) */}
+                    {/* Output Format Selector */}
                     <FormField
                       control={form.control}
                       name="outputFormat"
                       render={({ field }) => (
-                        <FormItem className="md:col-span-2">
+                        <FormItem className="lg:col-span-2">
                           <Select 
                             onValueChange={field.onChange} 
                             defaultValue={field.value}
                           >
                             <FormControl>
-                              <SelectTrigger>
-                                <SelectValue placeholder="Select format" />
+                              <SelectTrigger className="bg-background/50 backdrop-blur-sm border-border/60 hover:border-border transition-all duration-200">
+                                <SelectValue placeholder="Format" />
                               </SelectTrigger>
                             </FormControl>
                             <SelectContent>
@@ -999,19 +1005,19 @@ export function PromptForm({
                       )}
                     />
 
-                    {/* Model Selector (moved after Output Format Selector) */}
+                    {/* Model Selector */}
                     <FormField
                       control={form.control}
                       name="modelId"
                       render={({ field }) => (
-                        <FormItem className="md:col-span-3">
+                        <FormItem className="lg:col-span-3">
                           <Select 
                             onValueChange={field.onChange} 
                             value={field.value}
                             disabled={loadingModels || models.length === 0}
                           >
                             <FormControl>
-                              <SelectTrigger>
+                              <SelectTrigger className="bg-background/50 backdrop-blur-sm border-border/60 hover:border-border transition-all duration-200">
                                 <SelectValue placeholder="Select model" />
                               </SelectTrigger>
                             </FormControl>
@@ -1029,12 +1035,11 @@ export function PromptForm({
                     />
 
                     {/* Generate Button */}
-                    <div className="md:col-span-2">
+                    <div className="lg:col-span-2">
                       <Button 
                         type="button"
-                        variant="outline"
                         onClick={handleImageReferenceGeneration}
-                        className="w-full px-3"
+                        className="w-full bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary/80 text-primary-foreground shadow-lg hover:shadow-xl transition-all duration-200 font-medium"
                         disabled={loadingModels || !uploadedImageDataUrl}
                         aria-label="Generate image from image reference"
                       >
@@ -1049,11 +1054,16 @@ export function PromptForm({
         </div>
         
         {error && (
-          <div className="mt-4 p-4 bg-destructive/10 border border-destructive/20 rounded-lg">
-            <h3 className="text-lg font-semibold text-destructive mb-1">Error</h3>
-            <p className="text-sm text-destructive/90">{error}</p>
+          <div className="mx-6 mb-6 p-4 bg-gradient-to-r from-destructive/10 via-destructive/5 to-destructive/10 border border-destructive/20 rounded-xl backdrop-blur-sm">
+            <h3 className="text-lg font-semibold text-destructive mb-2 flex items-center gap-2">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              Error
+            </h3>
+            <p className="text-sm text-destructive/90 leading-relaxed">{error}</p>
             {errorDetails && (
-              <p className="text-xs text-destructive/80 mt-1">{errorDetails}</p>
+              <p className="text-xs text-destructive/70 mt-2 leading-relaxed">{errorDetails}</p>
             )}
           </div>
         )}

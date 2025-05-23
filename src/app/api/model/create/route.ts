@@ -44,7 +44,7 @@ export async function POST(request: NextRequest) {
     
     // Parse the body
     const body = await request.json();
-    const { modelName, owner, displayName } = body;
+    const { modelName, owner, displayName, gender } = body;
     
     if (!modelName || !owner || !displayName) {
       return NextResponse.json(
@@ -53,7 +53,7 @@ export async function POST(request: NextRequest) {
       );
     }
     
-    return await createModel(modelName, owner, displayName, supabase);
+    return await createModel(modelName, owner, displayName, gender, supabase);
   } catch (error) {
     console.error('Error processing request:', error);
     return NextResponse.json(
@@ -67,7 +67,7 @@ export async function POST(request: NextRequest) {
 }
 
 // Create a model in Replicate
-async function createModel(modelName: string, owner: string, displayName: string, supabase: SupabaseClient) {
+async function createModel(modelName: string, owner: string, displayName: string, gender: string, supabase: SupabaseClient) {
   // Validate model name format
   const validPattern = /^[a-z0-9][a-z0-9_.-]*[a-z0-9]$|^[a-z0-9]$/;
   if (!validPattern.test(modelName)) {
@@ -97,7 +97,8 @@ async function createModel(modelName: string, owner: string, displayName: string
       .insert({
         model_id: modelName,
         model_owner: model.owner,
-        display_name: displayName
+        display_name: displayName,
+        gender: gender
         // user_id is now handled by Supabase trigger
       })
       .select()

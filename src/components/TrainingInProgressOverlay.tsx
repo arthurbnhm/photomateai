@@ -13,7 +13,7 @@ export function TrainingInProgressOverlay() { // No props
         <AnimatedTrainingImages />
         <h2 className="text-2xl font-semibold text-foreground">Training in Progress</h2>
         <p className="text-sm text-muted-foreground">
-          This may take a few minutes. You can come back later.
+          Training should take between 2 to 3 minutes.
         </p>
       </div>
     </div>

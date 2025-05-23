@@ -22,6 +22,7 @@ import {
   DialogTrigger,
   DialogDescription
 } from "@/components/ui/dialog";
+import { cn } from "@/lib/utils";
 
 // Reusable upload icon component
 const UploadIcon = ({ 
@@ -194,12 +195,14 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
   const [currentStep, setCurrentStep] = useState(1);
   const [displayModelName, setDisplayModelName] = useState("");
   const [actualModelName, setActualModelName] = useState("");
+  const [selectedGender, setSelectedGender] = useState<string | null>(null);
   const [uploadedImages, setUploadedImages] = useState<File[]>([]);
   const [dragActive, setDragActive] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isGeneratingPreviews, setIsGeneratingPreviews] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [nameError, setNameError] = useState<string | null>(null);
+  const [genderError, setGenderError] = useState<string | null>(null);
   const [thumbnails, setThumbnails] = useState<string[]>([]);
   const { resolvedTheme } = useTheme();
   // State for the models dialog
@@ -263,6 +266,13 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    // Validate gender selection
+    if (!selectedGender) {
+      setGenderError("Please select the gender of the subject for better model results");
+      toast.error("Please select the gender of the subject");
+      return;
+    }
+    
     if (!actualModelName || !validateModelName(actualModelName) || uploadedImages.length === 0) {
       if (uploadedImages.length === 0) {
         toast.error("Please upload at least one image for training");
@@ -316,7 +326,8 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
           action: 'create',
           modelName: actualModelName,
           owner: 'arthurbnhm',
-          displayName: displayModelName
+          displayName: displayModelName,
+          gender: selectedGender
         }),
       });
 
@@ -467,6 +478,8 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
 
         // Reset the form fields but keep the training status for the ModelListTable
         setDisplayModelName("");
+        setSelectedGender(null);
+        setGenderError(null);
         setUploadedImages([]);
         setIsProcessing(false);
         
@@ -856,48 +869,65 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
     // No cleanup needed anymore
   }, []);
 
+  // Handle gender selection
+  const handleGenderSelect = (genderValue: string) => {
+    if (selectedGender === genderValue) {
+      setSelectedGender(null);
+      setGenderError("Please select the gender of the subject for better model results");
+    } else {
+      setSelectedGender(genderValue);
+      setGenderError(null);
+    }
+  };
+
   if (currentStep === 1) {
     return (
       <ErrorBoundary>
-        <div className="w-full bg-card border border-border rounded-xl overflow-hidden shadow-lg p-5 space-y-4">
-          <div className="text-center">
-            <h2 className="text-xl font-semibold">Quick Tips for Great Training Images!</h2> 
-            <p className="text-sm text-muted-foreground mt-1">
-              Good photos help create an amazing AI model of your subject. Here&rsquo;s what to aim for:
-            </p>
-          </div>
+        <div className="w-full bg-gradient-to-br from-card/95 via-card to-card/90 border border-border/60 rounded-2xl overflow-hidden shadow-xl backdrop-blur-sm">
+          <div className="p-6 space-y-6">
+            <div className="text-center space-y-2">
+              <h2 className="text-2xl font-bold bg-gradient-to-r from-foreground to-foreground/80 bg-clip-text text-transparent">Quick Tips for Great Training Images!</h2> 
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                Good photos help create an amazing AI model of your subject. Here&rsquo;s what to aim for:
+              </p>
+            </div>
 
-          <div className="space-y-3 py-3">
-            <ul className="space-y-2 text-sm text-muted-foreground">
-              <li className="flex items-start">
-                <svg className="w-5 h-5 text-green-500 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"></path></svg>
-                <span><strong>Variety is Key:</strong> Use different poses, backgrounds, and expressions.</span>
-              </li>
-              <li className="flex items-start">
-                <svg className="w-5 h-5 text-green-500 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"></path></svg>
-                <span><strong>Clear Subject:</strong> Ensure the face is well-lit, visible, and the only person in the shot.</span>
-              </li>
-              <li className="flex items-start">
-                <svg className="w-5 h-5 text-green-500 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"></path></svg>
-                <span><strong>Good Quality:</strong> Use sharp, clear photos. Avoid very blurry or pixelated images.</span>
-              </li>
-              <li className="flex items-start">
-                <svg className="w-5 h-5 text-red-500 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd"></path></svg>
-                <span><strong>Avoid Face Obstructions:</strong> No sunglasses or heavy face-altering accessories/filters.</span>
-              </li>
-            </ul>
-          </div>
+            <div className="bg-gradient-to-br from-muted/30 via-muted/20 to-background/80 border border-border/40 rounded-xl p-6 space-y-4 backdrop-blur-sm">
+              <ul className="space-y-3 text-sm">
+                <li className="flex items-start gap-3 p-3 rounded-lg bg-background/50 border border-green-200/20 dark:border-green-800/20">
+                  <div className="flex-shrink-0 w-6 h-6 rounded-full bg-green-100 dark:bg-green-900/50 flex items-center justify-center mt-0.5">
+                    <svg className="w-4 h-4 text-green-600 dark:text-green-400" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"></path></svg>
+                  </div>
+                  <span className="text-foreground"><strong className="font-semibold">Variety is Key:</strong> <span className="text-muted-foreground">Use different poses, backgrounds, and expressions.</span></span>
+                </li>
+                <li className="flex items-start gap-3 p-3 rounded-lg bg-background/50 border border-green-200/20 dark:border-green-800/20">
+                  <div className="flex-shrink-0 w-6 h-6 rounded-full bg-green-100 dark:bg-green-900/50 flex items-center justify-center mt-0.5">
+                    <svg className="w-4 h-4 text-green-600 dark:text-green-400" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"></path></svg>
+                  </div>
+                  <span className="text-foreground"><strong className="font-semibold">Clear Subject:</strong> <span className="text-muted-foreground">Ensure the face is well-lit, visible, and the only person in the shot.</span></span>
+                </li>
+                <li className="flex items-start gap-3 p-3 rounded-lg bg-background/50 border border-green-200/20 dark:border-green-800/20">
+                  <div className="flex-shrink-0 w-6 h-6 rounded-full bg-green-100 dark:bg-green-900/50 flex items-center justify-center mt-0.5">
+                    <svg className="w-4 h-4 text-green-600 dark:text-green-400" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"></path></svg>
+                  </div>
+                  <span className="text-foreground"><strong className="font-semibold">Good Quality:</strong> <span className="text-muted-foreground">Use sharp, clear photos. Avoid very blurry or pixelated images.</span></span>
+                </li>
+                <li className="flex items-start gap-3 p-3 rounded-lg bg-background/50 border border-red-200/20 dark:border-red-800/20">
+                  <div className="flex-shrink-0 w-6 h-6 rounded-full bg-red-100 dark:bg-red-900/50 flex items-center justify-center mt-0.5">
+                    <svg className="w-4 h-4 text-red-600 dark:text-red-400" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd"></path></svg>
+                  </div>
+                  <span className="text-foreground"><strong className="font-semibold">Avoid Face Obstructions:</strong> <span className="text-muted-foreground">No sunglasses or heavy face-altering accessories/filters.</span></span>
+                </li>
+              </ul>
+            </div>
 
-          <div className="text-xs text-center text-muted-foreground p-3 bg-muted/30 rounded-md">
-            Aim for <strong>{MIN_IMAGES} to {MAX_IMAGES} images</strong> for the best results. More quality photos mean a better AI!
+            <Button
+              onClick={() => setCurrentStep(2)}
+              className="w-full py-3 bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary/80 text-primary-foreground shadow-lg hover:shadow-xl transition-all duration-200 font-medium"
+            >
+              Got it, Let&rsquo;s Upload Photos!
+            </Button>
           </div>
-          
-          <Button
-            onClick={() => setCurrentStep(2)}
-            className="w-full py-3"
-          >
-            Got it, Let&rsquo;s Upload Photos!
-          </Button>
         </div>
       </ErrorBoundary>
     );
@@ -918,8 +948,9 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
               flexDirection: 'column',
               alignItems: 'center',
               justifyContent: 'center',
-              backgroundColor: resolvedTheme === 'dark' ? 'rgb(30, 58, 138)' : 'rgb(219, 234, 254)',
-              gap: '1rem'
+              backgroundColor: resolvedTheme === 'dark' ? 'rgba(30, 58, 138, 0.95)' : 'rgba(219, 234, 254, 0.95)',
+              backdropFilter: 'blur(8px)',
+              gap: '1.5rem'
             }}
             onDragOver={handleDragOver}
             onDragEnter={handleDragEnter}
@@ -930,47 +961,34 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
               setDragActive(false);
             }}
           >
-            <UploadIcon 
-              size={48} 
-              style={{ color: resolvedTheme === 'dark' ? '#93c5fd' : '#2563eb' }}
-            />
-            <h3 
-              className="text-xl font-semibold"
-              style={{ color: resolvedTheme === 'dark' ? '#bfdbfe' : '#1e40af' }}
-            >
-              Drop Images Here
-            </h3>
-            <p className="text-sm text-muted-foreground">
-              JPG, PNG, WebP - between {MIN_IMAGES} and {MAX_IMAGES} images required, max 200MB total
-            </p>
+            <div className="p-6 rounded-2xl bg-background/90 border border-border/60 shadow-2xl backdrop-blur-sm">
+              <UploadIcon 
+                size={56} 
+                style={{ color: resolvedTheme === 'dark' ? '#93c5fd' : '#2563eb' }}
+                className="mx-auto"
+              />
+            </div>
+            <div className="text-center space-y-2">
+              <h3 
+                className="text-2xl font-bold"
+                style={{ color: resolvedTheme === 'dark' ? '#bfdbfe' : '#1e40af' }}
+              >
+                Drop Images Here
+              </h3>
+              <div className="space-y-1">
+                <p className="text-base font-medium" style={{ color: resolvedTheme === 'dark' ? '#93c5fd' : '#2563eb' }}>
+                  JPG, PNG, WebP formats supported
+                </p>
+                <p className="text-sm opacity-80" style={{ color: resolvedTheme === 'dark' ? '#93c5fd' : '#2563eb' }}>
+                  {MIN_IMAGES}-{MAX_IMAGES} images • Max 200MB total • Max 10MB per file
+                </p>
+              </div>
+            </div>
           </div>
         )}
         
-        <div className="flex justify-between items-center mb-4">
-          <Button variant="outline" onClick={() => setCurrentStep(1)} className="mr-auto">
-            &larr; Back to Guidelines
-          </Button>
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-            <DialogTrigger asChild>
-              <Button variant="outline">View Your Models</Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-4xl">
-              <DialogHeader>
-                <DialogTitle>Your Models</DialogTitle>
-                <DialogDescription>
-                  Manage your trained models and ongoing trainings.
-                </DialogDescription>
-              </DialogHeader>
-              <ModelListTable 
-                newTraining={trainingStatus} 
-                onClearNewTraining={() => onTrainingStatusChange(null)}
-              />
-            </DialogContent>
-          </Dialog>
-        </div>
-        
         <div 
-          className="w-full bg-card border border-border rounded-xl overflow-hidden shadow-lg"
+          className="w-full bg-gradient-to-br from-card/95 via-card to-card/90 border border-border/60 rounded-2xl overflow-hidden shadow-xl backdrop-blur-sm"
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onDragEnd={(e) => {
@@ -979,64 +997,183 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
           }}
           onDrop={handleDrop}
         >
-          <div className="p-5">
+          {/* Header section with navigation buttons */}
+          <div className="px-6 pt-6 pb-4 border-b border-border/20 bg-gradient-to-r from-muted/10 via-background/50 to-muted/10">
+            <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
+              <Button 
+                variant="outline" 
+                onClick={() => setCurrentStep(1)} 
+                className="bg-background/50 backdrop-blur-sm border-border/60 hover:border-border hover:bg-background/80 transition-all duration-200 order-1 sm:order-1"
+              >
+                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                </svg>
+                Back to Guidelines
+              </Button>
+              
+              <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button 
+                    variant="outline"
+                    className="bg-background/50 backdrop-blur-sm border-border/60 hover:border-border hover:bg-background/80 transition-all duration-200 order-2 sm:order-2"
+                  >
+                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                    </svg>
+                    View Your Models
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-4xl">
+                  <DialogHeader>
+                    <DialogTitle>Your Models</DialogTitle>
+                    <DialogDescription>
+                      Manage your trained models and ongoing trainings.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <ModelListTable 
+                    newTraining={trainingStatus} 
+                    onClearNewTraining={() => onTrainingStatusChange(null)}
+                  />
+                </DialogContent>
+              </Dialog>
+            </div>
+          </div>
+          
+          <div className="p-6">
             <form className="space-y-6">
               <div className="space-y-4">
-                <div>
-                  <Label htmlFor="model-name">Model Name</Label>
+                <div className="space-y-2">
+                  <Label htmlFor="model-name" className="text-base font-semibold text-foreground">Model Name</Label>
                   <Input
                     id="model-name" 
                     placeholder="Enter a name for your model"
                     value={displayModelName}
                     onChange={(e) => setDisplayModelName(e.target.value)}
-                    className={`mt-1 ${nameError ? 'border-red-500' : ''}`}
+                    className={cn(
+                      "bg-background/50 backdrop-blur-sm border-border/60 hover:border-border transition-all duration-200 focus:ring-2 focus:ring-primary/20 focus:border-primary/30",
+                      nameError ? 'border-red-500 focus:border-red-500 focus:ring-red-500/20' : ''
+                    )}
                   />
                   {nameError ? (
-                    <p className="text-xs text-red-500 mt-1">{nameError}</p>
+                    <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
+                      <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                      </svg>
+                      {nameError}
+                    </p>
                   ) : null}
                 </div>
                 
-                <div className="space-y-2">
-                  <Label>Upload Images (between {MIN_IMAGES} and {MAX_IMAGES} required)</Label>
+                <div className="space-y-3">
+                  <Label className="text-base font-semibold text-foreground">Subject Gender</Label>
+                  <p className="text-sm text-muted-foreground">
+                    Help us understand your subject better for improved model results and more accurate generation.
+                  </p>
+                  <div className="grid grid-cols-6 gap-3">
+                    <div
+                      className={cn(
+                        "group relative flex flex-col items-center justify-center p-4 rounded-xl cursor-pointer border-2 transition-all duration-300 hover:scale-105 backdrop-blur-sm",
+                        selectedGender === "male" 
+                          ? "border-slate-400 dark:border-slate-500 bg-slate-100 dark:bg-slate-800/50 shadow-lg" 
+                          : genderError 
+                            ? "border-red-300 hover:border-red-400 bg-background/50 hover:bg-background/80 shadow-sm" 
+                            : "border-border/40 hover:border-slate-300 dark:hover:border-slate-600 bg-background/50 hover:bg-background/80 shadow-sm"
+                      )}
+                      onClick={() => handleGenderSelect("male")}
+                      title="Male"
+                    >
+                      <div className="text-2xl mb-2 group-hover:scale-110 transition-transform duration-200">👨</div>
+                      <div className="text-xs font-medium text-center leading-tight">Male</div>
+                    </div>
+                    <div
+                      className={cn(
+                        "group relative flex flex-col items-center justify-center p-4 rounded-xl cursor-pointer border-2 transition-all duration-300 hover:scale-105 backdrop-blur-sm",
+                        selectedGender === "female" 
+                          ? "border-slate-400 dark:border-slate-500 bg-slate-100 dark:bg-slate-800/50 shadow-lg" 
+                          : genderError 
+                            ? "border-red-300 hover:border-red-400 bg-background/50 hover:bg-background/80 shadow-sm" 
+                            : "border-border/40 hover:border-slate-300 dark:hover:border-slate-600 bg-background/50 hover:bg-background/80 shadow-sm"
+                      )}
+                      onClick={() => handleGenderSelect("female")}
+                      title="Female"
+                    >
+                      <div className="text-2xl mb-2 group-hover:scale-110 transition-transform duration-200">👩</div>
+                      <div className="text-xs font-medium text-center leading-tight">Female</div>
+                    </div>
+                  </div>
+                  {genderError ? (
+                    <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
+                      <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                      </svg>
+                      {genderError}
+                    </p>
+                  ) : null}
+                </div>
+                
+                <div className="space-y-3">
+                  <Label className="text-base font-semibold text-foreground">Upload Images (between {MIN_IMAGES} and {MAX_IMAGES} required)</Label>
                   <div 
                     {...getRootProps()} 
-                    className={`bg-muted/50 border ${
-                      isDragActive || dragActive ? 'border-2 border-primary' : 'border-border'
-                    } rounded-lg p-6 text-center cursor-pointer transition-colors hover:border-primary/50`}
+                    className={cn(
+                      "bg-gradient-to-br from-muted/30 via-muted/20 to-background/80 border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all duration-300 backdrop-blur-sm hover:border-primary/50",
+                      isDragActive || dragActive ? 'border-primary bg-primary/5 shadow-lg' : 'border-border/40 hover:bg-muted/10'
+                    )}
                   >
                     <input {...getInputProps()} />
-                    <div className="flex flex-col items-center justify-center gap-2">
-                      <UploadIcon 
-                        size={24} 
-                        className="mx-auto" 
-                        style={{ color: resolvedTheme === 'dark' ? '#93c5fd' : '#2563eb' }}
-                      />
-                      <p className="text-muted-foreground">
-                        Drag and drop images here, or click to select files
-                      </p>
-                      <p className="text-xs text-muted-foreground/80 mt-1">
-                        JPG, PNG, WebP - between {MIN_IMAGES} and {MAX_IMAGES} images required, max 200MB total
-                      </p>
+                    <div className="flex flex-col items-center justify-center gap-4">
+                      <div className="p-4 rounded-full bg-primary/10 border border-primary/20">
+                        <UploadIcon 
+                          size={32} 
+                          className="text-primary" 
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <p className="text-foreground font-medium">
+                          Drag and drop images here, or click to select files
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          JPG, PNG, WebP • {MIN_IMAGES}-{MAX_IMAGES} images • Max 200MB total • Max 10MB per file
+                        </p>
+                      </div>
                     </div>
                   </div>
                 </div>
                 
                 {uploadedImages.length > 0 && (
-                  <div className="space-y-2">
-                    <div className="flex justify-between items-center">
-                      <Label>
-                        {uploadedImages.length} image(s) selected (min {MIN_IMAGES}, max {MAX_IMAGES})
-                        {uploadedImages.length < MIN_IMAGES && ` (${MIN_IMAGES - uploadedImages.length} more required)`}
-                        {uploadedImages.length > MAX_IMAGES && ` (${uploadedImages.length - MAX_IMAGES} too many)`}
-                      </Label>
-                      <span className="text-sm text-muted-foreground">
-                        Total size: {formatSizeInMB(uploadedImages.reduce((total, file) => total + file.size, 0))} / 200MB
-                      </span>
+                  <div className="space-y-4">
+                    <div className="flex justify-between items-center p-4 bg-gradient-to-r from-muted/30 via-muted/20 to-background/80 border border-border/40 rounded-xl backdrop-blur-sm">
+                      <div className="space-y-1">
+                        <Label className="text-base font-semibold text-foreground">
+                          {uploadedImages.length} image(s) selected
+                        </Label>
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                          <span>Range: {MIN_IMAGES}-{MAX_IMAGES} images</span>
+                          {uploadedImages.length < MIN_IMAGES && (
+                            <span className="text-amber-600 dark:text-amber-400 font-medium">
+                              • {MIN_IMAGES - uploadedImages.length} more required
+                            </span>
+                          )}
+                          {uploadedImages.length > MAX_IMAGES && (
+                            <span className="text-red-600 dark:text-red-400 font-medium">
+                              • {uploadedImages.length - MAX_IMAGES} too many
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-sm font-medium text-foreground">
+                          Total size: {formatSizeInMB(uploadedImages.reduce((total, file) => total + file.size, 0))}
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          Limit: 200MB
+                        </div>
+                      </div>
                     </div>
                     
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4 mt-2">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
                       {uploadedImages.map((file, index) => (
-                        <Card key={index} className="overflow-hidden relative group">
+                        <Card key={index} className="overflow-hidden relative group bg-gradient-to-br from-card/50 to-card border-border/60 hover:border-border transition-all duration-200 shadow-md hover:shadow-lg">
                           <CardContent className="p-0">
                             <div className="relative aspect-square">
                               {thumbnails[index] ? (
@@ -1054,24 +1191,24 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
                                   }}
                                 />
                               ) : (
-                                <div className="flex items-center justify-center h-full bg-muted/30">
+                                <div className="flex items-center justify-center h-full bg-gradient-to-br from-muted/20 to-muted/10">
                                   <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
                                 </div>
                               )}
                               <button
                                 type="button"
                                 onClick={() => removeImage(index)}
-                                className="absolute top-1 right-1 bg-background/80 dark:bg-foreground/20 text-foreground dark:text-background rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                                className="absolute top-2 right-2 bg-background/90 hover:bg-background text-foreground rounded-full p-1.5 opacity-0 group-hover:opacity-100 transition-all duration-200 shadow-lg hover:shadow-xl hover:scale-110"
                                 aria-label="Remove image"
                               >
                                 <svg
                                   xmlns="http://www.w3.org/2000/svg" 
-                                  width="16" 
-                                  height="16" 
+                                  width="14" 
+                                  height="14" 
                                   viewBox="0 0 24 24" 
                                   fill="none"
                                   stroke="currentColor"
-                                  strokeWidth="2" 
+                                  strokeWidth="2.5" 
                                   strokeLinecap="round"
                                   strokeLinejoin="round"
                                 >
@@ -1088,33 +1225,43 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
                 )}
                 
                 {isProcessing && uploadProgress > 0 && (
-                  <div className="mt-4">
-                    <div className="flex justify-between mb-1">
-                      <span className="text-sm font-medium">Processing...</span>
-                      <span className="text-sm font-medium">{uploadProgress}%</span>
+                  <div className="p-4 bg-gradient-to-r from-primary/10 via-primary/5 to-primary/10 border border-primary/20 rounded-xl backdrop-blur-sm space-y-3">
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm font-semibold text-primary">Processing your model...</span>
+                      <span className="text-sm font-bold text-primary">{uploadProgress}%</span>
                     </div>
-                    <div className="w-full bg-muted rounded-full h-2.5">
+                    <div className="w-full bg-muted/50 rounded-full h-3 overflow-hidden">
                       <div
-                        className="bg-primary h-2.5 rounded-full" 
+                        className="bg-gradient-to-r from-primary to-primary/80 h-full rounded-full transition-all duration-500 ease-out shadow-sm" 
                         style={{ width: `${uploadProgress}%` }}
                       ></div>
                     </div>
+                    <p className="text-xs text-muted-foreground text-center">
+                      This may take a few moments. Please don&rsquo;t close this page.
+                    </p>
                   </div>
                 )}
               </div>
               
               <Button
                 type="submit"
-                className="w-full"
-                disabled={!displayModelName || nameError !== null || uploadedImages.length < MIN_IMAGES || uploadedImages.length > MAX_IMAGES || isProcessing}
+                className="w-full py-4 bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary/80 text-primary-foreground shadow-lg hover:shadow-xl transition-all duration-200 font-semibold text-base"
+                disabled={!displayModelName || !selectedGender || nameError !== null || uploadedImages.length < MIN_IMAGES || uploadedImages.length > MAX_IMAGES || isProcessing}
                 onClick={handleSubmit}
               >
                 {isProcessing ? (
-                  <span className="flex items-center justify-center">
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  <span className="flex items-center justify-center gap-2">
+                    <Loader2 className="h-5 w-5 animate-spin" />
                     Processing...
                   </span>
-                ) : 'Train My Model'}
+                ) : (
+                  <span className="flex items-center justify-center gap-2">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                    </svg>
+                    Train My Model
+                  </span>
+                )}
               </Button>
             </form>
           </div>

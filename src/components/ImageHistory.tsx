@@ -809,7 +809,7 @@ export function ImageHistory({
                             
                             {/* Heart Icon for Favorite */}
                             <button
-                              className="absolute top-2 right-2 z-20 p-1.5 rounded-full bg-black/20 backdrop-blur-sm hover:bg-black/40 transition-all duration-200 group-hover:scale-110"
+                              className="absolute top-2 right-2 z-20 p-1.5 transition-all duration-200 group-hover:scale-110"
                               onClick={(e) => {
                                 e.stopPropagation(); // Prevent opening the viewer
                                 toggleImageFavorite(generation.id, image.url, image.isLiked || false);
@@ -828,9 +828,12 @@ export function ImageHistory({
                                 strokeLinejoin="round" 
                                 className={`transition-colors duration-200 ${
                                   image.isLiked 
-                                    ? "text-red-500" 
-                                    : "text-white hover:text-red-500"
+                                    ? "text-red-500 drop-shadow-[0_2px_4px_rgba(255,255,255,0.8)]" 
+                                    : "text-white drop-shadow-[0_2px_4px_rgba(255,255,255,0.9)] hover:text-red-500"
                                 }`}
+                                style={{
+                                  filter: 'drop-shadow(0 0 3px rgba(255, 255, 255, 0.7))'
+                                }}
                               >
                                 <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
                               </svg>

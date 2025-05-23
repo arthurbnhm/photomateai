@@ -46,6 +46,7 @@ export default function RootLayout({
           defaultTheme="system"
           enableSystem
           disableTransitionOnChange
+          storageKey="photomate-theme"
         >
           <AuthProvider>
             <main className="min-h-screen">
