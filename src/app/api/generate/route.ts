@@ -1,6 +1,6 @@
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
-export const maxDuration = 300; // 5 minutes for processing
+export const maxDuration = 60; // Max allowed for Vercel hobby plan
 
 import { NextRequest, NextResponse } from 'next/server';
 import Replicate from 'replicate';
