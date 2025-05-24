@@ -922,7 +922,7 @@ export function PromptForm({
                       {/* Reference Images Block */}
                       <div className="flex flex-col items-center text-center space-y-2 md:space-y-3">
                         <div className="flex items-center gap-1.5 md:gap-3 pl-1">
-                          <div className="transform -rotate-3 transition-transform hover:rotate-0 duration-300">
+                          <div className="group transform -rotate-3 transition-all duration-500 ease-out hover:rotate-1 hover:scale-110 hover:-translate-y-2 cursor-pointer">
                             <Image 
                               src="/references/lavander.webp"
                               alt="Reference photo example - lavender field"
@@ -930,11 +930,12 @@ export function PromptForm({
                               height={80}
                               quality={100}
                               sizes="(max-width: 768px) 64px, 80px"
-                              className="w-16 h-16 md:w-20 md:h-20 rounded-lg md:rounded-xl object-cover shadow-lg border-2 md:border-4 border-white hover:shadow-xl transition-shadow duration-300"
+                              className="w-16 h-16 md:w-20 md:h-20 rounded-lg md:rounded-xl object-cover shadow-lg border-2 md:border-4 border-white group-hover:shadow-2xl group-hover:shadow-purple-500/30 group-hover:border-purple-200 dark:group-hover:border-purple-400 transition-all duration-500 ease-out group-hover:brightness-110"
                               priority
                             />
+                            <div className="absolute inset-0 bg-gradient-to-t from-purple-600/0 via-transparent to-purple-400/0 group-hover:from-purple-600/10 group-hover:to-purple-400/5 rounded-lg md:rounded-xl transition-all duration-500 ease-out pointer-events-none" />
                           </div>
-                          <div className="transform rotate-3 translate-y-1 transition-transform hover:rotate-0 hover:translate-y-0 duration-300">
+                          <div className="group transform rotate-3 translate-y-1 transition-all duration-500 ease-out hover:rotate-0 hover:scale-110 hover:-translate-y-1 cursor-pointer">
                             <Image
                               src="/references/acacia.webp"
                               alt="Reference photo example - acacia tree"
@@ -942,9 +943,10 @@ export function PromptForm({
                               height={80}
                               quality={100}
                               sizes="(max-width: 768px) 64px, 80px"
-                              className="w-16 h-16 md:w-20 md:h-20 rounded-lg md:rounded-xl object-cover shadow-lg border-2 md:border-4 border-white hover:shadow-xl transition-shadow duration-300"
+                              className="w-16 h-16 md:w-20 md:h-20 rounded-lg md:rounded-xl object-cover shadow-lg border-2 md:border-4 border-white group-hover:shadow-2xl group-hover:shadow-green-500/30 group-hover:border-green-200 dark:group-hover:border-green-400 transition-all duration-500 ease-out group-hover:brightness-110"
                               priority
                             />
+                            <div className="absolute inset-0 bg-gradient-to-t from-green-600/0 via-transparent to-green-400/0 group-hover:from-green-600/10 group-hover:to-green-400/5 rounded-lg md:rounded-xl transition-all duration-500 ease-out pointer-events-none" />
                           </div>
                         </div>
                         <p className="text-xs md:text-sm font-medium text-muted-foreground">Reference Photo</p>
@@ -958,10 +960,38 @@ export function PromptForm({
 
                       {/* "Your Model" Placeholder */}
                       <div className="flex flex-col items-center text-center space-y-2 md:space-y-3">
-                        <div className="transform -rotate-3 p-2 md:p-4 border-2 md:border-4 border-dashed border-primary/30 rounded-lg md:rounded-xl flex items-center justify-center w-16 h-16 md:w-20 md:h-20 bg-gradient-to-br from-primary/5 to-primary/10 hover:from-primary/10 hover:to-primary/15 transition-all duration-300">
-                          <UserSquare2 size={20} className="md:w-7 md:h-7 text-primary/70" />
+                        <div className="group relative transform -rotate-2 transition-all duration-500 ease-out hover:rotate-1 hover:scale-110 hover:-translate-y-2 cursor-pointer">
+                          {/* Main container with enhanced styling */}
+                          <div className="relative w-16 h-16 md:w-20 md:h-20 bg-gradient-to-br from-primary/10 via-primary/5 to-primary/15 group-hover:from-primary/20 group-hover:via-primary/10 group-hover:to-primary/25 border-2 md:border-4 border-dashed border-primary/40 group-hover:border-primary/60 group-hover:border-solid rounded-lg md:rounded-xl transition-all duration-500 ease-out overflow-hidden group-hover:shadow-2xl group-hover:shadow-primary/30">
+                            
+                            {/* Animated background pattern */}
+                            <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500">
+                              <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-primary/5 to-primary/10 animate-pulse" />
+                              <div className="absolute top-1 right-1 w-2 h-2 bg-primary/20 rounded-full animate-ping" />
+                            </div>
+                            
+                            {/* Icon container */}
+                            <div className="relative z-10 w-full h-full flex items-center justify-center">
+                              <div className="relative">
+                                {/* Main icon */}
+                                <UserSquare2 
+                                  size={20} 
+                                  className="md:w-7 md:h-7 text-primary/70 group-hover:text-primary group-hover:scale-110 transition-all duration-500 ease-out" 
+                                />
+                                
+                                {/* Subtle glow effect */}
+                                <div className="absolute inset-0 bg-primary/20 rounded-full blur-lg scale-150 opacity-0 group-hover:opacity-50 transition-all duration-500 ease-out" />
+                              </div>
+                            </div>
+                            
+                            {/* Shimmer effect on hover */}
+                            <div className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-700 ease-out bg-gradient-to-r from-transparent via-white/10 to-transparent skew-x-12" />
+                          </div>
+                          
+                          {/* Outer glow on hover */}
+                          <div className="absolute inset-0 bg-primary/10 rounded-lg md:rounded-xl opacity-0 group-hover:opacity-100 transition-all duration-500 ease-out blur-xl scale-125" />
                         </div>
-                        <p className="text-xs md:text-sm font-medium text-muted-foreground">Your Model</p>
+                        <p className="text-xs md:text-sm font-medium text-muted-foreground group-hover:text-foreground transition-colors duration-300">Your Model</p>
                       </div>
                     </div>
                     
