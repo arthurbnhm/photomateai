@@ -58,13 +58,24 @@ export function ImageUpload({ onImageChange, currentImageUrl, className }: Image
           // Convert to standardized data URL (always JPEG for consistency)
           const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
           
+          // Clean and validate the data URL format
+          const cleanDataUrl = dataUrl.trim().replace(/\s/g, '');
+          
           // Validate the data URL format is exactly what we expect
-          if (!dataUrl || !dataUrl.startsWith('data:image/jpeg;base64,')) {
+          if (!cleanDataUrl || !cleanDataUrl.startsWith('data:image/jpeg;base64,')) {
             reject(new Error('Failed to create valid data URL'));
             return;
           }
 
-          resolve(dataUrl);
+          // Additional validation: ensure base64 part is valid
+          const base64Part = cleanDataUrl.split(',')[1];
+          if (!base64Part || base64Part.length === 0) {
+            reject(new Error('Invalid base64 data in data URL'));
+            return;
+          }
+
+          console.log('✅ Created clean data URL, length:', cleanDataUrl.length);
+          resolve(cleanDataUrl);
         } catch (error) {
           reject(error);
         }
