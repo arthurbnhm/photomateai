@@ -410,53 +410,23 @@ export async function POST(request: Request) {
         id: replicate_id
       });
       
-      // If this is a terminal event (succeeded/failed), create a record for it
+      // This situation should not normally happen - predictions should be created
+      // by the /api/generate endpoint before the webhook fires. Log a warning.
+      console.warn(`⚠️ Received webhook for non-existent prediction: ${replicate_id}`);
+      console.warn('This may indicate the prediction was created without going through our API');
+      
+      // For terminal events, we should NOT create a new record as this breaks our flow
+      // The prediction should have been created by /api/generate before the webhook
       if (webhookData.status === 'succeeded' || webhookData.status === 'failed') {
-        console.log(`Creating record for webhook with replicate_id: ${replicate_id}`);
-        
-        // Extract timing and cost information from webhook payload
-        const startedAt = webhookData.started_at || null;
-        const completedAt = webhookData.completed_at || null;
-        const predictTime = webhookData.metrics?.predict_time || null;
-        
-        // Calculate cost based on predict time (if available)
-        const costPerSecond = 0.001525;
-        const cost = predictTime ? predictTime * costPerSecond : null;
-        
-        // Create a new prediction record
-        const { error: insertError } = await supabase
-          .from('predictions')
-          .insert({
-            replicate_id: replicate_id,
-            status: webhookData.status,
-            error: webhookData.error,
-            started_at: startedAt,
-            completed_at: completedAt || new Date().toISOString(),
-            predict_time: predictTime,
-            cost: cost,
-            storage_urls: Array.isArray(webhookData.output) ? webhookData.output : null
-          });
-          
-        if (insertError) {
-          console.error('Error creating prediction record from webhook:', insertError);
-          return NextResponse.json({ error: 'Error creating prediction record' }, { status: 500 });
-        }
-        
+        console.error(`❌ Cannot process ${webhookData.status} webhook for non-existent prediction: ${replicate_id}`);
+        console.error('Predictions must be created via /api/generate before webhooks are processed');
         return NextResponse.json({ 
-          success: true, 
-          type: 'prediction_created_from_webhook',
-          message: 'Created prediction record from webhook data'
-        });
+          error: 'Prediction not found in database',
+          message: 'Predictions must be created via /api/generate endpoint before webhook processing'
+        }, { status: 404 });
       }
       
-      // If this is not a terminal event (succeeded/failed), we can safely ignore it
-      if (webhookData.status !== 'succeeded' && webhookData.status !== 'failed') {
-        console.log(`Ignoring ${webhookData.status} webhook for non-existent prediction: ${replicate_id}`);
-        return NextResponse.json({ message: 'Webhook acknowledged but no action taken' }, { status: 200 });
-      }
-      
-      console.error('No prediction or training found with replicate_id:', replicate_id);
-      return NextResponse.json({ error: 'Webhook data not found in database' }, { status: 404 });
+      return NextResponse.json({ message: 'Webhook acknowledged but no action taken' }, { status: 200 });
     }
 
     // Handle prediction webhook based on status
