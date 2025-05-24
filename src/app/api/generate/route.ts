@@ -1,3 +1,7 @@
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
+export const maxDuration = 300; // 5 minutes for processing
+
 import { NextRequest, NextResponse } from 'next/server';
 import Replicate from 'replicate';
 import { createSupabaseServerClient } from '@/lib/supabase/server';

@@ -290,6 +290,17 @@ export function PromptForm({
     // No longer disabling aspect ratio here, backend will handle it.
   }, []);
   
+  // Debug logging function
+  const addDebugLog = useCallback((level: 'info' | 'error' | 'warn', message: string) => {
+    const timestamp = new Date().toLocaleTimeString();
+    setDebugLogs(prev => [...prev, { timestamp, level, message }]);
+  }, []);
+
+  // Clear debug logs
+  const clearDebugLogs = useCallback(() => {
+    setDebugLogs([]);
+  }, []);
+  
   // Add a pending generation
   const addPendingGeneration = (generation: PendingGeneration) => {
     // Add start time if not provided
@@ -412,7 +423,7 @@ export function PromptForm({
 
       const supabase = getSupabase();
       const abortController = new AbortController();
-      const timeoutId = setTimeout(() => abortController.abort(), 30000);
+      const timeoutId = setTimeout(() => abortController.abort(), 60000);
       let authHeader = {};
       if (userId) {
         const { data: { session } } = await supabase.auth.getSession();
@@ -485,7 +496,10 @@ export function PromptForm({
         const errorMsg = err instanceof Error ? err.message : 'Unknown network error';
         addDebugLog('error', `❌ Network error: ${errorMsg}`);
         
-        if (err instanceof Error && err.message.includes('string did not match')) {
+        if (err instanceof Error && err.name === 'AbortError') {
+          addDebugLog('error', '⏰ Request timed out (60s limit exceeded)');
+          setError('Request timed out. The image processing is taking longer than expected. Please try again.');
+        } else if (err instanceof Error && err.message.includes('string did not match')) {
           console.error('🎯 FOUND "string did not match" error in network request!');
           addDebugLog('error', '🎯 FOUND "string did not match" error in network layer!');
           setError('Failed to process image. The image format may be unsupported. Please try a different image.');
@@ -502,8 +516,42 @@ export function PromptForm({
         console.error('❌ API response not OK:', response.status, response.statusText);
         addDebugLog('error', `❌ API error: ${response.status} ${response.statusText}`);
         
+        // Handle different types of error responses
+        if (response.status === 504) {
+          addDebugLog('error', '⏰ Gateway timeout - API processing took too long');
+          setError('The request timed out on the server. This usually happens with large images. Please try with a smaller image or try again.');
+          removePendingGeneration(tempId);
+          onGenerationComplete?.();
+          return;
+        }
+        
+        // Try to get response text first, then parse as JSON if possible
+        let errorData: {error?: string, details?: string, debugLogs?: Array<{timestamp: string, step: string, details: unknown}>} | null = null;
         try {
-          const errorData = await response.json();
+          const responseText = await response.text();
+          addDebugLog('info', `📄 Raw response text length: ${responseText.length}`);
+          
+          // Try to parse as JSON
+          try {
+            errorData = JSON.parse(responseText);
+            addDebugLog('info', '✅ Successfully parsed error response as JSON');
+          } catch {
+            // If JSON parsing fails, the response is probably HTML (like 504 pages)
+            addDebugLog('error', `❌ Failed to parse as JSON - response is likely HTML/text: ${responseText.substring(0, 200)}...`);
+            setError(`Server error (${response.status}): The request could not be processed. Please try again.`);
+            removePendingGeneration(tempId);
+            onGenerationComplete?.();
+            return;
+          }
+        } catch (textError) {
+          addDebugLog('error', `❌ Failed to read response text: ${textError instanceof Error ? textError.message : 'Unknown'}`);
+          setError(`Server error (${response.status}): Unable to read error details.`);
+          removePendingGeneration(tempId);
+          onGenerationComplete?.();
+          return;
+        }
+        
+        if (errorData) {
           console.error('📋 Error response data:', errorData);
           addDebugLog('error', `📋 API error details: ${JSON.stringify(errorData)}`);
           
@@ -522,11 +570,8 @@ export function PromptForm({
           
           setError(errorData.error || 'Failed to generate image');
           setErrorDetails(errorData.details || null);
-        } catch (parseError) {
-          console.error('❌ Failed to parse error response:', parseError);
-          addDebugLog('error', `❌ Failed to parse error response: ${parseError instanceof Error ? parseError.message : 'Unknown'}`);
-          setError('Failed to generate image');
         }
+        
         removePendingGeneration(tempId);
         onGenerationComplete?.();
         return;
@@ -787,17 +832,6 @@ export function PromptForm({
     return () => {
       // We're no longer using realtime, so no cleanup needed
     };
-  }, []);
-
-  // Debug logging function
-  const addDebugLog = useCallback((level: 'info' | 'error' | 'warn', message: string) => {
-    const timestamp = new Date().toLocaleTimeString();
-    setDebugLogs(prev => [...prev, { timestamp, level, message }]);
-  }, []);
-
-  // Clear debug logs
-  const clearDebugLogs = useCallback(() => {
-    setDebugLogs([]);
   }, []);
 
   return (
