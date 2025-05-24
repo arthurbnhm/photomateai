@@ -4,6 +4,20 @@ import { createSupabaseAdminClient } from '@/lib/supabase/server';
 import Stripe from 'stripe';
 import { SupabaseClient } from '@supabase/supabase-js';
 
+// Helper function to get plan limits
+function getPlanLimits(plan: string): { credits: number; models: number } {
+  switch (plan) {
+    case 'basic':
+      return { credits: 50, models: 1 };
+    case 'professional':
+      return { credits: 200, models: 3 };
+    case 'executive':
+      return { credits: 3000, models: 10 };
+    default:
+      return { credits: 50, models: 1 }; // Default to basic
+  }
+}
+
 // This is the Stripe webhook handler
 export async function POST(req: NextRequest) {
   const body = await req.text();
@@ -146,18 +160,27 @@ export async function POST(req: NextRequest) {
           const updateData: {
             plan: string;
             is_active: boolean;
-            last_payment_date: string;
-            current_period_end?: string;
+            credits_remaining?: number;
+            models_remaining?: number;
+            subscription_start_date?: string;
+            subscription_end_date?: string;
           } = {
             plan: invoicePlan,
             is_active: true,
-            last_payment_date: new Date().toISOString(),
           };
           
-          // If it's a recurring payment, update the subscription period
+          // If it's a recurring payment, reset credits/models and update subscription period
           if (isRecurring) {
-            // Calculate the next billing date based on the current period end
-            updateData.current_period_end = new Date(invoiceSubscription.current_period_end * 1000).toISOString();
+            // Get plan limits and reset credits/models
+            const { credits, models } = getPlanLimits(invoicePlan);
+            updateData.credits_remaining = credits;
+            updateData.models_remaining = models;
+            
+            // Update subscription period dates for the new billing cycle
+            updateData.subscription_start_date = new Date().toISOString();
+            updateData.subscription_end_date = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(); // 30 days from now
+            
+            console.log(`🔄 Recurring payment for subscription ${invoiceSubscriptionId}: Resetting ${invoicePlan} plan to ${credits} credits and ${models} models`);
           }
           
           await supabase
@@ -190,7 +213,7 @@ export async function POST(req: NextRequest) {
           if (invoiceUserId) {
             // Create a new subscription record
             const now = new Date().toISOString();
-            const periodEnd = new Date(invoiceSubscription.current_period_end * 1000).toISOString();
+            const endDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(); // 30 days from now
             
             await supabase
               .from('subscriptions')
@@ -201,8 +224,8 @@ export async function POST(req: NextRequest) {
                 stripe_subscription_id: invoiceSubscriptionId,
                 is_active: true,
                 subscription_start_date: now,
-                last_payment_date: now,
-                current_period_end: periodEnd,
+                subscription_end_date: endDate,
+                // Credits and models will be set by INSERT trigger
               });
           } else {
             console.error(`No user found for customer ID ${invoiceCustomerId} in invoice.payment_succeeded`);
