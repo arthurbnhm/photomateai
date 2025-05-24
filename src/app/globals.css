@@ -281,3 +281,21 @@ body.is-landing-page .fixed.md\:top-4.md\:right-4 {
     display: none; /* Chrome, Safari and Opera */
   }
 }
+
+/* Safari gradient button fix */
+@supports (-webkit-appearance: none) {
+  /* Target buttons with gradients */
+  button[class*="bg-gradient-"] {
+    -webkit-transform: translateZ(0);
+    transform: translateZ(0);
+    -webkit-backface-visibility: hidden;
+    backface-visibility: hidden;
+    will-change: transform, box-shadow;
+  }
+  
+  /* Prevent layout shift on hover */
+  button[class*="bg-gradient-"]:hover {
+    -webkit-transform: translateZ(0);
+    transform: translateZ(0);
+  }
+}

@@ -919,7 +919,7 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
 
             <Button
               onClick={() => setCurrentStep(2)}
-              className="w-full py-3 bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary/80 text-primary-foreground shadow-lg hover:shadow-xl transition-all duration-200 font-medium"
+              className="w-full py-3 bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary/80 text-primary-foreground shadow-lg hover:shadow-xl font-medium"
             >
               Got it, Let&rsquo;s Upload Photos!
             </Button>
@@ -1241,7 +1241,7 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
               
               <Button
                 type="submit"
-                className="w-full py-4 bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary/80 text-primary-foreground shadow-lg hover:shadow-xl transition-all duration-200 font-semibold text-base"
+                className="w-full py-4 bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary/80 text-primary-foreground shadow-lg hover:shadow-xl font-semibold text-base"
                 disabled={!displayModelName || !selectedGender || nameError !== null || uploadedImages.length < MIN_IMAGES || uploadedImages.length > MAX_IMAGES || isProcessing}
                 onClick={handleSubmit}
               >

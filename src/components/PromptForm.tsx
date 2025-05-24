@@ -954,7 +954,7 @@ export function PromptForm({
                       <div className="lg:col-span-2 flex items-end">
                         <Button 
                           type="submit" 
-                          className="w-full bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary/80 text-primary-foreground shadow-lg hover:shadow-xl transition-all duration-200 font-medium"
+                          className="w-full bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary/80 text-primary-foreground shadow-lg hover:shadow-xl font-medium"
                           disabled={loadingModels}
                           aria-label="Generate image from prompt"
                         >
@@ -1133,7 +1133,7 @@ export function PromptForm({
                       <Button 
                         type="button"
                         onClick={handleImageReferenceGeneration}
-                        className="w-full bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary/80 text-primary-foreground shadow-lg hover:shadow-xl transition-all duration-200 font-medium"
+                        className="w-full bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary/80 text-primary-foreground shadow-lg hover:shadow-xl font-medium"
                         disabled={loadingModels || !uploadedImageDataUrl}
                         aria-label="Generate image from image reference"
                       >
