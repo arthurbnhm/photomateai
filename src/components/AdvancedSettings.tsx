@@ -666,11 +666,21 @@ export const AdvancedSettings = forwardRef<AdvancedSettingsRefType, AdvancedSett
         </div>
         <div 
           className={cn(
-            "overflow-hidden transition-all duration-500 ease-in-out",
-            isOpen ? "max-h-[3000px] opacity-100 mt-6" : "max-h-0 opacity-0 mt-0"
+            "overflow-hidden transition-all duration-300 ease-out will-change-transform transform-gpu",
+            isOpen 
+              ? "translate-y-0 opacity-100 mt-6 pointer-events-auto" 
+              : "-translate-y-4 opacity-0 mt-0 pointer-events-none"
           )}
+          style={{
+            maxHeight: isOpen ? '2000px' : '0px',
+            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+            transform: isOpen ? 'translate3d(0, 0, 0)' : 'translate3d(0, -16px, 0)'
+          }}
         >
-          <div className="bg-gradient-to-br from-muted/20 via-background/50 to-muted/10 border border-border/30 rounded-xl p-4 sm:p-6 space-y-6 sm:space-y-8 backdrop-blur-sm">
+          <div 
+            className="bg-gradient-to-br from-muted/20 via-background/50 to-muted/10 border border-border/30 rounded-xl p-4 sm:p-6 space-y-6 sm:space-y-8 backdrop-blur-sm"
+            style={{ transform: 'translate3d(0, 0, 0)' }}
+          >
             <div className="space-y-3 sm:space-y-4">
               <div className="flex items-center justify-between">
                 <h4 className="text-sm sm:text-base font-semibold text-foreground flex items-center gap-2 flex-wrap">

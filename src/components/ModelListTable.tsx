@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import {
   Table,
   TableBody,
@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Trash2, XCircle } from "lucide-react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
-import { useModels } from "@/hooks/useModels";
+import { useAuth } from "@/contexts/AuthContext";
 
 // Initialize Supabase client
 const supabase = createSupabaseBrowserClient();
@@ -47,6 +47,19 @@ interface Model {
   training_id?: string;
   is_cancelled?: boolean;
   training_status?: string;
+  gender?: string;
+}
+
+interface ModelListResponse {
+  success: boolean;
+  models: Model[];
+  error?: string;
+  pagination: {
+    total: number;
+    page: number;
+    limit: number;
+    pages: number;
+  };
 }
 
 interface NewTraining {
@@ -65,6 +78,14 @@ interface ModelListTableProps {
 }
 
 export function ModelListTable({ newTraining, onClearNewTraining }: ModelListTableProps = {}) {
+  const { user } = useAuth();
+  
+  // Model data state
+  const [models, setModels] = useState<Model[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  
+  // UI state
   const [modelToDelete, setModelToDelete] = useState<Model | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
@@ -74,16 +95,75 @@ export function ModelListTable({ newTraining, onClearNewTraining }: ModelListTab
   const deleteButtonRef = useRef<HTMLButtonElement | null>(null);
   const cancelButtonRef = useRef<HTMLButtonElement | null>(null);
   
-  // Use our custom hook for models
-  const {
-    models,
-    loading,
-    error,
-    fetchModels,
-    isNewTrainingInModels,
-    removeModelFromState
-  } = useModels(newTraining);
-  
+  // Data fetching logic
+  const fetchModels = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const userId = user?.id;
+      
+      const params = new URLSearchParams();
+      if (userId) {
+        params.append('user_id', userId);
+      }
+      
+      const url = `/api/model/list?${params.toString()}`;
+      
+      const response = await fetch(url);
+      
+      if (!response.ok) {
+        throw new Error(`Failed to fetch models: ${response.status} ${response.statusText}`);
+      }
+      
+      const data: ModelListResponse = await response.json();
+      
+      if (data.success) {
+        setModels(data.models);
+      } else {
+        setError(data.error || "Failed to fetch models");
+        setModels([]);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "An error occurred");
+      setModels([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [user?.id]);
+
+  const isNewTrainingInModels = useCallback(() => {
+    if (!newTraining || !models.length) return false;
+    
+    return models.some(model => {
+      if (newTraining.modelId && model.id === newTraining.modelId) return true;
+      
+      if (newTraining.modelName && newTraining.modelOwner) {
+        return model.model_id === newTraining.modelName && 
+               model.model_owner === newTraining.modelOwner;
+      }
+      
+      return model.trainings.some(training => 
+        training.id === newTraining.id || 
+        training.training_id === newTraining.id
+      );
+    });
+  }, [newTraining, models]);
+
+  const removeModelFromState = useCallback((modelId: string) => {
+    setModels(prevModels => prevModels.filter(model => model.id !== modelId));
+  }, []);
+
+  // Effects for data management
+  useEffect(() => {
+    fetchModels();
+  }, [fetchModels]);
+
+  useEffect(() => {
+    if (!newTraining) return;
+    
+    fetchModels();
+  }, [newTraining, fetchModels]);
+
   // Clear new training if it's found in models
   useEffect(() => {
     if (newTraining && onClearNewTraining && isNewTrainingInModels()) {

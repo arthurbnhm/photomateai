@@ -208,8 +208,6 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
   // State for the models dialog
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   
-  // const { invalidateCache } = useModels(); // This was removed as caching is gone
-
   // Format model name to meet Replicate's requirements
   const formatModelName = (name: string): string => {
     // Convert to lowercase
@@ -463,8 +461,6 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
           modelOwner: modelData.model.owner,
           displayName: displayModelName
         };
-        
-        // invalidateCache(); // This was removed as caching is gone
         
         onTrainingStatusChange(newTrainingStatus);
         
