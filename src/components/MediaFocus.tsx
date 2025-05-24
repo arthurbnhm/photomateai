@@ -1,12 +1,12 @@
 "use client"
 
-import React, { useEffect, useRef, useCallback } from "react"
+import React, { useEffect, useRef, useCallback, useMemo } from "react"
 import { createPortal } from "react-dom"
 import NextImage from "next/image"
 import { Button } from "@/components/ui/button"
 import { toast } from "sonner"
 import { motion, AnimatePresence } from "framer-motion"
-import { X, Download, ChevronLeft, ChevronRight } from "lucide-react"
+import { X, Download, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, RotateCcw } from "lucide-react"
 import { AspectRatio } from "@/components/ui/aspect-ratio"
 import { createSupabaseBrowserClient } from "@/lib/supabase/client"
 
@@ -49,8 +49,283 @@ export function MediaFocus({
 }: MediaFocusProps) {
   const [mounted, setMounted] = React.useState(false)
   const supabase = createSupabaseBrowserClient()
-  const activeTouchesRef = useRef<number>(0); // Added to track active touches
-  const thumbnailContainerRef = useRef<HTMLDivElement>(null); // Ref for thumbnail container
+  const activeTouchesRef = useRef<number>(0)
+  const thumbnailContainerRef = useRef<HTMLDivElement>(null)
+  
+  // Zoom state
+  const [zoomLevel, setZoomLevel] = React.useState(1)
+  const [panPosition, setPanPosition] = React.useState({ x: 0, y: 0 })
+  const [isDragging, setIsDragging] = React.useState(false)
+  const [lastMousePosition, setLastMousePosition] = React.useState({ x: 0, y: 0 })
+  const imageContainerRef = useRef<HTMLDivElement>(null)
+  
+  // Pinch-to-zoom state
+  const [initialPinchDistance, setInitialPinchDistance] = React.useState<number | null>(null)
+  const [initialZoomLevel, setInitialZoomLevel] = React.useState(1)
+  
+  // Performance optimization refs
+  const animationFrameRef = useRef<number | null>(null)
+  const wheelTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  
+  // Reset zoom when image changes
+  useEffect(() => {
+    setZoomLevel(1)
+    setPanPosition({ x: 0, y: 0 })
+    setIsDragging(false)
+  }, [currentImageIndex])
+  
+  // Optimized zoom functions with minimal dependencies
+  const zoomIn = useCallback(() => {
+    setZoomLevel(prev => Math.min(prev * 1.5, 5))
+  }, [])
+  
+  const zoomOut = useCallback(() => {
+    setZoomLevel(prev => {
+      const newZoom = prev / 1.5
+      if (newZoom <= 1) {
+        setPanPosition({ x: 0, y: 0 })
+        return 1
+      }
+      return newZoom
+    })
+  }, [])
+  
+  const resetZoom = useCallback(() => {
+    setZoomLevel(1)
+    setPanPosition({ x: 0, y: 0 })
+  }, [])
+  
+  // Throttled wheel zoom for better performance
+  const handleWheel = useCallback((e: React.WheelEvent) => {
+    if (!imageContainerRef.current) return
+    
+    e.preventDefault()
+    
+    // Clear existing timeout
+    if (wheelTimeoutRef.current) {
+      clearTimeout(wheelTimeoutRef.current)
+    }
+    
+    // Throttle wheel events
+    wheelTimeoutRef.current = setTimeout(() => {
+      const rect = imageContainerRef.current!.getBoundingClientRect()
+      const centerX = rect.width / 2
+      const centerY = rect.height / 2
+      
+      const mouseX = e.clientX - rect.left - centerX
+      const mouseY = e.clientY - rect.top - centerY
+      
+      const zoomDelta = e.deltaY > 0 ? 0.9 : 1.1
+      
+      setZoomLevel(prevZoom => {
+        const newZoomLevel = Math.max(1, Math.min(prevZoom * zoomDelta, 5))
+        
+        if (newZoomLevel === 1) {
+          setPanPosition({ x: 0, y: 0 })
+        } else if (newZoomLevel !== prevZoom) {
+          const zoomRatio = newZoomLevel / prevZoom
+          setPanPosition(prev => ({
+            x: prev.x * zoomRatio + mouseX * (1 - zoomRatio),
+            y: prev.y * zoomRatio + mouseY * (1 - zoomRatio)
+          }))
+        }
+        
+        return newZoomLevel
+      })
+    }, 16) // ~60fps throttling
+  }, [])
+  
+  // Optimized mouse drag with requestAnimationFrame
+  const updatePanPosition = useCallback((deltaX: number, deltaY: number) => {
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current)
+    }
+    
+    animationFrameRef.current = requestAnimationFrame(() => {
+      setPanPosition(prev => ({
+        x: prev.x + deltaX,
+        y: prev.y + deltaY
+      }))
+    })
+  }, [])
+  
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    if (zoomLevel > 1) {
+      setIsDragging(true)
+      setLastMousePosition({ x: e.clientX, y: e.clientY })
+      e.preventDefault()
+    }
+  }, [zoomLevel])
+  
+  const handleMouseMove = useCallback((e: React.MouseEvent) => {
+    if (isDragging && zoomLevel > 1) {
+      const deltaX = e.clientX - lastMousePosition.x
+      const deltaY = e.clientY - lastMousePosition.y
+      
+      updatePanPosition(deltaX, deltaY)
+      setLastMousePosition({ x: e.clientX, y: e.clientY })
+      e.preventDefault()
+    }
+  }, [isDragging, lastMousePosition, zoomLevel, updatePanPosition])
+  
+  const handleMouseUp = useCallback(() => {
+    setIsDragging(false)
+  }, [])
+  
+  // Cleanup animation frames and timeouts
+  useEffect(() => {
+    return () => {
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current)
+      }
+      if (wheelTimeoutRef.current) {
+        clearTimeout(wheelTimeoutRef.current)
+      }
+    }
+  }, [])
+  
+  // Optimized global mouse event listeners
+  useEffect(() => {
+    if (isDragging) {
+      const handleGlobalMouseMove = (e: MouseEvent) => {
+        const deltaX = e.clientX - lastMousePosition.x
+        const deltaY = e.clientY - lastMousePosition.y
+        
+        updatePanPosition(deltaX, deltaY)
+        setLastMousePosition({ x: e.clientX, y: e.clientY })
+      }
+      
+      const handleGlobalMouseUp = () => {
+        setIsDragging(false)
+      }
+      
+      document.addEventListener('mousemove', handleGlobalMouseMove, { passive: false })
+      document.addEventListener('mouseup', handleGlobalMouseUp, { passive: true })
+      
+      return () => {
+        document.removeEventListener('mousemove', handleGlobalMouseMove)
+        document.removeEventListener('mouseup', handleGlobalMouseUp)
+      }
+    }
+  }, [isDragging, lastMousePosition, updatePanPosition])
+  
+  // Navigation
+  const nextImage = useCallback(() => {
+    if (!currentGeneration) return
+    const totalImages = allImages ? allImages.length : currentGeneration.images.length
+    onNavigate((currentImageIndex + 1) % totalImages)
+  }, [currentGeneration, currentImageIndex, onNavigate, allImages]);
+
+  const prevImage = useCallback(() => {
+    if (!currentGeneration) return
+    const totalImages = allImages ? allImages.length : currentGeneration.images.length
+    onNavigate((currentImageIndex - 1 + totalImages) % totalImages)
+  }, [currentGeneration, currentImageIndex, onNavigate, allImages]);
+  
+  // Calculate distance between two touch points
+  const getTouchDistance = (touches: React.TouchList) => {
+    if (touches.length < 2) return 0
+    const touch1 = touches[0]
+    const touch2 = touches[1]
+    return Math.sqrt(
+      Math.pow(touch2.clientX - touch1.clientX, 2) + 
+      Math.pow(touch2.clientY - touch1.clientY, 2)
+    )
+  }
+  
+  // Optimized touch handling for pinch-to-zoom
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    activeTouchesRef.current = e.touches.length
+    
+    if (e.touches.length === 1) {
+      // Single touch - potential swipe (only if not zoomed)
+      if (zoomLevel <= 1) {
+        touchStartXRef.current = e.touches[0].clientX
+        touchStartYRef.current = e.touches[0].clientY
+      } else {
+        // If zoomed, prepare for pan
+        setIsDragging(true)
+        setLastMousePosition({ 
+          x: e.touches[0].clientX, 
+          y: e.touches[0].clientY 
+        })
+      }
+    } else if (e.touches.length === 2) {
+      // Two touches - pinch to zoom
+      const distance = getTouchDistance(e.touches)
+      setInitialPinchDistance(distance)
+      setInitialZoomLevel(zoomLevel)
+      
+      // Clear swipe data
+      touchStartXRef.current = null
+      touchStartYRef.current = null
+    }
+  }, [zoomLevel])
+  
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    if (e.touches.length === 1) {
+      if (zoomLevel > 1 && isDragging) {
+        // Pan when zoomed - use updatePanPosition for smoother performance
+        const deltaX = e.touches[0].clientX - lastMousePosition.x
+        const deltaY = e.touches[0].clientY - lastMousePosition.y
+        
+        updatePanPosition(deltaX, deltaY)
+        setLastMousePosition({ 
+          x: e.touches[0].clientX, 
+          y: e.touches[0].clientY 
+        })
+        e.preventDefault()
+      } else if (zoomLevel <= 1 && touchStartXRef.current !== null) {
+        // Allow swipe when not zoomed
+        e.preventDefault()
+      }
+    } else if (e.touches.length === 2 && initialPinchDistance !== null) {
+      // Pinch to zoom - batch state updates for performance
+      const currentDistance = getTouchDistance(e.touches)
+      const scaleRatio = currentDistance / initialPinchDistance
+      const newZoomLevel = Math.max(1, Math.min(initialZoomLevel * scaleRatio, 5))
+      
+      // Use a single state update instead of multiple
+      if (newZoomLevel === 1) {
+        setZoomLevel(1)
+        setPanPosition({ x: 0, y: 0 })
+      } else {
+        setZoomLevel(newZoomLevel)
+      }
+      
+      e.preventDefault()
+    }
+  }, [zoomLevel, isDragging, lastMousePosition, initialPinchDistance, initialZoomLevel, updatePanPosition])
+  
+  const handleTouchEnd = useCallback((e: React.TouchEvent) => {
+    // Handle swipe only if single touch and not zoomed
+    if (activeTouchesRef.current === 1 && zoomLevel <= 1 && 
+        touchStartXRef.current !== null && e.changedTouches.length === 1) {
+      const touchEndX = e.changedTouches[0].clientX
+      const diffX = touchStartXRef.current - touchEndX
+      const swipeThreshold = 50
+      
+      if (Math.abs(diffX) > swipeThreshold) {
+        if (diffX > 0) {
+          nextImage()
+        } else {
+          prevImage()
+        }
+      }
+    }
+    
+    // Reset touch state
+    if (e.touches.length === 0) {
+      touchStartXRef.current = null
+      touchStartYRef.current = null
+      activeTouchesRef.current = 0
+      setIsDragging(false)
+      setInitialPinchDistance(null)
+    } else if (e.touches.length === 1) {
+      // Still one touch remaining, reset pinch state
+      setInitialPinchDistance(null)
+    }
+  }, [zoomLevel, nextImage, prevImage])
   
   // Handle mounting for portal
   useEffect(() => {
@@ -74,69 +349,6 @@ export function MediaFocus({
   // Touch swipe handling
   const touchStartXRef = useRef<number | null>(null)
   const touchStartYRef = useRef<number | null>(null)
-  
-  const handleTouchStart = (e: React.TouchEvent) => {
-    activeTouchesRef.current = e.touches.length; // Record number of touches
-    if (e.touches.length === 1) {
-      touchStartXRef.current = e.touches[0].clientX;
-      touchStartYRef.current = e.touches[0].clientY; // Store Y for potential future use
-    } else {
-      // Multi-touch, clear swipe start data to prevent swipe on release
-      touchStartXRef.current = null;
-      touchStartYRef.current = null;
-    }
-  };
-  
-  const handleTouchMove = (e: React.TouchEvent) => {
-    if (activeTouchesRef.current === 1 && touchStartXRef.current !== null) { 
-      // If it started as a single touch and is potentially a swipe
-      e.preventDefault(); // Prevent scrolling during swipe
-    }
-    // If activeTouchesRef.current > 1 (multi-touch), do nothing here to allow native pinch-zoom.
-  };
-  
-  const handleTouchEnd = (e: React.TouchEvent) => {
-    // Only process swipe if it was a single touch gesture from start to end
-    if (activeTouchesRef.current === 1 && touchStartXRef.current !== null && e.changedTouches.length === 1) {
-      const touchEndX = e.changedTouches[0].clientX;
-      const diffX = touchStartXRef.current - touchEndX;
-      
-      // Optional: Could add Y-axis difference check if stricter swipe detection is needed
-      // const touchEndY = e.changedTouches[0].clientY;
-      // const diffY = touchStartYRef.current !== null ? touchStartYRef.current - touchEndY : 0;
-      // A common threshold for swipe detection
-      const swipeThreshold = 50; 
-
-      if (Math.abs(diffX) > swipeThreshold) {
-        // Check if horizontal movement is dominant if diffY is also considered
-        // if (Math.abs(diffX) > Math.abs(diffY)) { 
-        if (diffX > 0) { // Swipe left
-          nextImage();
-        } else { // Swipe right
-          prevImage();
-        }
-        // }
-      }
-    }
-    
-    // Reset for next touch interaction
-    touchStartXRef.current = null;
-    touchStartYRef.current = null;
-    activeTouchesRef.current = 0; // Reset active touches
-  };
-  
-  // Navigation
-  const nextImage = useCallback(() => {
-    if (!currentGeneration) return
-    const totalImages = allImages ? allImages.length : currentGeneration.images.length
-    onNavigate((currentImageIndex + 1) % totalImages)
-  }, [currentGeneration, currentImageIndex, onNavigate, allImages]);
-
-  const prevImage = useCallback(() => {
-    if (!currentGeneration) return
-    const totalImages = allImages ? allImages.length : currentGeneration.images.length
-    onNavigate((currentImageIndex - 1 + totalImages) % totalImages)
-  }, [currentGeneration, currentImageIndex, onNavigate, allImages]);
   
   // Simplified preloading that immediately preloads all images in the current generation
   useEffect(() => {
@@ -332,6 +544,15 @@ export function MediaFocus({
     }
   }, [currentImageIndex])
   
+  // Memoized transform style for performance
+  const imageTransformStyle = useMemo(() => ({
+    maxWidth: '90vw',
+    maxHeight: '50vh',
+    transform: `scale(${zoomLevel}) translate(${panPosition.x / zoomLevel}px, ${panPosition.y / zoomLevel}px)`,
+    transformOrigin: 'center center',
+    cursor: zoomLevel > 1 ? (isDragging ? 'grabbing' : 'grab') : 'default'
+  }), [zoomLevel, panPosition.x, panPosition.y, isDragging])
+  
   // Update scroll position when currentImageIndex changes
   useEffect(() => {
     scrollToCurrentThumbnail()
@@ -374,6 +595,38 @@ export function MediaFocus({
               </div>
               
               <div className="flex gap-[2vw]">
+                {/* Zoom controls */}
+                <Button 
+                  onClick={(e) => { e.stopPropagation(); zoomOut(); }}
+                  variant="outline"
+                  size="icon"
+                  className="h-[5vh] w-[5vh] min-h-[2.5rem] min-w-[2.5rem]"
+                  disabled={zoomLevel <= 1}
+                >
+                  <ZoomOut className="h-[40%] w-[40%]" />
+                </Button>
+                
+                <Button 
+                  onClick={(e) => { e.stopPropagation(); resetZoom(); }}
+                  variant="outline"
+                  size="icon"
+                  className="h-[5vh] w-[5vh] min-h-[2.5rem] min-w-[2.5rem]"
+                  disabled={zoomLevel <= 1}
+                  title="Reset zoom"
+                >
+                  <RotateCcw className="h-[40%] w-[40%]" />
+                </Button>
+                
+                <Button 
+                  onClick={(e) => { e.stopPropagation(); zoomIn(); }}
+                  variant="outline"
+                  size="icon"
+                  className="h-[5vh] w-[5vh] min-h-[2.5rem] min-w-[2.5rem]"
+                  disabled={zoomLevel >= 5}
+                >
+                  <ZoomIn className="h-[40%] w-[40%]" />
+                </Button>
+                
                 <Button 
                   onClick={downloadImage}
                   variant="outline"
@@ -421,67 +674,77 @@ export function MediaFocus({
             
             {/* Middle section with image and navigation */}
             <div 
-              className="flex-1 w-full flex items-center justify-center relative my-[3vh]"
+              className="flex-1 w-full flex items-center justify-center relative my-[3vh] overflow-hidden"
+              ref={imageContainerRef}
+              onWheel={handleWheel}
             >
               {/* Main image */}
-              <motion.div
+              <div
                 key={currentImageIndex}
-                className="relative rounded-md overflow-hidden"
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ duration: 0.2 }}
-                style={{
-                  maxWidth: '90vw',
-                  maxHeight: '50vh',
-                }}
+                className="relative rounded-md overflow-hidden transition-all duration-200"
+                style={imageTransformStyle}
                 onClick={(e) => e.stopPropagation()}
+                onMouseDown={handleMouseDown}
+                onMouseMove={handleMouseMove}
+                onMouseUp={handleMouseUp}
               >
                 <NextImage
                   src={allImages ? allImages[currentImageIndex].url : currentGeneration.images[currentImageIndex].url}
                   alt={`Generated image for "${currentGeneration.prompt}"`}
-                  className="object-contain rounded-md"
+                  className="object-contain rounded-md select-none"
                   width={1024}
                   height={1024}
                   style={{ 
                     maxWidth: '90vw',
                     maxHeight: '50vh',
                     width: 'auto', 
-                    height: 'auto' 
+                    height: 'auto',
+                    userSelect: 'none',
+                    pointerEvents: 'none'
                   }}
                   onError={(e) => {
                     console.error("Image failed to load:", e);
-                    // toast.error("Image could not be loaded");
                   }}
                   unoptimized={true}
                   priority={true}
+                  draggable={false}
                 />
-              </motion.div>
-              
-              {/* Left/Right arrows */}
-              <div className="absolute inset-x-0 w-full flex items-center justify-between px-[3vw]">
-                <Button 
-                  onClick={(e) => { e.stopPropagation(); prevImage(); }}
-                  variant="outline"
-                  size="icon"
-                  className="h-[5vh] w-[5vh] min-h-[2.5rem] min-w-[2.5rem] z-30"
-                  aria-label="Previous image"
-                >
-                  <ChevronLeft className="h-[40%] w-[40%]" />
-                </Button>
-                
-                <Button 
-                  onClick={(e) => { e.stopPropagation(); nextImage(); }}
-                  variant="outline"
-                  size="icon"
-                  className="h-[5vh] w-[5vh] min-h-[2.5rem] min-w-[2.5rem] z-30"
-                  aria-label="Next image"
-                >
-                  <ChevronRight className="h-[40%] w-[40%]" />
-                </Button>
               </div>
+              
+              {/* Left/Right arrows - only show when not zoomed or zoomed but navigation available */}
+              {zoomLevel <= 1 && (
+                <div className="absolute inset-x-0 w-full flex items-center justify-between px-[3vw]">
+                  <Button 
+                    onClick={(e) => { e.stopPropagation(); prevImage(); }}
+                    variant="outline"
+                    size="icon"
+                    className="h-[5vh] w-[5vh] min-h-[2.5rem] min-w-[2.5rem] z-30"
+                    aria-label="Previous image"
+                  >
+                    <ChevronLeft className="h-[40%] w-[40%]" />
+                  </Button>
+                  
+                  <Button 
+                    onClick={(e) => { e.stopPropagation(); nextImage(); }}
+                    variant="outline"
+                    size="icon"
+                    className="h-[5vh] w-[5vh] min-h-[2.5rem] min-w-[2.5rem] z-30"
+                    aria-label="Next image"
+                  >
+                    <ChevronRight className="h-[40%] w-[40%]" />
+                  </Button>
+                </div>
+              )}
+              
+              {/* Zoom level indicator */}
+              {zoomLevel > 1 && (
+                <div className="absolute top-4 left-4 bg-muted/80 backdrop-blur-sm py-1 px-3 rounded-full text-sm font-medium text-foreground">
+                  {Math.round(zoomLevel * 100)}%
+                </div>
+              )}
             </div>
             
-            {/* Bottom section with thumbnails - no background */}
+            {/* Bottom section with thumbnails */}
             <div 
               className="w-full z-20 px-[3vw]"
               onClick={(e) => e.stopPropagation()}
