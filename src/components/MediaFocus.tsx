@@ -67,6 +67,67 @@ export function MediaFocus({
   const animationFrameRef = useRef<number | null>(null)
   const wheelTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   
+  // Mobile detection and touch optimization
+  const [isMobile, setIsMobile] = React.useState(false)
+  const lastTapRef = useRef<number>(0)
+  const tapTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  
+  // Detect mobile device
+  useEffect(() => {
+    const checkMobile = () => {
+      const userAgent = navigator.userAgent || navigator.vendor || ''
+      const isMobileDevice = /iPhone|iPad|iPod|Android|webOS|BlackBerry|IEMobile|Opera Mini/i.test(userAgent)
+      const isTouchScreen = 'ontouchstart' in window || navigator.maxTouchPoints > 0
+      setIsMobile(isMobileDevice || (isTouchScreen && window.innerWidth < 768))
+    }
+    
+    checkMobile()
+    window.addEventListener('resize', checkMobile)
+    return () => window.removeEventListener('resize', checkMobile)
+  }, [])
+  
+  // Double-tap to zoom functionality for mobile
+  const handleImageTap = useCallback((e: React.TouchEvent | React.MouseEvent) => {
+    if (!isMobile) return
+    
+    const now = Date.now()
+    const timeDiff = now - lastTapRef.current
+    
+    if (timeDiff < 300 && timeDiff > 0) {
+      // Double tap detected
+      e.preventDefault()
+      e.stopPropagation()
+      
+      if (zoomLevel === 1) {
+        // Zoom in to 2x
+        setZoomLevel(2)
+      } else {
+        // Reset zoom
+        setZoomLevel(1)
+        setPanPosition({ x: 0, y: 0 })
+      }
+    }
+    
+    lastTapRef.current = now
+  }, [isMobile, zoomLevel])
+  
+  // Cleanup timeouts
+  useEffect(() => {
+    return () => {
+      if (tapTimeoutRef.current) {
+        clearTimeout(tapTimeoutRef.current)
+      }
+    }
+  }, [])
+  
+  // Prevent zoom on UI elements
+  const preventUIZoom = useCallback((e: React.TouchEvent) => {
+    if (isMobile && e.touches.length > 1) {
+      e.preventDefault()
+      e.stopPropagation()
+    }
+  }, [isMobile])
+  
   // Reset zoom when image changes
   useEffect(() => {
     setZoomLevel(1)
@@ -235,6 +296,11 @@ export function MediaFocus({
   
   // Optimized touch handling for pinch-to-zoom
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    // Prevent browser zoom immediately on any touch
+    if (isMobile) {
+      e.preventDefault()
+    }
+    
     activeTouchesRef.current = e.touches.length
     
     if (e.touches.length === 1) {
@@ -252,6 +318,7 @@ export function MediaFocus({
       }
     } else if (e.touches.length === 2) {
       // Two touches - pinch to zoom
+      e.preventDefault() // Aggressively prevent browser zoom
       const distance = getTouchDistance(e.touches)
       setInitialPinchDistance(distance)
       setInitialZoomLevel(zoomLevel)
@@ -260,12 +327,18 @@ export function MediaFocus({
       touchStartXRef.current = null
       touchStartYRef.current = null
     }
-  }, [zoomLevel])
+  }, [zoomLevel, isMobile])
   
   const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    // Always prevent default on touch move to stop browser zoom
+    if (isMobile && e.touches.length >= 2) {
+      e.preventDefault()
+    }
+    
     if (e.touches.length === 1) {
       if (zoomLevel > 1 && isDragging) {
         // Pan when zoomed - use updatePanPosition for smoother performance
+        e.preventDefault()
         const deltaX = e.touches[0].clientX - lastMousePosition.x
         const deltaY = e.touches[0].clientY - lastMousePosition.y
         
@@ -274,13 +347,15 @@ export function MediaFocus({
           x: e.touches[0].clientX, 
           y: e.touches[0].clientY 
         })
-        e.preventDefault()
       } else if (zoomLevel <= 1 && touchStartXRef.current !== null) {
-        // Allow swipe when not zoomed
-        e.preventDefault()
+        // Allow swipe when not zoomed but prevent browser zoom
+        if (isMobile) e.preventDefault()
       }
     } else if (e.touches.length === 2 && initialPinchDistance !== null) {
-      // Pinch to zoom - batch state updates for performance
+      // Pinch to zoom - aggressively prevent browser zoom
+      e.preventDefault()
+      e.stopPropagation()
+      
       const currentDistance = getTouchDistance(e.touches)
       const scaleRatio = currentDistance / initialPinchDistance
       const newZoomLevel = Math.max(1, Math.min(initialZoomLevel * scaleRatio, 5))
@@ -292,10 +367,8 @@ export function MediaFocus({
       } else {
         setZoomLevel(newZoomLevel)
       }
-      
-      e.preventDefault()
     }
-  }, [zoomLevel, isDragging, lastMousePosition, initialPinchDistance, initialZoomLevel, updatePanPosition])
+  }, [zoomLevel, isDragging, lastMousePosition, initialPinchDistance, initialZoomLevel, updatePanPosition, isMobile])
   
   const handleTouchEnd = useCallback((e: React.TouchEvent) => {
     // Handle swipe only if single touch and not zoomed
@@ -571,76 +644,111 @@ export function MediaFocus({
           exit={{ opacity: 0 }}
           className="fixed inset-0 flex flex-col items-center justify-center z-[99999]"
           onClick={onClose}
-          onTouchStart={handleTouchStart}
-          onTouchMove={handleTouchMove}
-          onTouchEnd={handleTouchEnd}
+          onTouchStart={(e) => {
+            // Only allow zoom on the actual image element, not the container
+            if (e.target !== e.currentTarget) return
+            handleTouchStart(e)
+          }}
+          onTouchMove={(e) => {
+            // Only handle container-level touch moves for navigation
+            if (e.target !== e.currentTarget) return
+            handleTouchMove(e)
+          }}
+          onTouchEnd={(e) => {
+            // Only handle container-level touch ends for navigation
+            if (e.target !== e.currentTarget) return
+            handleTouchEnd(e)
+          }}
+          style={{ touchAction: 'none' }} // Prevent zoom on entire modal
         >
           {/* Theme-aware backdrop overlay */}
           <div 
             className="absolute inset-0 bg-background" 
             aria-hidden="true"
+            style={{ touchAction: 'none' }} // Prevent zoom on backdrop
           />
           
           {/* Main content container */}
           <div 
             className="relative flex flex-col items-center justify-between w-full h-full z-10 px-[5vw] py-[3vh]"
+            style={{ touchAction: 'none' }} // Prevent zoom on main container
           >
             {/* Top bar with counter and controls */}
             <div 
               className="w-full flex items-center justify-between z-20 px-[3vw]"
               onClick={(e) => e.stopPropagation()}
+              style={{ touchAction: 'none' }} // Prevent zoom on controls
             >
               <div className="bg-muted py-[1vh] px-4 rounded-full text-sm font-medium text-foreground">
                 {currentImageIndex + 1} / {allImages ? allImages.length : currentGeneration.images.length}
               </div>
               
               <div className="flex gap-[2vw]">
-                {/* Zoom controls */}
-                <Button 
-                  onClick={(e) => { e.stopPropagation(); zoomOut(); }}
-                  variant="outline"
-                  size="icon"
-                  className="h-[5vh] w-[5vh] min-h-[2.5rem] min-w-[2.5rem]"
-                  disabled={zoomLevel <= 1}
-                >
-                  <ZoomOut className="h-[40%] w-[40%]" />
-                </Button>
-                
-                <Button 
-                  onClick={(e) => { e.stopPropagation(); resetZoom(); }}
-                  variant="outline"
-                  size="icon"
-                  className="h-[5vh] w-[5vh] min-h-[2.5rem] min-w-[2.5rem]"
-                  disabled={zoomLevel <= 1}
-                  title="Reset zoom"
-                >
-                  <RotateCcw className="h-[40%] w-[40%]" />
-                </Button>
-                
-                <Button 
-                  onClick={(e) => { e.stopPropagation(); zoomIn(); }}
-                  variant="outline"
-                  size="icon"
-                  className="h-[5vh] w-[5vh] min-h-[2.5rem] min-w-[2.5rem]"
-                  disabled={zoomLevel >= 5}
-                >
-                  <ZoomIn className="h-[40%] w-[40%]" />
-                </Button>
+                {/* Zoom controls - Only show on desktop */}
+                {!isMobile && (
+                  <>
+                    <Button 
+                      onClick={(e) => { e.stopPropagation(); zoomOut(); }}
+                      onTouchStart={preventUIZoom}
+                      onTouchMove={preventUIZoom}
+                      variant="outline"
+                      size="icon"
+                      className="h-[5vh] w-[5vh] min-h-[2.5rem] min-w-[2.5rem]"
+                      disabled={zoomLevel <= 1}
+                      style={{ touchAction: 'none' }}
+                    >
+                      <ZoomOut className="h-[40%] w-[40%]" />
+                    </Button>
+                    
+                    <Button 
+                      onClick={(e) => { e.stopPropagation(); resetZoom(); }}
+                      onTouchStart={preventUIZoom}
+                      onTouchMove={preventUIZoom}
+                      variant="outline"
+                      size="icon"
+                      className="h-[5vh] w-[5vh] min-h-[2.5rem] min-w-[2.5rem]"
+                      disabled={zoomLevel <= 1}
+                      title="Reset zoom"
+                      style={{ touchAction: 'none' }}
+                    >
+                      <RotateCcw className="h-[40%] w-[40%]" />
+                    </Button>
+                    
+                    <Button 
+                      onClick={(e) => { e.stopPropagation(); zoomIn(); }}
+                      onTouchStart={preventUIZoom}
+                      onTouchMove={preventUIZoom}
+                      variant="outline"
+                      size="icon"
+                      className="h-[5vh] w-[5vh] min-h-[2.5rem] min-w-[2.5rem]"
+                      disabled={zoomLevel >= 5}
+                      style={{ touchAction: 'none' }}
+                    >
+                      <ZoomIn className="h-[40%] w-[40%]" />
+                    </Button>
+                  </>
+                )}
                 
                 <Button 
                   onClick={downloadImage}
+                  onTouchStart={preventUIZoom}
+                  onTouchMove={preventUIZoom}
                   variant="outline"
                   size="icon"
                   className="h-[5vh] w-[5vh] min-h-[2.5rem] min-w-[2.5rem]"
+                  style={{ touchAction: 'none' }}
                 >
                   <Download className="h-[40%] w-[40%]" />
                 </Button>
                 
                 <Button 
                   onClick={toggleImageFavorite}
+                  onTouchStart={preventUIZoom}
+                  onTouchMove={preventUIZoom}
                   variant="outline"
                   size="icon"
                   className="h-[5vh] w-[5vh] min-h-[2.5rem] min-w-[2.5rem]"
+                  style={{ touchAction: 'none' }}
                   aria-label={allImages ? (allImages[currentImageIndex].isLiked ? "Remove from favorites" : "Add to favorites") : currentGeneration.images[currentImageIndex].isLiked ? "Remove from favorites" : "Add to favorites"}
                 >
                   <svg 
@@ -663,9 +771,12 @@ export function MediaFocus({
                 
                 <Button 
                   onClick={(e) => { e.stopPropagation(); onClose(); }}
+                  onTouchStart={preventUIZoom}
+                  onTouchMove={preventUIZoom}
                   variant="outline"
                   size="icon"
                   className="h-[5vh] w-[5vh] min-h-[2.5rem] min-w-[2.5rem]"
+                  style={{ touchAction: 'none' }}
                 >
                   <X className="h-[40%] w-[40%]" />
                 </Button>
@@ -677,13 +788,50 @@ export function MediaFocus({
               className="flex-1 w-full flex items-center justify-center relative my-[3vh] overflow-hidden"
               ref={imageContainerRef}
               onWheel={handleWheel}
+              style={{ touchAction: 'none' }} // Prevent browser zoom
+              onTouchStart={(e) => {
+                // Only allow zoom on the actual image element, not the container
+                if (e.target !== e.currentTarget) return
+                handleTouchStart(e)
+              }}
+              onTouchMove={(e) => {
+                // Only handle container-level touch moves for navigation
+                if (e.target !== e.currentTarget) return
+                handleTouchMove(e)
+              }}
+              onTouchEnd={(e) => {
+                // Only handle container-level touch ends for navigation
+                if (e.target !== e.currentTarget) return
+                handleTouchEnd(e)
+              }}
             >
               {/* Main image */}
               <div
                 key={currentImageIndex}
                 className="relative rounded-md overflow-hidden transition-all duration-200"
-                style={imageTransformStyle}
+                style={{
+                  ...imageTransformStyle,
+                  touchAction: 'none' // Prevent browser zoom on image
+                }}
                 onClick={(e) => e.stopPropagation()}
+                onTouchStart={(e) => {
+                  // Handle image-specific touch events
+                  e.stopPropagation()
+                  if (isMobile) {
+                    handleImageTap(e)
+                    handleTouchStart(e)
+                  }
+                }}
+                onTouchMove={(e) => {
+                  // Handle image-specific touch moves
+                  e.stopPropagation()
+                  handleTouchMove(e)
+                }}
+                onTouchEnd={(e) => {
+                  // Handle image-specific touch ends
+                  e.stopPropagation()
+                  handleTouchEnd(e)
+                }}
                 onMouseDown={handleMouseDown}
                 onMouseMove={handleMouseMove}
                 onMouseUp={handleMouseUp}
@@ -700,7 +848,8 @@ export function MediaFocus({
                     width: 'auto', 
                     height: 'auto',
                     userSelect: 'none',
-                    pointerEvents: 'none'
+                    pointerEvents: 'none',
+                    touchAction: 'none' // Prevent zoom on the image element itself
                   }}
                   onError={(e) => {
                     console.error("Image failed to load:", e);
@@ -716,9 +865,12 @@ export function MediaFocus({
                 <div className="absolute inset-x-0 w-full flex items-center justify-between px-[3vw]">
                   <Button 
                     onClick={(e) => { e.stopPropagation(); prevImage(); }}
+                    onTouchStart={preventUIZoom}
+                    onTouchMove={preventUIZoom}
                     variant="outline"
                     size="icon"
                     className="h-[5vh] w-[5vh] min-h-[2.5rem] min-w-[2.5rem] z-30"
+                    style={{ touchAction: 'none' }}
                     aria-label="Previous image"
                   >
                     <ChevronLeft className="h-[40%] w-[40%]" />
@@ -726,9 +878,12 @@ export function MediaFocus({
                   
                   <Button 
                     onClick={(e) => { e.stopPropagation(); nextImage(); }}
+                    onTouchStart={preventUIZoom}
+                    onTouchMove={preventUIZoom}
                     variant="outline"
                     size="icon"
                     className="h-[5vh] w-[5vh] min-h-[2.5rem] min-w-[2.5rem] z-30"
+                    style={{ touchAction: 'none' }}
                     aria-label="Next image"
                   >
                     <ChevronRight className="h-[40%] w-[40%]" />
@@ -738,7 +893,12 @@ export function MediaFocus({
               
               {/* Zoom level indicator */}
               {zoomLevel > 1 && (
-                <div className="absolute top-4 left-4 bg-muted/80 backdrop-blur-sm py-1 px-3 rounded-full text-sm font-medium text-foreground">
+                <div 
+                  className="absolute top-4 left-4 bg-muted/80 backdrop-blur-sm py-1 px-3 rounded-full text-sm font-medium text-foreground"
+                  style={{ touchAction: 'none' }} // Prevent zoom on indicator
+                  onTouchStart={preventUIZoom}
+                  onTouchMove={preventUIZoom}
+                >
                   {Math.round(zoomLevel * 100)}%
                 </div>
               )}
@@ -748,6 +908,9 @@ export function MediaFocus({
             <div 
               className="w-full z-20 px-[3vw]"
               onClick={(e) => e.stopPropagation()}
+              style={{ touchAction: 'none' }} // Prevent zoom on thumbnails
+              onTouchStart={preventUIZoom}
+              onTouchMove={preventUIZoom}
             >
               <div className="mx-auto py-[2vh] rounded-lg overflow-x-auto">
                 <div ref={thumbnailContainerRef} className="flex items-center gap-[2vw] justify-center">
@@ -755,11 +918,14 @@ export function MediaFocus({
                     <button
                       key={index}
                       onClick={() => onNavigate(index)}
+                      onTouchStart={preventUIZoom}
+                      onTouchMove={preventUIZoom}
                       className={`w-[15vw] h-[15vw] max-w-[5rem] max-h-[5rem] min-w-[3rem] min-h-[3rem] 
                                   rounded-md overflow-hidden border border-input bg-background 
                                   flex-shrink-0 transition relative ${
                         index === currentImageIndex ? 'ring-2 ring-ring/50 scale-110' : 'opacity-70 hover:opacity-100'
                       }`}
+                      style={{ touchAction: 'none' }} // Prevent zoom on individual thumbnails
                       aria-label={`View image ${index + 1}`}
                       aria-current={index === currentImageIndex ? 'true' : 'false'}
                     >
