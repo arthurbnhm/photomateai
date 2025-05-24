@@ -299,10 +299,10 @@ const cameraShots: CameraShot[] = [
     promptText: "A full body shot"
   },
   {
-    value: "extreme-closeup",
-    label: "Extreme Close-up",
-    icon: "🔍",
-    promptText: "An extreme close-up shot"
+    value: "monochrome",
+    label: "Monochrome",
+    icon: "⚫",
+    promptText: "A monochrome photo"
   }
 ];
 
@@ -421,6 +421,11 @@ export const AdvancedSettings = forwardRef<AdvancedSettingsRefType, AdvancedSett
     }));
 
     const handleBgColorSelect = (bgColorValue: string) => {
+      // If monochrome is selected, only allow white and black
+      if (selectedCameraShot === "monochrome" && bgColorValue !== "white" && bgColorValue !== "black") {
+        return;
+      }
+
       const currentBgColor = selectedBgColor;
       const currentPrompt = form.getValues().prompt;
       
@@ -550,6 +555,16 @@ export const AdvancedSettings = forwardRef<AdvancedSettingsRefType, AdvancedSett
         }
         form.setValue("prompt", cleanupPrompt(updatedPrompt));
         setSelectedCameraShot(shotValue);
+
+        // If selecting monochrome, clear any background color that's not white or black
+        if (shotValue === "monochrome" && selectedBgColor && selectedBgColor !== "white" && selectedBgColor !== "black") {
+          const bgColorToRemove = backgroundColors.find(bg => bg.value === selectedBgColor);
+          if (bgColorToRemove) {
+            const finalPrompt = updatedPrompt.replace(bgColorToRemove.promptText, '');
+            form.setValue("prompt", cleanupPrompt(finalPrompt));
+            setSelectedBgColor(null);
+          }
+        }
       }
     };
 
@@ -773,30 +788,43 @@ export const AdvancedSettings = forwardRef<AdvancedSettingsRefType, AdvancedSett
               </div>
               
               <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2 sm:gap-3">
-                {backgroundColors.map((bgColor) => (
-                  <div
-                    key={bgColor.value}
-                    className={cn(
-                      "group relative flex flex-col items-center justify-center rounded-xl cursor-pointer border-2 transition-all duration-300 hover:scale-105 backdrop-blur-sm overflow-hidden",
-                      selectedBgColor === bgColor.value 
-                        ? "border-slate-400 dark:border-slate-500 bg-slate-100 dark:bg-slate-800/50 shadow-lg" 
-                        : "border-border/40 hover:border-slate-300 dark:hover:border-slate-600 bg-background/50 hover:bg-background/80 shadow-sm"
-                    )}
-                    onClick={() => handleBgColorSelect(bgColor.value)}
-                  >
-                    <div 
-                      className="w-8 h-8 sm:w-12 sm:h-12 rounded-full mt-2 sm:mt-4 mb-1 sm:mb-2 group-hover:scale-110 transition-transform duration-200 shadow-md"
-                      style={{
-                        background: bgColor.color,
-                        border: bgColor.value === "white" ? "2px solid #e5e7eb" : "none"
-                      }}
-                    />
-                    
-                    <div className="pb-2 sm:pb-3 text-center px-1">
-                      <div className="text-xs font-medium break-words hyphens-auto">{bgColor.label}</div>
+                {backgroundColors.map((bgColor) => {
+                  const isMonochromeMode = selectedCameraShot === "monochrome";
+                  const isDisabled = isMonochromeMode && bgColor.value !== "white" && bgColor.value !== "black";
+                  
+                  return (
+                    <div
+                      key={bgColor.value}
+                      className={cn(
+                        "group relative flex flex-col items-center justify-center rounded-xl border-2 transition-all duration-300 backdrop-blur-sm overflow-hidden",
+                        isDisabled 
+                          ? "opacity-30 cursor-not-allowed border-border/20" 
+                          : cn(
+                              "cursor-pointer hover:scale-105",
+                              selectedBgColor === bgColor.value 
+                                ? "border-slate-400 dark:border-slate-500 bg-slate-100 dark:bg-slate-800/50 shadow-lg" 
+                                : "border-border/40 hover:border-slate-300 dark:hover:border-slate-600 bg-background/50 hover:bg-background/80 shadow-sm"
+                            )
+                      )}
+                      onClick={() => !isDisabled && handleBgColorSelect(bgColor.value)}
+                    >
+                      <div 
+                        className={cn(
+                          "w-8 h-8 sm:w-12 sm:h-12 rounded-full mt-2 sm:mt-4 mb-1 sm:mb-2 shadow-md transition-transform duration-200",
+                          !isDisabled && "group-hover:scale-110"
+                        )}
+                        style={{
+                          background: bgColor.color,
+                          border: bgColor.value === "white" ? "2px solid #e5e7eb" : "none"
+                        }}
+                      />
+                      
+                      <div className="pb-2 sm:pb-3 text-center px-1">
+                        <div className="text-xs font-medium break-words hyphens-auto">{bgColor.label}</div>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
 
