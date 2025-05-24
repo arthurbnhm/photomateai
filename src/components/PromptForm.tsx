@@ -5,6 +5,7 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import * as z from "zod"
 import { createSupabaseBrowserClient } from "@/lib/supabase/client"
+import { useAuth } from "@/contexts/AuthContext"
 import { creditEvents } from "./CreditCounter"
 import { cn } from "@/lib/utils"
 import TextareaAutosize from 'react-textarea-autosize'
@@ -45,7 +46,7 @@ import {
 interface Model {
   id: string;              // Database ID (primary key)
   model_id: string;        // Actual model identifier for API calls
-  model_owner: string;     // Owner of the model
+  model_owner?: string;    // Owner of the model (optional since not always provided)
   display_name: string;    // Human-readable name chosen by the user
   version?: string;        // Optional version information
   gender?: string;         // Gender of the model (male/female)
@@ -135,6 +136,8 @@ interface PromptFormProps {
   pendingGenerations: PendingGeneration[];
   setPendingGenerations: React.Dispatch<React.SetStateAction<PendingGeneration[]>>;
   promptValue: string;
+  userModels?: Model[]; // Make optional for backward compatibility
+  isLoadingUserModels?: boolean; // Make optional for backward compatibility
   onGenerationStart?: () => void; // Optional prop
   onGenerationComplete?: () => void; // Optional prop
 }
@@ -205,6 +208,8 @@ export function PromptForm({
   pendingGenerations, 
   setPendingGenerations,
   promptValue,
+  userModels,
+  isLoadingUserModels,
   onGenerationStart, // Destructure new props
   onGenerationComplete // Destructure new props
 }: PromptFormProps) { // Use the new interface here
@@ -212,15 +217,15 @@ export function PromptForm({
   const supabaseRef = useRef(createSupabaseBrowserClient());
   const getSupabase = useCallback(() => supabaseRef.current, []);
   
+  // Get user from AuthContext instead of making separate API call
+  const { user } = useAuth();
+  
   // Create ref for AdvancedSettings component
   const advancedSettingsRef = useRef<AdvancedSettingsRefType>(null);
   
   // State variables
-  const [models, setModels] = useState<Model[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [errorDetails, setErrorDetails] = useState<string | null>(null);
-  const [userId, setUserId] = useState<string | null>(null);
-  const [loadingModels, setLoadingModels] = useState(false);
   const [placeholderText, setPlaceholderText] = useState("");
   const [isAnimating, setIsAnimating] = useState(true);
   // const [creditDeducting, setCreditDeducting] = useState(false);
@@ -275,83 +280,25 @@ export function PromptForm({
     form.setValue("prompt", promptValue);
   }, [promptValue, form]);
 
-  // Initial fetch
-  useEffect(() => {
-    const fetchModels = async () => {
-      setLoadingModels(true);
-      try {
-        // Fetch models with pagination handling and only necessary fields
-        let allModels: Model[] = [];
-        let currentPage = 1;
-        let hasMorePages = true;
-        
-        while (hasMorePages) {
-          // Fetch one page at a time with fields parameter
-          const response = await fetch(`/api/model/list?is_cancelled=false&is_deleted=false&status=succeeded&page=${currentPage}&fields=id,display_name,model_id,model_owner,version,gender`);
-          if (!response.ok) {
-            throw new Error('Failed to fetch models');
-          }
-          
-          const data = await response.json();
-          
-          if (data.success) {
-            if (data.models && data.models.length > 0) {
-              allModels = [...allModels, ...data.models];
-            }
-            
-            // Check if there are more pages
-            if (data.pagination && data.pagination.page < data.pagination.pages) {
-              currentPage++;
-            } else {
-              hasMorePages = false;
-            }
-          } else {
-            hasMorePages = false;
-          }
-        }
-        
-        if (allModels.length > 0) {
-          // Sort models by display_name for better user experience
-          const sortedModels = [...allModels].sort((a, b) => {
-            // Use display_name consistently
-            const displayNameA = a.display_name || '';
-            const displayNameB = b.display_name || '';
-            return displayNameA.localeCompare(displayNameB);
-          });
-          setModels(sortedModels);
-          
-          // Set default model if available and form is not already filled
-          if (sortedModels.length > 0 && !form.getValues().modelId) {
-            form.setValue('modelId', sortedModels[0].id);
-          }
-        } else {
-          console.warn('No models found with succeeded status');
-        }
-      } catch (err) {
-        console.error('Error fetching models:', err);
-      } finally {
-        setLoadingModels(false);
-      }
-    };
-    
-    fetchModels();
-  }, [form]);
+  // Use userModels prop if provided, otherwise fall back to local state for backward compatibility
+  const effectiveModels = useMemo(() => userModels || [], [userModels]);
+  const effectiveLoadingModels = isLoadingUserModels !== undefined ? isLoadingUserModels : false;
   
-  // Set default model when models are loaded
+  // Set default model when effectiveModels are loaded
   useEffect(() => {
-    if (models.length > 0 && !form.getValues().modelId) {
+    if (effectiveModels.length > 0 && !form.getValues().modelId) {
       // Try to get the last used model from localStorage
       const lastUsedModelId = getLastUsedModelId();
       
       // Check if the last used model still exists in the current models list
-      const lastUsedModel = lastUsedModelId ? models.find(m => m.id === lastUsedModelId) : null;
+      const lastUsedModel = lastUsedModelId ? effectiveModels.find(m => m.id === lastUsedModelId) : null;
       
       // Use the last used model if it exists, otherwise use the first model alphabetically
-      const defaultModelId = lastUsedModel ? lastUsedModel.id : models[0].id;
+      const defaultModelId = lastUsedModel ? lastUsedModel.id : effectiveModels[0].id;
       
       form.setValue('modelId', defaultModelId);
     }
-  }, [models, form]);
+  }, [effectiveModels, form]);
   
   const handleImageChange = useCallback((imageDataUrl: string | null) => {
     setUploadedImageDataUrl(imageDataUrl);
@@ -382,13 +329,14 @@ export function PromptForm({
     outputFormat: string;
     modelId: string;
     imageDataUrl?: string | null; // Optional image data
+    isImageReference?: boolean; // Optional flag to indicate if this is from image reference tab
   }) => {
     try {
       setError(null);
       setErrorDetails(null);
       onGenerationStart?.();
 
-      const { prompt, aspectRatio, outputFormat, modelId, imageDataUrl } = submissionData;
+      const { prompt, aspectRatio, outputFormat, modelId, imageDataUrl, isImageReference } = submissionData;
 
       if (!modelId) {
         setError("Please select a model.");
@@ -418,7 +366,7 @@ export function PromptForm({
       let modelVersion: string | null = null;
       let modelDisplayName = '';
       let modelGender: string | null = null;
-      const selectedModel = models.find(m => m.id === modelId);
+      const selectedModel = effectiveModels.find(m => m.id === modelId);
       if (selectedModel) {
         modelApiId = selectedModel.model_id;
         modelDisplayName = selectedModel.display_name || selectedModel.model_id || '';
@@ -470,15 +418,17 @@ export function PromptForm({
       setLastUsedModelId(modelId);
 
       // Save the selected aspect ratio and output format to localStorage for future use
-      setLastUsedAspectRatio(aspectRatio);
+      // Don't save aspect ratio for image reference since it's determined by the uploaded image
+      if (!isImageReference) {
+        setLastUsedAspectRatio(aspectRatio);
+      }
       setLastUsedOutputFormat(outputFormat);
 
-      const supabase = getSupabase();
       const abortController = new AbortController();
       const timeoutId = setTimeout(() => abortController.abort(), 60000); // Increased from 30s to 60s
       let authHeader = {};
-      if (userId) {
-        const { data: { session } } = await supabase.auth.getSession();
+      if (user) {
+        const { data: { session } } = await getSupabase().auth.getSession();
         if (session?.access_token) {
           authHeader = { 'Authorization': `Bearer ${session.access_token}` };
         }
@@ -503,7 +453,7 @@ export function PromptForm({
         generationId: tempId,
         modelVersion: modelVersion,
         modelName: modelApiId,
-        userId: userId,
+        userId: user ? user.id : null,
         modelGender: modelGender,
       };
 
@@ -521,7 +471,7 @@ export function PromptForm({
           modelId,
           modelVersion,
           modelName: modelApiId,
-          userId,
+          userId: user ? user.id : null,
           modelGender,
           hasImageData: !!imageDataUrl,
           imageDataLength: imageDataUrl?.length || 0,
@@ -649,12 +599,14 @@ export function PromptForm({
       return;
     }
     const currentValues = form.getValues();
+    
     await executeGeneration({
       prompt: currentValues.prompt, // Use current prompt from form (can be empty/short)
       aspectRatio: currentValues.aspectRatio, // Will be ignored by backend if image is present
       outputFormat: currentValues.outputFormat,
       modelId: currentValues.modelId,
       imageDataUrl: uploadedImageDataUrl,
+      isImageReference: true, // Flag to indicate this is from image reference tab
     });
   };
 
@@ -764,76 +716,6 @@ export function PromptForm({
       }
     };
   }, [isAnimating, placeholderExamples]);
-  
-  // Fetch pending generations from the database
-  const fetchPendingGenerations = async (userId: string) => {
-    try {
-      const supabase = getSupabase();
-      
-      // Fetch predictions with status "starting" or "processing"
-      // Join with models table to get display_name
-      const { data, error } = await supabase
-        .from('predictions')
-        .select(`
-          *,
-          models:model_id (
-            display_name
-          )
-        `)
-        .eq('user_id', userId)
-        .in('status', ['starting', 'processing']);
-        
-      // Add any pending generations to state
-      if (data && data.length > 0) {
-        // Map the data to our PendingGeneration type
-        const pendingGens = data.map((pred) => ({
-          id: pred.id,
-          replicate_id: pred.replicate_id,
-          prompt: pred.prompt,
-          aspectRatio: pred.aspect_ratio || '1:1',
-          startTime: pred.created_at,
-          format: pred.format || pred.input?.output_format || 'webp',
-          modelDisplayName: pred.models?.display_name || pred.model_name || 'Default Model'
-        }));
-        
-        // Update the pendingGenerations state
-        setPendingGenerations(prev => {
-          // Filter out any duplicates
-          const currentIds = prev.map(p => p.id);
-          const newGens = pendingGens.filter(p => !currentIds.includes(p.id));
-          return [...prev, ...newGens];
-        });
-      }
-      
-      if (error) {
-        console.error('Error fetching pending generations:', error);
-      }
-    } catch (error) {
-      console.error('Error in fetchPendingGenerations:', error);
-    }
-  };
-
-  // Get the user ID from the session when the component mounts
-  useEffect(() => {
-    const getUserId = async () => {
-      try {
-        const { data: { user }, error: userError } = await supabaseRef.current.auth.getUser();
-        if (userError) {
-          console.error('Error getting user:', userError);
-        } else if (user) {
-          setUserId(user.id);
-          
-          // Once we have the user ID, fetch their pending generations
-          fetchPendingGenerations(user.id);
-        }
-      } catch (error) {
-        console.error('Error getting user session:', error);
-      }
-    };
-
-    getUserId();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
   
   // Track pending generations count for debugging
   useEffect(() => {
@@ -1008,7 +890,7 @@ export function PromptForm({
                             <Select 
                               onValueChange={field.onChange} 
                               value={field.value}
-                              disabled={loadingModels || models.length === 0}
+                              disabled={effectiveLoadingModels || effectiveModels.length === 0}
                             >
                               <FormControl>
                                 <SelectTrigger className="bg-background/50 backdrop-blur-sm border-border/60 hover:border-border transition-all duration-200">
@@ -1016,7 +898,7 @@ export function PromptForm({
                                 </SelectTrigger>
                               </FormControl>
                               <SelectContent>
-                                {models.map((model) => (
+                                {effectiveModels.map((model) => (
                                   <SelectItem key={model.id} value={model.id}>
                                     {model.display_name}
                                   </SelectItem>
@@ -1033,7 +915,7 @@ export function PromptForm({
                         <Button 
                           type="submit" 
                           className="w-full bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary/80 text-primary-foreground shadow-lg hover:shadow-xl font-medium"
-                          disabled={loadingModels}
+                          disabled={effectiveLoadingModels}
                           aria-label="Generate image from prompt"
                         >
                           Generate
@@ -1186,7 +1068,7 @@ export function PromptForm({
                           <Select 
                             onValueChange={field.onChange} 
                             value={field.value}
-                            disabled={loadingModels || models.length === 0}
+                            disabled={effectiveLoadingModels || effectiveModels.length === 0}
                           >
                             <FormControl>
                               <SelectTrigger className="bg-background/50 backdrop-blur-sm border-border/60 hover:border-border transition-all duration-200">
@@ -1194,7 +1076,7 @@ export function PromptForm({
                               </SelectTrigger>
                             </FormControl>
                             <SelectContent>
-                              {models.map((model) => (
+                              {effectiveModels.map((model) => (
                                 <SelectItem key={model.id} value={model.id}>
                                   {model.display_name}
                                 </SelectItem>
@@ -1212,7 +1094,7 @@ export function PromptForm({
                         type="button"
                         onClick={handleImageReferenceGeneration}
                         className="w-full bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary/80 text-primary-foreground shadow-lg hover:shadow-xl font-medium"
-                        disabled={loadingModels || !uploadedImageDataUrl}
+                        disabled={effectiveLoadingModels || !uploadedImageDataUrl}
                         aria-label="Generate image from image reference"
                       >
                         Generate

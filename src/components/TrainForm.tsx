@@ -1065,10 +1065,10 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
                   <p className="text-sm text-muted-foreground">
                     Help us understand your subject better for improved model results and more accurate generation.
                   </p>
-                  <div className="grid grid-cols-6 gap-3">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-2 sm:gap-3">
                     <div
                       className={cn(
-                        "group relative flex flex-col items-center justify-center p-4 rounded-xl cursor-pointer border-2 transition-all duration-300 hover:scale-105 backdrop-blur-sm",
+                        "group relative flex flex-col items-center justify-center p-2 sm:p-4 rounded-xl cursor-pointer border-2 transition-all duration-300 hover:scale-105 backdrop-blur-sm",
                         selectedGender === "male" 
                           ? "border-slate-400 dark:border-slate-500 bg-slate-100 dark:bg-slate-800/50 shadow-lg" 
                           : genderError 
@@ -1078,12 +1078,12 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
                       onClick={() => handleGenderSelect("male")}
                       title="Male"
                     >
-                      <div className="text-2xl mb-2 group-hover:scale-110 transition-transform duration-200">👨</div>
-                      <div className="text-xs font-medium text-center leading-tight">Male</div>
+                      <div className="text-lg sm:text-2xl mb-1 sm:mb-2 group-hover:scale-110 transition-transform duration-200">👨</div>
+                      <div className="text-xs font-medium text-center leading-tight px-1 break-words hyphens-auto">Male</div>
                     </div>
                     <div
                       className={cn(
-                        "group relative flex flex-col items-center justify-center p-4 rounded-xl cursor-pointer border-2 transition-all duration-300 hover:scale-105 backdrop-blur-sm",
+                        "group relative flex flex-col items-center justify-center p-2 sm:p-4 rounded-xl cursor-pointer border-2 transition-all duration-300 hover:scale-105 backdrop-blur-sm",
                         selectedGender === "female" 
                           ? "border-slate-400 dark:border-slate-500 bg-slate-100 dark:bg-slate-800/50 shadow-lg" 
                           : genderError 
@@ -1093,8 +1093,8 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
                       onClick={() => handleGenderSelect("female")}
                       title="Female"
                     >
-                      <div className="text-2xl mb-2 group-hover:scale-110 transition-transform duration-200">👩</div>
-                      <div className="text-xs font-medium text-center leading-tight">Female</div>
+                      <div className="text-lg sm:text-2xl mb-1 sm:mb-2 group-hover:scale-110 transition-transform duration-200">👩</div>
+                      <div className="text-xs font-medium text-center leading-tight px-1 break-words hyphens-auto">Female</div>
                     </div>
                   </div>
                   {genderError ? (

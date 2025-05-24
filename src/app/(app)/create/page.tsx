@@ -73,6 +73,24 @@ interface Model {
   // Add other fields if necessary, matching the API response
 }
 
+// Define type for pending generation database response
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+interface PendingGenerationDbRow {
+  id: string;
+  replicate_id: string;
+  prompt: string;
+  aspect_ratio: string;
+  created_at: string;
+  format?: string;
+  input?: {
+    output_format?: string;
+  };
+  model_id: string;
+  models?: {
+    display_name: string;
+  } | null;
+}
+
 // Simplified processOutput (moved from ImageHistory)
 const processOutput = (storageUrls: string[] | null, likedImages: string[] | null = null): ImageWithStatus[] => {
   if (!storageUrls || !Array.isArray(storageUrls)) {
@@ -110,6 +128,107 @@ function CreatePageContent() {
   const { user } = useAuth();
   const supabaseClient = useRef(createSupabaseBrowserClient());
 
+  // Combined function to fetch all predictions and separate them
+  const fetchAllPredictions = useCallback(async (silentUpdate: boolean = false) => {
+    if (!user?.id) return;
+    
+    const abortController = new AbortController();
+    const timeoutId = setTimeout(() => abortController.abort(), 10000);
+
+    if (!silentUpdate) {
+      setIsLoadingHistory(true);
+      setErrorHistory(null);
+    }
+
+    try {
+      const { data, error } = await supabaseClient.current
+        .from('predictions')
+        .select(`
+          *,
+          models:model_id (
+            display_name
+          )
+        `)
+        .eq('user_id', user.id)
+        .eq('is_deleted', false)
+        .order('created_at', { ascending: false })
+        .limit(50);
+      
+      clearTimeout(timeoutId);
+      
+      if (error) {
+        throw error; 
+      }
+      
+      if (data) {
+        // Separate pending and completed predictions
+        const pendingPredictions = data.filter((item: PredictionData) => 
+          ['starting', 'queued', 'processing'].includes(item.status) && !item.is_cancelled
+        );
+        
+        const completedPredictions = data.filter((item: PredictionData) => 
+          item.status === 'succeeded' && item.storage_urls
+        );
+
+        // Process pending generations
+        if (pendingPredictions.length > 0) {
+          const pendingGens: PendingGeneration[] = pendingPredictions.map((item: PredictionData) => ({
+            id: item.id,
+            replicate_id: item.replicate_id,
+            prompt: item.prompt || '',
+            aspectRatio: item.aspect_ratio || '1:1',
+            startTime: item.created_at,
+            format: item.format || item.input?.output_format || 'webp',
+            modelDisplayName: item.models?.display_name || 'Unknown Model'
+          }));
+          setPendingGenerations(pendingGens);
+        } else {
+          setPendingGenerations([]);
+        }
+
+        // Process completed generations
+        const processedData: ImageGeneration[] = completedPredictions.map((item: PredictionData) => {
+          const modelDisplayName = item.models?.display_name || 'Default Model';
+          return {
+            id: item.id,
+            replicate_id: item.replicate_id,
+            prompt: item.prompt,
+            timestamp: item.created_at,
+            images: processOutput(item.storage_urls, item.liked_images),
+            aspectRatio: item.aspect_ratio,
+            format: item.format || item.input?.output_format || 'webp',
+            modelDisplayName: modelDisplayName
+          };
+        });
+        setGenerations(processedData);
+      }
+      
+    } catch (fetchError: unknown) { 
+      clearTimeout(timeoutId);
+      console.error("Full error object in fetchAllPredictions catch:", JSON.stringify(fetchError, null, 2));
+
+      if (fetchError instanceof Error) {
+        if (fetchError.name === 'AbortError') {
+          console.warn('Fetch predictions aborted due to timeout');
+        } else {
+          console.error('Error fetching predictions (Error instance):', fetchError);
+          setErrorHistory(`Failed to load predictions: ${fetchError.message}`);
+        }
+      } else {
+        let errorMessage = 'An unknown error occurred while loading predictions.';
+        if (typeof fetchError === 'object' && fetchError !== null && 'message' in fetchError) {
+          errorMessage = `Failed to load predictions: ${(fetchError as { message: string }).message}`;
+        }
+        console.error('Unknown error object fetching predictions:', fetchError);
+        setErrorHistory(errorMessage);
+      }
+    } finally {
+      if (!silentUpdate) {
+        setIsLoadingHistory(false);
+      }
+    }
+  }, [user?.id, supabaseClient]);
+
   useEffect(() => {
     setIsMounted(true);
     // Update allowModelLoadingScreen based on localStorage after mounting
@@ -117,6 +236,18 @@ function CreatePageContent() {
       setAllowModelLoadingScreen(localStorage.getItem('photomate_hasShownModelsOnce') !== 'true');
     }
   }, []);
+
+  // Use combined fetch on mount instead of separate calls
+  useEffect(() => {
+    if (isMounted && user) {
+      fetchAllPredictions();
+    } else if (!user && isMounted) {
+      // Clear data when user signs out
+      setPendingGenerations([]);
+      setGenerations([]);
+      setIsLoadingHistory(false);
+    }
+  }, [isMounted, user, fetchAllPredictions]);
 
   // Fetch user models
   useEffect(() => {
@@ -160,107 +291,18 @@ function CreatePageContent() {
     }
   }, [isMounted, user]);
 
-  // Separate Supabase fetch logic for image history
-  const fetchFromSupabase = useCallback(async (silentUpdate: boolean = false) => {
-    const abortController = new AbortController();
-    const timeoutId = setTimeout(() => abortController.abort(), 10000);
-
-    if (!silentUpdate) {
-      // setIsLoadingHistory(true); // Already set by loadGenerations caller
-    }
-
-    try {
-      let query = supabaseClient.current
-        .from('predictions')
-        .select(`
-          *,
-          models:model_id (
-            display_name
-          )
-        `)
-        .eq('is_deleted', false);
-      
-      if (user?.id) {
-        query = query.eq('user_id', user.id);
-      }
-      
-      const { data, error } = await query
-        .order('created_at', { ascending: false })
-        .limit(50); // Limit to 50, can be adjusted
-      
-      clearTimeout(timeoutId);
-      
-      if (error) {
-        throw error; 
-      }
-      
-      if (data) {
-        const processedData: ImageGeneration[] = data
-          .filter((item: PredictionData) => item.status === 'succeeded' && item.storage_urls)
-          .map((item: PredictionData) => {
-            const modelDisplayName = item.models?.display_name || 'Default Model';
-            return {
-              id: item.id,
-              replicate_id: item.replicate_id,
-              prompt: item.prompt,
-              timestamp: item.created_at,
-              images: processOutput(item.storage_urls, item.liked_images),
-              aspectRatio: item.aspect_ratio,
-              format: item.format || item.input?.output_format || 'webp',
-              modelDisplayName: modelDisplayName
-            };
-          });
-        setGenerations(processedData);
-      }
-      
-    } catch (fetchError: unknown) { 
-      clearTimeout(timeoutId);
-      console.error("Full error object in fetchFromSupabase catch:", JSON.stringify(fetchError, null, 2));
-
-      if (fetchError instanceof Error) {
-        if (fetchError.name === 'AbortError') {
-          console.warn('Fetch generations aborted due to timeout');
-        } else {
-          console.error('Error fetching generations (Error instance):', fetchError);
-          setErrorHistory(`Failed to load image history: ${fetchError.message}`);
-        }
-      } else {
-        let errorMessage = 'An unknown error occurred while loading image history.';
-        if (typeof fetchError === 'object' && fetchError !== null && 'message' in fetchError) {
-          errorMessage = `Failed to load image history: ${(fetchError as { message: string }).message}`;
-        }
-        console.error('Unknown error object fetching generations:', fetchError);
-        setErrorHistory(errorMessage);
-      }
-    } finally {
-      if (!silentUpdate) {
-        setIsLoadingHistory(false);
-      }
-    }
-  }, [user?.id, supabaseClient]);
-
-  // Load generations from Supabase
+  // Load generations from Supabase (wrapper for compatibility with ImageHistory)
   const loadGenerations = useCallback(async (silentUpdate: boolean = false) => {
     try {
       if (!silentUpdate) {
         setIsLoadingHistory(true);
         setErrorHistory(null); // Clear previous errors
       }
-      await fetchFromSupabase(silentUpdate);
+      await fetchAllPredictions(silentUpdate);
     } catch {
-      // Error handling is now within fetchFromSupabase
+      // Error handling is now within fetchAllPredictions
     }
-  }, [fetchFromSupabase]);
-
-  // Initial data load for image history
-  useEffect(() => {
-    if (isMounted && user) {
-      loadGenerations(false);
-    } else if (!user && isMounted) {
-        setIsLoadingHistory(false); // Not loading if no user
-        setGenerations([]);
-    }
-  }, [isMounted, user, loadGenerations]);
+  }, [fetchAllPredictions]);
 
   // Visibility change effect for image history
   useEffect(() => {
@@ -375,6 +417,8 @@ function CreatePageContent() {
         pendingGenerations={pendingGenerations}
         setPendingGenerations={setPendingGenerations}
         promptValue={promptValue}
+        userModels={userModels}
+        isLoadingUserModels={isLoadingUserModels}
         onGenerationStart={() => { /* Potentially do nothing here if polling handles it */ }}
         onGenerationComplete={() => loadGenerations(true)} // Silent refresh
       />

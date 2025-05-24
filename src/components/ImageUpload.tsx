@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, ChangeEvent, DragEvent, useRef } from 'react';
+import { useState, useCallback, ChangeEvent, DragEvent, useRef, useEffect } from 'react';
 import NextImage from 'next/image';
 import { X, FolderUp } from 'lucide-react';
 import { cn } from "@/lib/utils";
@@ -17,6 +17,16 @@ export function ImageUpload({ onImageChange, currentImageUrl, className }: Image
   const [uploadedFileName, setUploadedFileName] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Reset internal state when currentImageUrl becomes null
+  useEffect(() => {
+    if (currentImageUrl === null) {
+      setUploadedFileName(null);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  }, [currentImageUrl]);
 
   // Simple, reliable image processing using canvas
   const processImageFile = useCallback(async (file: File): Promise<string> => {

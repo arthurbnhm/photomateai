@@ -95,6 +95,10 @@ export function ModelListTable({ newTraining, onClearNewTraining }: ModelListTab
   const deleteButtonRef = useRef<HTMLButtonElement | null>(null);
   const cancelButtonRef = useRef<HTMLButtonElement | null>(null);
   
+  // Ref to track if we've done the initial fetch
+  const hasInitialFetched = useRef(false);
+  const lastNewTrainingId = useRef<string | null>(null);
+  
   // Data fetching logic
   const fetchModels = useCallback(async () => {
     setLoading(true);
@@ -155,14 +159,26 @@ export function ModelListTable({ newTraining, onClearNewTraining }: ModelListTab
 
   // Effects for data management
   useEffect(() => {
-    fetchModels();
-  }, [fetchModels]);
-
-  useEffect(() => {
-    if (!newTraining) return;
+    // Initial fetch on mount
+    if (!hasInitialFetched.current) {
+      fetchModels();
+      hasInitialFetched.current = true;
+      if (newTraining) {
+        lastNewTrainingId.current = newTraining.id;
+      }
+      return;
+    }
     
-    fetchModels();
-  }, [newTraining, fetchModels]);
+    // Fetch only if newTraining changed (different ID or went from null to non-null)
+    if (newTraining && newTraining.id !== lastNewTrainingId.current) {
+      fetchModels();
+      lastNewTrainingId.current = newTraining.id;
+    } else if (!newTraining && lastNewTrainingId.current !== null) {
+      // newTraining was cleared
+      lastNewTrainingId.current = null;
+      // Don't refetch in this case as clearing training doesn't require new data
+    }
+  }, [fetchModels, newTraining]);
 
   // Clear new training if it's found in models
   useEffect(() => {

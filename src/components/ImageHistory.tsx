@@ -115,6 +115,19 @@ export function ImageHistory({
     currentImageIndex: 0
   })
 
+  // Function to play success sound
+  const playSuccessSound = useCallback(() => {
+    try {
+      const audio = new Audio('/sounds/success.mp3');
+      audio.volume = 0.5; // Set volume to 50%
+      audio.play().catch(error => {
+        console.warn('Could not play success sound:', error);
+      });
+    } catch (error) {
+      console.warn('Error creating audio element:', error);
+    }
+  }, []);
+
   useEffect(() => {
     setIsMounted(true)
     return () => {
@@ -146,9 +159,20 @@ export function ImageHistory({
       });
     };
     
+    // Check if any pending generations are restored from page refresh (older than 5 seconds)
+    const hasRestoredGenerations = () => {
+      const now = Date.now();
+      return pendingGenerations.some(gen => {
+        if (!gen.startTime) return false;
+        const startTime = new Date(gen.startTime).getTime();
+        return (now - startTime) >= 5000; // Consider restored if older than 5 seconds
+      });
+    };
+    
     const checkPendingGenerations = async () => {
       try {
-        if (!shouldStartPolling()) return;
+        // For restored generations, check immediately. For new ones, wait 10 seconds.
+        if (!shouldStartPolling() && !hasRestoredGenerations()) return;
         
         const replicateIds = pendingGenerations
           .filter(gen => gen.replicate_id)
@@ -196,6 +220,9 @@ export function ImageHistory({
                   // We can call loadGenerations(true) to ask the parent to refresh.
                   shouldRefreshParentGenerations = true;
                   
+                  // Play success sound when generation completes
+                  playSuccessSound();
+                  
                   // Remove from local pendingGenerations state in ImageHistory
                   setPendingGenerations(prev => 
                     prev.filter(g => g.id !== matchingPending.id)
@@ -236,7 +263,7 @@ export function ImageHistory({
       }
     };
     
-    const pollInterval = 5000;
+    const pollInterval = 10000;
     
     if (intervalRef.current) {
       clearInterval(intervalRef.current);
@@ -246,13 +273,15 @@ export function ImageHistory({
     if (timeoutRef.current) {
       clearTimeout(timeoutRef.current);
     }
-    timeoutRef.current = setTimeout(checkPendingGenerations, 1000);
+    // Check immediately for restored generations, otherwise wait 1 second for new ones
+    const initialDelay = hasRestoredGenerations() ? 100 : 1000;
+    timeoutRef.current = setTimeout(checkPendingGenerations, initialDelay);
     
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
     };
-  }, [isMounted, pendingGenerations, loadGenerations, setPendingGenerations, supabaseClient]); // Added supabaseClient dependency
+  }, [isMounted, pendingGenerations, loadGenerations, setPendingGenerations, supabaseClient, playSuccessSound]);
 
   // Update UI when generations prop changes (from parent)
   useEffect(() => {
@@ -263,12 +292,18 @@ export function ImageHistory({
       );
       
       if (pendingToRemove.length > 0) {
+        // Play success sound for newly completed generations detected via parent update
+        // This catches cases where polling might miss the completion
+        pendingToRemove.forEach(() => {
+          playSuccessSound();
+        });
+        
         setPendingGenerations(prev => 
           prev.filter(gen => !pendingToRemove.some(p => p.id === gen.id))
         );
       }
     }
-  }, [generations, pendingGenerations, setPendingGenerations]);
+  }, [generations, pendingGenerations, setPendingGenerations, playSuccessSound]);
 
   // Update elapsed times (remains the same)
   useEffect(() => {

@@ -44,21 +44,9 @@ function useAuthImplementation() {
       }
     )
 
-    // Perform initial user fetch. onAuthStateChange might not fire immediately
-    // or if the user is already authenticated on page load.
-    const getCurrentUser = async () => {
-      try {
-        const { data: { user: currentUser } } = await supabase.auth.getUser()
-        setUser(currentUser)
-      } catch (error) {
-        console.error('Error fetching initial user:', error)
-        setUser(null)
-      } finally {
-        setIsLoading(false)
-      }
-    }
-    getCurrentUser()
-
+    // Remove the redundant getCurrentUser call - onAuthStateChange will fire immediately
+    // and provide the current session state, eliminating duplicate calls
+    
     return () => {
       subscription.unsubscribe()
     }
