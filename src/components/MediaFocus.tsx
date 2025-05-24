@@ -453,7 +453,8 @@ export function MediaFocus({
             onClick={prevImage}
             variant="outline"
             size="icon"
-            className="absolute left-4 top-1/2 -translate-y-1/2"
+            className="absolute left-4 -translate-y-1/2"
+            style={{ top: 'calc(50% - 4rem)' }}
           >
             <ChevronLeft className="h-4 w-4" />
           </Button>
@@ -462,7 +463,8 @@ export function MediaFocus({
             onClick={nextImage}
             variant="outline"
             size="icon"
-            className="absolute right-4 top-1/2 -translate-y-1/2"
+            className="absolute right-4 -translate-y-1/2"
+            style={{ top: 'calc(50% - 4rem)' }}
           >
             <ChevronRight className="h-4 w-4" />
           </Button>
