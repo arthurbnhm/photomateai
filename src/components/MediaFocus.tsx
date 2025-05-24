@@ -8,7 +8,8 @@ import { toast } from "sonner"
 import { motion, AnimatePresence } from "framer-motion"
 import { X, Download, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, RotateCcw } from "lucide-react"
 import { createSupabaseBrowserClient } from "@/lib/supabase/client"
-import { TransformWrapper, TransformComponent, ReactZoomPanPinchRef } from "react-zoom-pan-pinch"
+import { useGesture } from "@use-gesture/react"
+import { useSpring, animated, config } from "@react-spring/web"
 
 // Define the types needed for the component
 export type ImageWithStatus = {
@@ -50,7 +51,16 @@ export function MediaFocus({
   const [mounted, setMounted] = React.useState(false)
   const supabase = createSupabaseBrowserClient()
   const thumbnailContainerRef = useRef<HTMLDivElement>(null)
-  const transformComponentRef = useRef<ReactZoomPanPinchRef>(null)
+  const imageContainerRef = useRef<HTMLDivElement>(null)
+  const modalRef = useRef<HTMLDivElement>(null)
+  
+  // Zoom and pan state
+  const [{ scale, x, y }, api] = useSpring(() => ({
+    scale: 1,
+    x: 0,
+    y: 0,
+    config: config.gentle
+  }))
   
   // Simple mobile detection
   const isMobile = useMemo(() => {
@@ -64,26 +74,185 @@ export function MediaFocus({
     return () => setMounted(false)
   }, [])
   
-  // Lock body scroll when viewer is open
+  // Comprehensive UI zoom prevention
   useEffect(() => {
-    if (isOpen) {
-      document.body.style.overflow = 'hidden'
-      // Prevent browser zoom on open
-      document.body.style.touchAction = 'none'
-      
-      return () => {
-        document.body.style.overflow = ''
-        document.body.style.touchAction = ''
+    if (!isOpen) return
+    
+    // Save original viewport meta
+    const originalMeta = document.querySelector('meta[name="viewport"]')
+    const originalContent = originalMeta?.getAttribute('content') || ''
+    
+    // Update viewport to prevent zoom
+    if (originalMeta) {
+      originalMeta.setAttribute('content', 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no')
+    }
+    
+    // Lock body scroll and prevent touch actions
+    document.body.style.overflow = 'hidden'
+    document.body.style.touchAction = 'none'
+    document.body.style.userSelect = 'none'
+    document.body.style.webkitUserSelect = 'none'
+    
+    // Prevent zoom with keyboard shortcuts
+    const preventKeyboardZoom = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && (e.key === '+' || e.key === '-' || e.key === '0' || e.key === '=')) {
+        e.preventDefault()
       }
+    }
+    
+    // Prevent zoom with mouse wheel + ctrl/cmd
+    const preventWheelZoom = (e: WheelEvent) => {
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault()
+      }
+    }
+    
+    // Prevent touch zoom on the entire document
+    const preventTouchZoom = (e: TouchEvent) => {
+      if (e.touches.length > 1) {
+        e.preventDefault()
+      }
+    }
+    
+    // Prevent double tap zoom
+    let lastTouchEnd = 0
+    const preventDoubleTapZoom = (e: TouchEvent) => {
+      const now = Date.now()
+      if (now - lastTouchEnd <= 300) {
+        e.preventDefault()
+      }
+      lastTouchEnd = now
+    }
+    
+    // Add event listeners with capture phase
+    document.addEventListener('keydown', preventKeyboardZoom, { capture: true })
+    document.addEventListener('wheel', preventWheelZoom, { passive: false, capture: true })
+    document.addEventListener('touchstart', preventTouchZoom, { passive: false, capture: true })
+    document.addEventListener('touchmove', preventTouchZoom, { passive: false, capture: true })
+    document.addEventListener('touchend', preventDoubleTapZoom, { passive: false, capture: true })
+    
+    // Add CSS to prevent zoom on specific elements
+    const style = document.createElement('style')
+    style.id = 'media-focus-zoom-prevention'
+    style.textContent = `
+      body.media-focus-open {
+        touch-action: none !important;
+        -webkit-touch-action: none !important;
+        -ms-touch-action: none !important;
+        overscroll-behavior: none !important;
+      }
+      body.media-focus-open * {
+        touch-action: none !important;
+        -webkit-touch-action: none !important;
+        -ms-touch-action: none !important;
+      }
+      body.media-focus-open input,
+      body.media-focus-open textarea,
+      body.media-focus-open select {
+        font-size: 16px !important;
+      }
+    `
+    document.head.appendChild(style)
+    document.body.classList.add('media-focus-open')
+    
+    return () => {
+      // Restore original viewport
+      if (originalMeta) {
+        originalMeta.setAttribute('content', originalContent)
+      }
+      
+      // Restore body styles
+      document.body.style.overflow = ''
+      document.body.style.touchAction = ''
+      document.body.style.userSelect = ''
+      document.body.style.webkitUserSelect = ''
+      document.body.classList.remove('media-focus-open')
+      
+      // Remove event listeners
+      document.removeEventListener('keydown', preventKeyboardZoom, { capture: true })
+      document.removeEventListener('wheel', preventWheelZoom, { capture: true })
+      document.removeEventListener('touchstart', preventTouchZoom, { capture: true })
+      document.removeEventListener('touchmove', preventTouchZoom, { capture: true })
+      document.removeEventListener('touchend', preventDoubleTapZoom, { capture: true })
+      
+      // Remove style
+      document.getElementById('media-focus-zoom-prevention')?.remove()
     }
   }, [isOpen])
   
   // Reset zoom when image changes
   useEffect(() => {
-    if (transformComponentRef.current) {
-      transformComponentRef.current.resetTransform()
+    api.start({ scale: 1, x: 0, y: 0 })
+  }, [currentImageIndex, api])
+  
+  // Zoom functions
+  const zoomIn = useCallback(() => {
+    api.start({ scale: Math.min(5, scale.get() * 1.3) })
+  }, [api, scale])
+  
+  const zoomOut = useCallback(() => {
+    api.start({ scale: Math.max(0.5, scale.get() * 0.7) })
+  }, [api, scale])
+  
+  const resetZoom = useCallback(() => {
+    api.start({ scale: 1, x: 0, y: 0 })
+  }, [api])
+  
+  // Gesture handling with improved zoom isolation
+  const bind = useGesture(
+    {
+      onDrag: ({ offset: [x, y], pinching, event }) => {
+        event?.stopPropagation?.()
+        if (!pinching && scale.get() > 1) {
+          api.start({ x, y })
+        }
+      },
+      onPinch: ({ offset: [s], event }) => {
+        event?.stopPropagation?.()
+        const newScale = Math.max(0.5, Math.min(5, s))
+        api.start({ scale: newScale })
+      },
+      onWheel: ({ event, delta: [, dy] }) => {
+        event.preventDefault()
+        event.stopPropagation()
+        
+        // Only zoom if not using ctrl/cmd (which would be browser zoom)
+        if (!event.ctrlKey && !event.metaKey) {
+          const scaleFactor = 1 - dy * 0.01
+          const newScale = Math.max(0.5, Math.min(5, scale.get() * scaleFactor))
+          api.start({ scale: newScale })
+        }
+      },
+      onDoubleClick: ({ event }) => {
+        event?.stopPropagation?.()
+        if (scale.get() > 1) {
+          resetZoom()
+        } else {
+          api.start({ scale: 2 })
+        }
+      }
+    },
+    {
+      drag: {
+        from: () => [x.get(), y.get()],
+        bounds: () => {
+          const s = scale.get()
+          const maxX = (s - 1) * 150
+          const maxY = (s - 1) * 150
+          return { left: -maxX, right: maxX, top: -maxY, bottom: maxY }
+        },
+        rubberband: true
+      },
+      pinch: {
+        scaleBounds: { min: 0.5, max: 5 },
+        rubberband: true,
+        from: () => [scale.get(), 0]
+      },
+      wheel: {
+        preventDefault: true
+      }
     }
-  }, [currentImageIndex])
+  )
   
   // Navigation
   const nextImage = useCallback((e?: React.MouseEvent) => {
@@ -275,16 +444,19 @@ export function MediaFocus({
     <AnimatePresence>
       {isOpen && (
         <motion.div
+          ref={modalRef}
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           className="fixed inset-0 flex flex-col items-center justify-center z-[99999] bg-background"
           onClick={onClose}
+          style={{ touchAction: 'none' }}
         >
           {/* Top bar */}
           <div 
             className="absolute top-0 w-full flex items-center justify-between z-20 p-4"
             onClick={(e) => e.stopPropagation()}
+            style={{ touchAction: 'none' }}
           >
             <div className="bg-muted py-2 px-4 rounded-full text-sm font-medium">
               {currentImageIndex + 1} / {allImages ? allImages.length : currentGeneration.images.length}
@@ -334,118 +506,77 @@ export function MediaFocus({
           </div>
           
           {/* Main image with zoom */}
-          <div className="flex-1 w-full flex items-center justify-center px-4 pb-32" onClick={(e) => e.stopPropagation()}>
-            <TransformWrapper
-              ref={transformComponentRef}
-              initialScale={1}
-              initialPositionX={0}
-              initialPositionY={0}
-              minScale={0.5}
-              maxScale={5}
-              wheel={{ 
-                wheelDisabled: isMobile,
-                step: 0.2,
-                activationKeys: [],
-                excluded: ["button", "svg"]
+          <div 
+            ref={imageContainerRef}
+            className="flex-1 w-full flex items-center justify-center px-4 pb-32" 
+            onClick={(e) => e.stopPropagation()}
+            style={{ touchAction: 'none' }}
+          >
+            <animated.div
+              {...bind()}
+              style={{
+                scale,
+                x,
+                y,
+                touchAction: 'none',
+                cursor: scale.get() > 1 ? 'grab' : 'default'
               }}
-              pinch={{ 
-                disabled: false,
-                step: 0.2
-              }}
-              doubleClick={{ mode: "toggle" }}
-              panning={{ excluded: ["button", "svg"] }}
-              centerOnInit={true}
-              centerZoomedOut={true}
-              limitToBounds={false}
-              velocityAnimation={{
-                sensitivity: 1,
-                animationTime: 200,
-              }}
+              className="flex items-center justify-center"
             >
-              {({ zoomIn, zoomOut, resetTransform }) => (
-                <>
-                  {/* Desktop zoom controls */}
-                  {!isMobile && (
-                    <div className="absolute top-20 right-4 flex flex-col gap-2 z-20">
-                      <Button
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          zoomIn()
-                        }}
-                        variant="outline"
-                        size="icon"
-                      >
-                        <ZoomIn className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          resetTransform()
-                        }}
-                        variant="outline"
-                        size="icon"
-                      >
-                        <RotateCcw className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          zoomOut()
-                        }}
-                        variant="outline"
-                        size="icon"
-                      >
-                        <ZoomOut className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  )}
-                  
-                  <TransformComponent
-                    wrapperStyle={{
-                      width: "100%",
-                      height: "100%",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                    }}
-                    contentStyle={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      width: "100%",
-                      height: "100%",
-                    }}
-                  >
-                    <div style={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      width: "fit-content",
-                      height: "fit-content",
-                      maxWidth: "100%",
-                      maxHeight: "100%",
-                    }}>
-                      <NextImage
-                        src={currentImage.url}
-                        alt={`Generated image for "${currentGeneration.prompt}"`}
-                        className="object-contain select-none"
-                        width={1024}
-                        height={1024}
-                        style={{ 
-                          maxWidth: '90vw',
-                          maxHeight: '60vh',
-                          width: 'auto', 
-                          height: 'auto'
-                        }}
-                        priority={true}
-                        unoptimized={true}
-                        draggable={false}
-                      />
-                    </div>
-                  </TransformComponent>
-                </>
-              )}
-            </TransformWrapper>
+              <NextImage
+                src={currentImage.url}
+                alt={`Generated image for "${currentGeneration.prompt}"`}
+                className="object-contain select-none pointer-events-none"
+                width={1024}
+                height={1024}
+                style={{ 
+                  maxWidth: '90vw',
+                  maxHeight: '60vh',
+                  width: 'auto', 
+                  height: 'auto',
+                  touchAction: 'none'
+                }}
+                priority={true}
+                unoptimized={true}
+                draggable={false}
+              />
+            </animated.div>
+            
+            {/* Desktop zoom controls */}
+            {!isMobile && (
+              <div className="absolute top-20 right-4 flex flex-col gap-2 z-20" style={{ touchAction: 'none' }}>
+                <Button
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    zoomIn()
+                  }}
+                  variant="outline"
+                  size="icon"
+                >
+                  <ZoomIn className="h-4 w-4" />
+                </Button>
+                <Button
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    resetZoom()
+                  }}
+                  variant="outline"
+                  size="icon"
+                >
+                  <RotateCcw className="h-4 w-4" />
+                </Button>
+                <Button
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    zoomOut()
+                  }}
+                  variant="outline"
+                  size="icon"
+                >
+                  <ZoomOut className="h-4 w-4" />
+                </Button>
+              </div>
+            )}
           </div>
           
           {/* Navigation arrows */}
@@ -454,7 +585,7 @@ export function MediaFocus({
             variant="outline"
             size="icon"
             className="absolute left-4 -translate-y-1/2"
-            style={{ top: 'calc(50% - 4rem)' }}
+            style={{ top: 'calc(50% - 4rem)', touchAction: 'none' }}
           >
             <ChevronLeft className="h-4 w-4" />
           </Button>
@@ -464,13 +595,17 @@ export function MediaFocus({
             variant="outline"
             size="icon"
             className="absolute right-4 -translate-y-1/2"
-            style={{ top: 'calc(50% - 4rem)' }}
+            style={{ top: 'calc(50% - 4rem)', touchAction: 'none' }}
           >
             <ChevronRight className="h-4 w-4" />
           </Button>
           
           {/* Thumbnails */}
-          <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-background via-background/95 to-background/80 backdrop-blur-md border-t border-border/50" onClick={(e) => e.stopPropagation()}>
+          <div 
+            className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-background via-background/95 to-background/80 backdrop-blur-md border-t border-border/50" 
+            onClick={(e) => e.stopPropagation()}
+            style={{ touchAction: 'none' }}
+          >
             <div className="p-6">
               {/* Thumbnail strip */}
               <div className="relative">
@@ -480,6 +615,7 @@ export function MediaFocus({
                   style={{
                     scrollbarWidth: 'none',
                     msOverflowStyle: 'none',
+                    touchAction: 'pan-x'
                   }}
                 >
                   {(allImages || currentGeneration.images).map((image, index) => (
@@ -495,6 +631,7 @@ export function MediaFocus({
                           : 'ring-1 ring-border/50 hover:ring-2 hover:ring-primary/50 hover:scale-105 opacity-70 hover:opacity-100'
                       }`}
                       aria-label={`View image ${index + 1}`}
+                      style={{ touchAction: 'none' }}
                     >
                       {/* Image */}
                       <div className="relative w-full h-full">

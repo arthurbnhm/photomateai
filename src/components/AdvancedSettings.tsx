@@ -670,14 +670,14 @@ export const AdvancedSettings = forwardRef<AdvancedSettingsRefType, AdvancedSett
             isOpen ? "max-h-[3000px] opacity-100 mt-6" : "max-h-0 opacity-0 mt-0"
           )}
         >
-          <div className="bg-gradient-to-br from-muted/20 via-background/50 to-muted/10 border border-border/30 rounded-xl p-6 space-y-8 backdrop-blur-sm">
-            <div className="space-y-4">
+          <div className="bg-gradient-to-br from-muted/20 via-background/50 to-muted/10 border border-border/30 rounded-xl p-4 sm:p-6 space-y-6 sm:space-y-8 backdrop-blur-sm">
+            <div className="space-y-3 sm:space-y-4">
               <div className="flex items-center justify-between">
-                <h4 className="text-base font-semibold text-foreground flex items-center gap-2">
-                  <Camera className="w-5 h-5 text-primary" />
-                  Camera Shot
+                <h4 className="text-sm sm:text-base font-semibold text-foreground flex items-center gap-2 flex-wrap">
+                  <Camera className="w-4 h-4 sm:w-5 sm:h-5 text-primary flex-shrink-0" />
+                  <span>Camera Shot</span>
                   <span className={cn(
-                    "text-sm font-normal bg-muted/50 px-2 py-1 rounded-md transition-opacity duration-200 min-w-[60px] text-center",
+                    "text-xs sm:text-sm font-normal bg-muted/50 px-2 py-1 rounded-md transition-opacity duration-200 min-w-[60px] text-center",
                     selectedCameraShot 
                       ? "text-muted-foreground opacity-100" 
                       : "text-transparent opacity-0"
@@ -692,7 +692,7 @@ export const AdvancedSettings = forwardRef<AdvancedSettingsRefType, AdvancedSett
                   size="sm" 
                   type="button"
                   className={cn(
-                    "h-8 px-3 text-xs transition-opacity duration-200",
+                    "h-8 px-3 text-xs transition-opacity duration-200 flex-shrink-0",
                     selectedCameraShot 
                       ? "text-muted-foreground hover:text-foreground opacity-100 cursor-pointer" 
                       : "text-transparent opacity-0 cursor-default pointer-events-none"
@@ -707,32 +707,32 @@ export const AdvancedSettings = forwardRef<AdvancedSettingsRefType, AdvancedSett
                 </Button>
               </div>
               
-              <div className="grid grid-cols-3 md:grid-cols-6 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2 sm:gap-3">
                 {cameraShots.map((shot) => (
                   <div
                     key={shot.value}
                     className={cn(
-                      "group relative flex flex-col items-center justify-center p-4 rounded-xl cursor-pointer border-2 transition-all duration-300 hover:scale-105 backdrop-blur-sm",
+                      "group relative flex flex-col items-center justify-center p-2 sm:p-4 rounded-xl cursor-pointer border-2 transition-all duration-300 hover:scale-105 backdrop-blur-sm",
                       selectedCameraShot === shot.value 
                         ? "border-slate-400 dark:border-slate-500 bg-slate-100 dark:bg-slate-800/50 shadow-lg" 
                         : "border-border/40 hover:border-slate-300 dark:hover:border-slate-600 bg-background/50 hover:bg-background/80 shadow-sm"
                     )}
                     onClick={() => handleCameraShotSelect(shot.value)}
                   >
-                    <div className="text-2xl mb-2 group-hover:scale-110 transition-transform duration-200">{shot.icon}</div>
-                    <div className="text-xs font-medium text-center leading-tight">{shot.label}</div>
+                    <div className="text-lg sm:text-2xl mb-1 sm:mb-2 group-hover:scale-110 transition-transform duration-200">{shot.icon}</div>
+                    <div className="text-xs font-medium text-center leading-tight px-1 break-words hyphens-auto">{shot.label}</div>
                   </div>
                 ))}
               </div>
             </div>
 
-            <div className="space-y-4">
+            <div className="space-y-3 sm:space-y-4">
               <div className="flex items-center justify-between">
-                <h4 className="text-base font-semibold text-foreground flex items-center gap-2">
-                  <Palette className="w-5 h-5 text-primary" />
-                  Background Color
+                <h4 className="text-sm sm:text-base font-semibold text-foreground flex items-center gap-2 flex-wrap">
+                  <Palette className="w-4 h-4 sm:w-5 sm:h-5 text-primary flex-shrink-0" />
+                  <span>Background Color</span>
                   <span className={cn(
-                    "text-sm font-normal bg-muted/50 px-2 py-1 rounded-md transition-opacity duration-200 min-w-[60px] text-center",
+                    "text-xs sm:text-sm font-normal bg-muted/50 px-2 py-1 rounded-md transition-opacity duration-200 min-w-[60px] text-center",
                     selectedBgColor 
                       ? "text-muted-foreground opacity-100" 
                       : "text-transparent opacity-0"
@@ -747,7 +747,7 @@ export const AdvancedSettings = forwardRef<AdvancedSettingsRefType, AdvancedSett
                   size="sm" 
                   type="button"
                   className={cn(
-                    "h-8 px-3 text-xs transition-opacity duration-200",
+                    "h-8 px-3 text-xs transition-opacity duration-200 flex-shrink-0",
                     selectedBgColor 
                       ? "text-muted-foreground hover:text-foreground opacity-100 cursor-pointer" 
                       : "text-transparent opacity-0 cursor-default pointer-events-none"
@@ -762,7 +762,7 @@ export const AdvancedSettings = forwardRef<AdvancedSettingsRefType, AdvancedSett
                 </Button>
               </div>
               
-              <div className="grid grid-cols-4 md:grid-cols-6 gap-3">
+              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2 sm:gap-3">
                 {backgroundColors.map((bgColor) => (
                   <div
                     key={bgColor.value}
@@ -775,28 +775,28 @@ export const AdvancedSettings = forwardRef<AdvancedSettingsRefType, AdvancedSett
                     onClick={() => handleBgColorSelect(bgColor.value)}
                   >
                     <div 
-                      className="w-12 h-12 rounded-full mt-4 mb-2 group-hover:scale-110 transition-transform duration-200 shadow-md"
+                      className="w-8 h-8 sm:w-12 sm:h-12 rounded-full mt-2 sm:mt-4 mb-1 sm:mb-2 group-hover:scale-110 transition-transform duration-200 shadow-md"
                       style={{
                         background: bgColor.color,
                         border: bgColor.value === "white" ? "2px solid #e5e7eb" : "none"
                       }}
                     />
                     
-                    <div className="pb-3 text-center">
-                      <div className="text-xs font-medium">{bgColor.label}</div>
+                    <div className="pb-2 sm:pb-3 text-center px-1">
+                      <div className="text-xs font-medium break-words hyphens-auto">{bgColor.label}</div>
                     </div>
                   </div>
                 ))}
               </div>
             </div>
 
-            <div className="space-y-4">
+            <div className="space-y-3 sm:space-y-4">
               <div className="flex items-center justify-between">
-                <h4 className="text-base font-semibold text-foreground flex items-center gap-2">
-                  <Smile className="w-5 h-5 text-primary" />
-                  Facial Expressions
+                <h4 className="text-sm sm:text-base font-semibold text-foreground flex items-center gap-2 flex-wrap">
+                  <Smile className="w-4 h-4 sm:w-5 sm:h-5 text-primary flex-shrink-0" />
+                  <span>Facial Expressions</span>
                   <span className={cn(
-                    "text-sm font-normal bg-muted/50 px-2 py-1 rounded-md transition-opacity duration-200 min-w-[60px] text-center",
+                    "text-xs sm:text-sm font-normal bg-muted/50 px-2 py-1 rounded-md transition-opacity duration-200 min-w-[60px] text-center",
                     selectedExpression 
                       ? "text-muted-foreground opacity-100" 
                       : "text-transparent opacity-0"
@@ -811,7 +811,7 @@ export const AdvancedSettings = forwardRef<AdvancedSettingsRefType, AdvancedSett
                   size="sm" 
                   type="button"
                   className={cn(
-                    "h-8 px-3 text-xs transition-opacity duration-200",
+                    "h-8 px-3 text-xs transition-opacity duration-200 flex-shrink-0",
                     selectedExpression 
                       ? "text-muted-foreground hover:text-foreground opacity-100 cursor-pointer" 
                       : "text-transparent opacity-0 cursor-default pointer-events-none"
@@ -826,32 +826,32 @@ export const AdvancedSettings = forwardRef<AdvancedSettingsRefType, AdvancedSett
                 </Button>
               </div>
               
-              <div className="grid grid-cols-4 md:grid-cols-8 gap-3">
+              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-8 gap-2 sm:gap-3">
                 {facialExpressions.map((expression) => (
                   <div
                     key={expression.value}
                     className={cn(
-                      "group relative flex flex-col items-center justify-center p-3 rounded-xl cursor-pointer border-2 transition-all duration-300 hover:scale-105 backdrop-blur-sm",
+                      "group relative flex flex-col items-center justify-center p-2 sm:p-3 rounded-xl cursor-pointer border-2 transition-all duration-300 hover:scale-105 backdrop-blur-sm",
                       selectedExpression === expression.value 
                         ? "border-slate-400 dark:border-slate-500 bg-slate-100 dark:bg-slate-800/50 shadow-lg" 
                         : "border-border/40 hover:border-slate-300 dark:hover:border-slate-600 bg-background/50 hover:bg-background/80 shadow-sm"
                     )}
                     onClick={() => handleExpressionSelect(expression.value)}
                   >
-                    <div className="text-2xl mb-2 group-hover:scale-110 transition-transform duration-200">{expression.emoji}</div>
-                    <div className="text-xs font-medium text-center leading-tight">{expression.label}</div>
+                    <div className="text-lg sm:text-2xl mb-1 sm:mb-2 group-hover:scale-110 transition-transform duration-200">{expression.emoji}</div>
+                    <div className="text-xs font-medium text-center leading-tight px-1 break-words hyphens-auto">{expression.label}</div>
                   </div>
                 ))}
               </div>
             </div>
 
-            <div className="space-y-4">
+            <div className="space-y-3 sm:space-y-4">
               <div className="flex items-center justify-between">
-                <h4 className="text-base font-semibold text-foreground flex items-center gap-2">
-                  <Crown className="w-5 h-5 text-primary" />
-                  Accessories
+                <h4 className="text-sm sm:text-base font-semibold text-foreground flex items-center gap-2 flex-wrap">
+                  <Crown className="w-4 h-4 sm:w-5 sm:h-5 text-primary flex-shrink-0" />
+                  <span>Accessories</span>
                   <span className={cn(
-                    "text-sm font-normal bg-muted/50 px-2 py-1 rounded-md transition-opacity duration-200 min-w-[60px] text-center",
+                    "text-xs sm:text-sm font-normal bg-muted/50 px-2 py-1 rounded-md transition-opacity duration-200 min-w-[60px] text-center",
                     selectedAccessory.length > 0 
                       ? "text-muted-foreground opacity-100" 
                       : "text-transparent opacity-0"
@@ -866,7 +866,7 @@ export const AdvancedSettings = forwardRef<AdvancedSettingsRefType, AdvancedSett
                   size="sm" 
                   type="button"
                   className={cn(
-                    "h-8 px-3 text-xs transition-opacity duration-200",
+                    "h-8 px-3 text-xs transition-opacity duration-200 flex-shrink-0",
                     selectedAccessory.length > 0 
                       ? "text-muted-foreground hover:text-foreground opacity-100 cursor-pointer" 
                       : "text-transparent opacity-0 cursor-default pointer-events-none"
@@ -884,32 +884,32 @@ export const AdvancedSettings = forwardRef<AdvancedSettingsRefType, AdvancedSett
                 </Button>
               </div>
               
-              <div className="grid grid-cols-4 md:grid-cols-6 gap-3">
+              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2 sm:gap-3">
                 {accessories.map((accessory) => (
                   <div
                     key={accessory.value}
                     className={cn(
-                      "group relative flex flex-col items-center justify-center p-3 rounded-xl cursor-pointer border-2 transition-all duration-300 hover:scale-105 backdrop-blur-sm",
+                      "group relative flex flex-col items-center justify-center p-2 sm:p-3 rounded-xl cursor-pointer border-2 transition-all duration-300 hover:scale-105 backdrop-blur-sm",
                       selectedAccessory.includes(accessory.value) 
                         ? "border-slate-400 dark:border-slate-500 bg-slate-100 dark:bg-slate-800/50 shadow-lg" 
                         : "border-border/40 hover:border-slate-300 dark:hover:border-slate-600 bg-background/50 hover:bg-background/80 shadow-sm"
                     )}
                     onClick={() => handleAccessorySelect(accessory.value)}
                   >
-                    <div className="text-2xl mb-2 group-hover:scale-110 transition-transform duration-200">{accessory.emoji}</div>
-                    <div className="text-xs font-medium text-center leading-tight">{accessory.label}</div>
+                    <div className="text-lg sm:text-2xl mb-1 sm:mb-2 group-hover:scale-110 transition-transform duration-200">{accessory.emoji}</div>
+                    <div className="text-xs font-medium text-center leading-tight px-1 break-words hyphens-auto">{accessory.label}</div>
                   </div>
                 ))}
               </div>
             </div>
 
-            <div className="space-y-4">
+            <div className="space-y-3 sm:space-y-4">
               <div className="flex items-center justify-between">
-                <h4 className="text-base font-semibold text-foreground flex items-center gap-2">
-                  <Lightbulb className="w-5 h-5 text-primary" />
-                  Lighting
+                <h4 className="text-sm sm:text-base font-semibold text-foreground flex items-center gap-2 flex-wrap">
+                  <Lightbulb className="w-4 h-4 sm:w-5 sm:h-5 text-primary flex-shrink-0" />
+                  <span>Lighting</span>
                   <span className={cn(
-                    "text-sm font-normal bg-muted/50 px-2 py-1 rounded-md transition-opacity duration-200 min-w-[60px] text-center",
+                    "text-xs sm:text-sm font-normal bg-muted/50 px-2 py-1 rounded-md transition-opacity duration-200 min-w-[60px] text-center",
                     selectedLight 
                       ? "text-muted-foreground opacity-100" 
                       : "text-transparent opacity-0"
@@ -924,7 +924,7 @@ export const AdvancedSettings = forwardRef<AdvancedSettingsRefType, AdvancedSett
                   size="sm" 
                   type="button"
                   className={cn(
-                    "h-8 px-3 text-xs transition-opacity duration-200",
+                    "h-8 px-3 text-xs transition-opacity duration-200 flex-shrink-0",
                     selectedLight 
                       ? "text-muted-foreground hover:text-foreground opacity-100 cursor-pointer" 
                       : "text-transparent opacity-0 cursor-default pointer-events-none"
@@ -938,20 +938,20 @@ export const AdvancedSettings = forwardRef<AdvancedSettingsRefType, AdvancedSett
                   Clear
                 </Button>
               </div>
-              <div className="grid grid-cols-3 md:grid-cols-6 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2 sm:gap-3">
                 {lightSettings.map((light) => (
                   <div
                     key={light.value}
                     className={cn(
-                      "group relative flex flex-col items-center justify-center p-4 rounded-xl cursor-pointer border-2 transition-all duration-300 hover:scale-105 backdrop-blur-sm",
+                      "group relative flex flex-col items-center justify-center p-2 sm:p-4 rounded-xl cursor-pointer border-2 transition-all duration-300 hover:scale-105 backdrop-blur-sm",
                       selectedLight === light.value 
                         ? "border-slate-400 dark:border-slate-500 bg-slate-100 dark:bg-slate-800/50 shadow-lg" 
                         : "border-border/40 hover:border-slate-300 dark:hover:border-slate-600 bg-background/50 hover:bg-background/80 shadow-sm"
                     )}
                     onClick={() => handleLightSelect(light.value)}
                   >
-                    <div className="text-2xl mb-2 group-hover:scale-110 transition-transform duration-200">{light.icon}</div>
-                    <div className="text-xs font-medium text-center leading-tight">{light.label}</div>
+                    <div className="text-lg sm:text-2xl mb-1 sm:mb-2 group-hover:scale-110 transition-transform duration-200">{light.icon}</div>
+                    <div className="text-xs font-medium text-center leading-tight px-1 break-words hyphens-auto">{light.label}</div>
                   </div>
                 ))}
               </div>
