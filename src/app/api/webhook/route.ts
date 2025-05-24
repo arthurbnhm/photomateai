@@ -368,7 +368,7 @@ export async function POST(request: Request) {
           // Verify the model update by fetching the record again
           const { data: verifyModelData, error: verifyModelError } = await supabase
             .from('models')
-            .select('version')
+            .select('version, user_id')
             .eq('id', training.model_id)
             .single();
             
@@ -376,6 +376,47 @@ export async function POST(request: Request) {
             console.error('❌ Error verifying model update:', verifyModelError);
           } else {
             console.log('✅ Verified model record after update:', verifyModelData);
+            
+            // Decrement models_remaining from user's subscription
+            if (verifyModelData.user_id) {
+              console.log(`💳 Decrementing models_remaining for user: ${verifyModelData.user_id}`);
+              
+              try {
+                // Get the user's active subscription
+                const { data: subscription, error: subscriptionError } = await supabase
+                  .from('subscriptions')
+                  .select('models_remaining')
+                  .eq('user_id', verifyModelData.user_id)
+                  .eq('is_active', true)
+                  .single();
+
+                if (subscriptionError || !subscription) {
+                  console.error(`❌ Error fetching subscription for user ${verifyModelData.user_id}:`, subscriptionError);
+                } else if (subscription.models_remaining > 0) {
+                  // Decrement models_remaining
+                  const { error: decrementError } = await supabase
+                    .from('subscriptions')
+                    .update({ 
+                      models_remaining: subscription.models_remaining - 1,
+                      updated_at: new Date().toISOString()
+                    })
+                    .eq('user_id', verifyModelData.user_id)
+                    .eq('is_active', true);
+
+                  if (decrementError) {
+                    console.error(`❌ Error decrementing models_remaining for user ${verifyModelData.user_id}:`, decrementError);
+                  } else {
+                    console.log(`✅ Successfully decremented models_remaining for user ${verifyModelData.user_id} from ${subscription.models_remaining} to ${subscription.models_remaining - 1}`);
+                  }
+                } else {
+                  console.warn(`⚠️ User ${verifyModelData.user_id} has no models_remaining to decrement (current: ${subscription.models_remaining})`);
+                }
+              } catch (error) {
+                console.error(`❌ Unexpected error while decrementing models_remaining for user ${verifyModelData.user_id}:`, error);
+              }
+            } else {
+              console.error('❌ No user_id found in model record, cannot decrement models_remaining');
+            }
           }
         }
       } else if (webhookData.status === 'succeeded' && !finalModelVersionToStore && training.model_id) {

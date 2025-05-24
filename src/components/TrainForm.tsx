@@ -68,6 +68,7 @@ export interface TrainingStatus {
 interface TrainFormProps {
   onTrainingStatusChange: (status: TrainingStatus | null) => void;
   trainingStatus: TrainingStatus | null;
+  onModelsRemainingChange?: (hasModelsRemaining: boolean) => void;
 }
 
 // Add helper function to format bytes to MB with 2 decimal places
@@ -186,7 +187,7 @@ const createThumbnail = async (file: File, maxWidth = 500, maxHeight = 500): Pro
   });
 };
 
-export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormProps) {
+export function TrainForm({ onTrainingStatusChange, trainingStatus, onModelsRemainingChange }: TrainFormProps) {
   // Initialize Supabase client
   const supabaseRef = useRef(createSupabaseBrowserClient());
   const getSupabase = useCallback(() => supabaseRef.current, []);
@@ -207,6 +208,11 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
   const { resolvedTheme } = useTheme();
   // State for the models dialog
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  
+  // Subscription state
+  const [subscription, setSubscription] = useState<{models_remaining: number} | null>(null);
+  const [isLoadingSubscription, setIsLoadingSubscription] = useState(true);
+  const [subscriptionError, setSubscriptionError] = useState<string | null>(null);
   
   // Format model name to meet Replicate's requirements
   const formatModelName = (name: string): string => {
@@ -248,6 +254,216 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
     return true;
   };
 
+  // Define new constants for the number of images
+  const MIN_IMAGES = 12;
+  const MAX_IMAGES = 20;
+
+  // Handle file drop for the dropzone component
+  const onDrop = useCallback((acceptedFiles: File[]) => {
+    // If already processing, don't accept more files
+    if (isGeneratingPreviews || isProcessing) {
+      toast.error("Please wait for current processing to complete");
+      return;
+    }
+
+    const newImages = [...uploadedImages];
+    
+    // Check if the total size of existing and new files would exceed 200MB
+    const MAX_TOTAL_SIZE = 200 * 1024 * 1024; // 200MB in bytes
+    const MAX_INDIVIDUAL_FILE_SIZE = 10 * 1024 * 1024; // 10MB per file
+    const currentTotalSize = uploadedImages.reduce((total, file) => total + file.size, 0);
+    let newFilesTotalSize = 0;
+    const validFiles: File[] = [];
+    const oversizedFiles: File[] = [];
+    
+    // Sort files by size in ascending order to prioritize smaller files
+    const sortedFiles = [...acceptedFiles].sort((a, b) => a.size - b.size);
+    
+    // Process files in order until we hit the size limit
+    for (let i = 0; i < sortedFiles.length; i++) {
+      const file = sortedFiles[i];
+      
+      // Check individual file size first
+      if (file.size > MAX_INDIVIDUAL_FILE_SIZE) {
+        oversizedFiles.push(file);
+        continue;
+      }
+      
+      // Then check if adding this file would exceed total size limit
+      if (currentTotalSize + newFilesTotalSize + file.size <= MAX_TOTAL_SIZE) {
+        validFiles.push(file);
+        newFilesTotalSize += file.size;
+      } else {
+        // We've hit the total size limit
+        break;
+      }
+    }
+    
+    // Show appropriate error messages
+    if (oversizedFiles.length > 0) {
+      oversizedFiles.forEach(file => {
+        toast.error(`File "${file.name}" (${formatSizeInMB(file.size)}) exceeds the individual file limit of 10MB`);
+      });
+    }
+    
+    // Check if any files were rejected due to total size limit
+    const totalSizeRejected = sortedFiles.length - validFiles.length - oversizedFiles.length;
+    if (totalSizeRejected > 0) {
+      const wouldBeTotalSize = formatSizeInMB(currentTotalSize + sortedFiles.reduce((total, file) => total + file.size, 0));
+      toast.error(`${totalSizeRejected} file(s) were rejected because total size would be ${wouldBeTotalSize} (max 200MB)`);
+    }
+    
+    // Si aucun fichier valide, on arrête
+    if (validFiles.length === 0 && acceptedFiles.length > 0 && oversizedFiles.length < acceptedFiles.length) { // Check if validFiles is empty due to size, not because no files were accepted
+      // This case implies files were accepted by dropzone but then rejected by size logic here.
+      // Errors for oversized files or total size rejected already shown.
+      // If all accepted files were oversized or hit total size limit, validFiles would be empty.
+      return;
+    }
+    if (validFiles.length === 0 && acceptedFiles.length === 0) { // No files accepted by dropzone initially
+        return;
+    }
+    
+    // Vérifier si le total d'images dépasse la limite
+    if (newImages.length + validFiles.length > MAX_IMAGES) {
+      const excessCount = newImages.length + validFiles.length - MAX_IMAGES;
+      toast.error(`You can upload a maximum of ${MAX_IMAGES} images. Please remove ${excessCount}.`);
+      return;
+    }
+    // Vérifier si on n'atteint pas le minimum
+    if (newImages.length + validFiles.length < MIN_IMAGES) {
+      const neededCount = MIN_IMAGES - (newImages.length + validFiles.length);
+      toast.info(`Add ${neededCount} more image(s) to reach the minimum of ${MIN_IMAGES}.`);
+      // Add the files anyway to allow adding more later
+      setUploadedImages([...newImages, ...validFiles]);
+      return;
+    }
+    // If within the allowed range
+    setUploadedImages([...newImages, ...validFiles]);
+  }, [uploadedImages, isGeneratingPreviews, isProcessing, MIN_IMAGES, MAX_IMAGES]);
+
+  // Setup dropzone
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({
+    onDrop,
+    accept: {
+      'image/jpeg': [],
+      'image/png': [],
+      'image/webp': []
+    },
+    maxFiles: MAX_IMAGES,
+    validator: (file) => {
+      // Check individual file size first
+      const MAX_INDIVIDUAL_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+      if (file.size > MAX_INDIVIDUAL_FILE_SIZE) {
+        return {
+          code: 'file-too-large',
+          message: `File "${file.name}" (${formatSizeInMB(file.size)}) exceeds the individual file limit of 10MB`
+        };
+      }
+      
+      // Then check total size
+      const currentTotalSize = uploadedImages.reduce((total, f) => total + f.size, 0);
+      const MAX_TOTAL_SIZE = 200 * 1024 * 1024; // 200MB
+      
+      if (currentTotalSize + file.size > MAX_TOTAL_SIZE) {
+        const wouldBeTotalSize = formatSizeInMB(currentTotalSize + file.size);
+        return {
+          code: 'total-size-too-large',
+          message: `Adding this file would make total size ${wouldBeTotalSize} (max 200MB)`
+        };
+      }
+      
+      return null;
+    },
+    onDropRejected: (rejectedFiles) => {
+      const typeRejected = rejectedFiles.filter(item => 
+        item.errors.some(err => err.code === 'file-invalid-type')
+      );
+      
+      const individualSizeRejected = rejectedFiles.filter(item => 
+        item.errors.some(err => err.code === 'file-too-large')
+      );
+      
+      const totalSizeRejected = rejectedFiles.filter(item => 
+        item.errors.some(err => err.code === 'total-size-too-large')
+      );
+      
+      const tooManyFiles = rejectedFiles.some(item => 
+        item.errors.some(err => err.code === 'too-many-files')
+      );
+      
+      if (typeRejected.length > 0) {
+        toast.error(`${typeRejected.length} file(s) have an invalid file type. Only JPG, PNG, and WebP formats are accepted.`);
+      }
+      
+      individualSizeRejected.forEach(item => {
+        toast.error(`File "${item.file.name}" (${formatSizeInMB(item.file.size)}) exceeds the individual file limit of 10MB`);
+      });
+      
+      totalSizeRejected.forEach(item => {
+        const currentTotalSize = uploadedImages.reduce((total, file) => total + file.size, 0);
+        const wouldBeTotalSize = formatSizeInMB(currentTotalSize + item.file.size);
+        toast.error(`Adding "${item.file.name}" would make total size ${wouldBeTotalSize} (max 200MB)`);
+      });
+
+      if (tooManyFiles) {
+        const remainingSlots = MAX_IMAGES - uploadedImages.length;
+        if (remainingSlots > 0) {
+          toast.error(`You can add a maximum of ${remainingSlots} more image(s).`);
+        } else {
+          toast.error(`You already have ${MAX_IMAGES} images. Please remove some before adding more.`);
+        }
+      }
+    }
+  });
+
+  // Fetch user's subscription to check models_remaining
+  useEffect(() => {
+    const fetchSubscription = async () => {
+      try {
+        setIsLoadingSubscription(true);
+        setSubscriptionError(null);
+        
+        const { data: { user } } = await getSupabase().auth.getUser();
+        if (!user) {
+          setSubscriptionError("You must be logged in to train models");
+          setIsLoadingSubscription(false);
+          return;
+        }
+        
+        const { data: subscriptionData, error: subscriptionError } = await getSupabase()
+          .from('subscriptions')
+          .select('models_remaining')
+          .eq('user_id', user.id)
+          .eq('is_active', true)
+          .single();
+        
+        if (subscriptionError || !subscriptionData) {
+          setSubscriptionError("No active subscription found");
+          setIsLoadingSubscription(false);
+          return;
+        }
+        
+        setSubscription(subscriptionData);
+        setIsLoadingSubscription(false);
+      } catch (error) {
+        console.error('Error fetching subscription:', error);
+        setSubscriptionError("Failed to load subscription information");
+        setIsLoadingSubscription(false);
+      }
+    };
+    
+    fetchSubscription();
+  }, [getSupabase]);
+
+  // Notify parent component about models remaining status
+  useEffect(() => {
+    if (onModelsRemainingChange && !isLoadingSubscription && !subscriptionError) {
+      const hasModelsRemaining = subscription ? subscription.models_remaining > 0 : false;
+      onModelsRemainingChange(hasModelsRemaining);
+    }
+  }, [subscription, isLoadingSubscription, subscriptionError, onModelsRemainingChange]);
+
   // Update actual model name whenever display name changes
   useEffect(() => {
     if (displayModelName) {
@@ -259,6 +475,225 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
       setNameError(null);
     }
   }, [displayModelName]);
+
+  // Replace the effect for Object URLs with thumbnail generation
+  useEffect(() => {
+    const generateThumbnails = async () => {
+      if (uploadedImages.length === 0) {
+        setThumbnails([]);
+        return;
+      }
+      
+      // Set loading state
+      setIsGeneratingPreviews(true);
+      
+      try {
+        // Process images in small batches to avoid memory pressure
+        // Note: These thumbnails are only for UI preview - the original full-resolution images
+        // will be used for actual model training
+        const newThumbnails: string[] = [];
+        const batchSize = 2;
+        const numBatches = Math.ceil(uploadedImages.length / batchSize);
+        
+        for (let batchIndex = 0; batchIndex < numBatches; batchIndex++) {
+          const start = batchIndex * batchSize;
+          const end = Math.min(start + batchSize, uploadedImages.length);
+          const batch = uploadedImages.slice(start, end);
+          
+          // Process each image in the batch
+          const batchThumbnails = await Promise.all(
+            batch.map(file => createThumbnail(file))
+          );
+          
+          newThumbnails.push(...batchThumbnails);
+          
+          // Small delay to prevent UI freezing
+          if (batchIndex < numBatches - 1) {
+            await new Promise(resolve => setTimeout(resolve, 10));
+          }
+        }
+        
+        setThumbnails(newThumbnails);
+      } catch (error) {
+        console.error("Error generating thumbnails:", error);
+        toast.error("Failed to generate image previews");
+      } finally {
+        setIsGeneratingPreviews(false);
+      }
+    };
+    
+    generateThumbnails();
+    
+    // No need for cleanup as we're using data URLs, not object URLs
+  }, [uploadedImages]);
+
+  // Update effect for handling dragActive changes
+  useEffect(() => {
+    // Dispatch event to hide/show ActionButtons when drag overlay state changes
+    const event = new CustomEvent('imageDropOverlayStateChange', { 
+      detail: { isOpen: dragActive } 
+    });
+    window.dispatchEvent(event);
+  }, [dragActive]);
+
+  // Add global event listeners for drag and drop
+  useEffect(() => {
+    const handleGlobalDragOver = (e: DragEvent) => {
+      e.preventDefault();
+      if (e.dataTransfer?.items && containsImageFiles(e.dataTransfer.items)) {
+        setDragActive(true);
+      }
+    };
+    
+    const handleGlobalDragLeave = (e: DragEvent) => {
+      e.preventDefault();
+      // Only consider leaving if it's to the document.body or document.documentElement
+      if (e.target === document.body || e.target === document.documentElement) {
+        setDragActive(false);
+      }
+    };
+    
+    const handleGlobalDragEnd = () => {
+      setDragActive(false);
+    };
+
+    const handleGlobalDrop = () => {
+      setDragActive(false);
+    };
+
+    const handleGlobalMouseLeave = () => {
+      setDragActive(false);
+    };
+
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setDragActive(false);
+      }
+    };
+    
+    document.addEventListener('dragover', handleGlobalDragOver);
+    document.addEventListener('dragleave', handleGlobalDragLeave);
+    document.addEventListener('dragend', handleGlobalDragEnd);
+    document.addEventListener('drop', handleGlobalDrop);
+    document.addEventListener('mouseleave', handleGlobalMouseLeave);
+    document.addEventListener('keydown', handleGlobalKeyDown);
+    
+    return () => {
+      document.removeEventListener('dragover', handleGlobalDragOver);
+      document.removeEventListener('dragleave', handleGlobalDragLeave);
+      document.removeEventListener('dragend', handleGlobalDragEnd);
+      document.removeEventListener('drop', handleGlobalDrop);
+      document.removeEventListener('mouseleave', handleGlobalMouseLeave);
+      document.removeEventListener('keydown', handleGlobalKeyDown);
+    };
+  }, []);
+
+  // Clean up Supabase resources when component unmounts - remove since no realtime
+  useEffect(() => {
+    // No cleanup needed anymore
+  }, []);
+
+  // Remove an image from the uploaded images
+  const removeImage = (index: number) => {
+    const newImages = [...uploadedImages];
+    newImages.splice(index, 1);
+    setUploadedImages(newImages);
+    // Show message about how many more images are needed
+    const remainingNeeded = Math.max(MIN_IMAGES - newImages.length, 0);
+    if (newImages.length < MIN_IMAGES) {
+      toast.info(`Add ${remainingNeeded} more image(s) to reach the minimum of ${MIN_IMAGES}.`);
+    } else {
+      toast.info(`${newImages.length} image(s) selected.`);
+    }
+  };
+
+  // Check if the dragged items contain image files
+  const containsImageFiles = (items: DataTransferItemList): boolean => {
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      if (item.kind === 'file' && item.type.startsWith('image/')) {
+        return true;
+      }
+    }
+    return false;
+  };
+
+  // Handle page-level drag events
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    // Only show overlay if dragging image files
+    if (e.dataTransfer.items && containsImageFiles(e.dataTransfer.items)) {
+      setDragActive(true);
+    }
+  };
+
+  const handleDragEnter = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    if (e.dataTransfer.items && containsImageFiles(e.dataTransfer.items)) {
+      setDragActive(true);
+    }
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    // Only set to false if we're leaving the main container
+    if (e.currentTarget === e.target) {
+      setDragActive(false);
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(false);
+    
+    // If the dragged items are not files, do nothing
+    if (!e.dataTransfer.files || e.dataTransfer.files.length === 0) {
+      return;
+    }
+    
+    // Create an array from the FileList and filter only image files
+    const fileArray = Array.from(e.dataTransfer.files);
+    const imageFiles = fileArray.filter(file => file.type.startsWith('image/'));
+    
+    if (imageFiles.length === 0) {
+      toast.error('Only image files are accepted (JPG, PNG, WebP).');
+      return;
+    }
+
+    const potentialTotalImages = uploadedImages.length + imageFiles.length;
+
+    // Check only if the drop would exceed the absolute maximum.
+    // The main onDrop handler (from useDropzone) will manage messages related to MIN_IMAGES.
+    if (potentialTotalImages > MAX_IMAGES) {
+      toast.error(
+        `Cannot add ${imageFiles.length} image(s). Maximum is ${MAX_IMAGES} images. ` +
+        `(Current: ${uploadedImages.length}, adding these would make ${potentialTotalImages} total).`
+      );
+      return;
+    }
+    
+    // Delegate to the main onDrop handler from useDropzone.
+    // This handler will process files, check sizes, and manage MIN_IMAGES/MAX_IMAGES logic consistently.
+    onDrop(imageFiles);
+  };
+
+  // Handle gender selection
+  const handleGenderSelect = (genderValue: string) => {
+    if (selectedGender === genderValue) {
+      setSelectedGender(null);
+      setGenderError("Please select the gender of the subject for better model results");
+    } else {
+      setSelectedGender(genderValue);
+      setGenderError(null);
+    }
+  };
 
   // Handle form submission - now combines model creation and training
   const handleSubmit = async (e: React.FormEvent) => {
@@ -494,387 +929,119 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
     }
   };
 
-  // Define new constants for the number of images
-  const MIN_IMAGES = 12;
-  const MAX_IMAGES = 20;
-
-  // Handle file drop for the dropzone component
-  const onDrop = useCallback((acceptedFiles: File[]) => {
-    // If already processing, don't accept more files
-    if (isGeneratingPreviews || isProcessing) {
-      toast.error("Please wait for current processing to complete");
-      return;
-    }
-
-    const newImages = [...uploadedImages];
-    
-    // Check if the total size of existing and new files would exceed 200MB
-    const MAX_TOTAL_SIZE = 200 * 1024 * 1024; // 200MB in bytes
-    const MAX_INDIVIDUAL_FILE_SIZE = 10 * 1024 * 1024; // 10MB per file
-    const currentTotalSize = uploadedImages.reduce((total, file) => total + file.size, 0);
-    let newFilesTotalSize = 0;
-    const validFiles: File[] = [];
-    const oversizedFiles: File[] = [];
-    
-    // Sort files by size in ascending order to prioritize smaller files
-    const sortedFiles = [...acceptedFiles].sort((a, b) => a.size - b.size);
-    
-    // Process files in order until we hit the size limit
-    for (let i = 0; i < sortedFiles.length; i++) {
-      const file = sortedFiles[i];
-      
-      // Check individual file size first
-      if (file.size > MAX_INDIVIDUAL_FILE_SIZE) {
-        oversizedFiles.push(file);
-        continue;
-      }
-      
-      // Then check if adding this file would exceed total size limit
-      if (currentTotalSize + newFilesTotalSize + file.size <= MAX_TOTAL_SIZE) {
-        validFiles.push(file);
-        newFilesTotalSize += file.size;
-      } else {
-        // We've hit the total size limit
-        break;
-      }
-    }
-    
-    // Show appropriate error messages
-    if (oversizedFiles.length > 0) {
-      oversizedFiles.forEach(file => {
-        toast.error(`File "${file.name}" (${formatSizeInMB(file.size)}) exceeds the individual file limit of 10MB`);
-      });
-    }
-    
-    // Check if any files were rejected due to total size limit
-    const totalSizeRejected = sortedFiles.length - validFiles.length - oversizedFiles.length;
-    if (totalSizeRejected > 0) {
-      const wouldBeTotalSize = formatSizeInMB(currentTotalSize + sortedFiles.reduce((total, file) => total + file.size, 0));
-      toast.error(`${totalSizeRejected} file(s) were rejected because total size would be ${wouldBeTotalSize} (max 200MB)`);
-    }
-    
-    // Si aucun fichier valide, on arrête
-    if (validFiles.length === 0 && acceptedFiles.length > 0 && oversizedFiles.length < acceptedFiles.length) { // Check if validFiles is empty due to size, not because no files were accepted
-      // This case implies files were accepted by dropzone but then rejected by size logic here.
-      // Errors for oversized files or total size rejected already shown.
-      // If all accepted files were oversized or hit total size limit, validFiles would be empty.
-      return;
-    }
-    if (validFiles.length === 0 && acceptedFiles.length === 0) { // No files accepted by dropzone initially
-        return;
-    }
-    
-    // Vérifier si le total d'images dépasse la limite
-    if (newImages.length + validFiles.length > MAX_IMAGES) {
-      const excessCount = newImages.length + validFiles.length - MAX_IMAGES;
-      toast.error(`You can upload a maximum of ${MAX_IMAGES} images. Please remove ${excessCount}.`);
-      return;
-    }
-    // Vérifier si on n'atteint pas le minimum
-    if (newImages.length + validFiles.length < MIN_IMAGES) {
-      const neededCount = MIN_IMAGES - (newImages.length + validFiles.length);
-      toast.info(`Add ${neededCount} more image(s) to reach the minimum of ${MIN_IMAGES}.`);
-      // Add the files anyway to allow adding more later
-      setUploadedImages([...newImages, ...validFiles]);
-      return;
-    }
-    // If within the allowed range
-    setUploadedImages([...newImages, ...validFiles]);
-  }, [uploadedImages, isGeneratingPreviews, isProcessing, MIN_IMAGES, MAX_IMAGES]);
-
-  // Setup dropzone
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    onDrop,
-    accept: {
-      'image/jpeg': [],
-      'image/png': [],
-      'image/webp': []
-    },
-    maxFiles: MAX_IMAGES,
-    validator: (file) => {
-      // Check individual file size first
-      const MAX_INDIVIDUAL_FILE_SIZE = 10 * 1024 * 1024; // 10MB
-      if (file.size > MAX_INDIVIDUAL_FILE_SIZE) {
-        return {
-          code: 'file-too-large',
-          message: `File "${file.name}" (${formatSizeInMB(file.size)}) exceeds the individual file limit of 10MB`
-        };
-      }
-      
-      // Then check total size
-      const currentTotalSize = uploadedImages.reduce((total, f) => total + f.size, 0);
-      const MAX_TOTAL_SIZE = 200 * 1024 * 1024; // 200MB
-      
-      if (currentTotalSize + file.size > MAX_TOTAL_SIZE) {
-        const wouldBeTotalSize = formatSizeInMB(currentTotalSize + file.size);
-        return {
-          code: 'total-size-too-large',
-          message: `Adding this file would make total size ${wouldBeTotalSize} (max 200MB)`
-        };
-      }
-      
-      return null;
-    },
-    onDropRejected: (rejectedFiles) => {
-      const typeRejected = rejectedFiles.filter(item => 
-        item.errors.some(err => err.code === 'file-invalid-type')
-      );
-      
-      const individualSizeRejected = rejectedFiles.filter(item => 
-        item.errors.some(err => err.code === 'file-too-large')
-      );
-      
-      const totalSizeRejected = rejectedFiles.filter(item => 
-        item.errors.some(err => err.code === 'total-size-too-large')
-      );
-      
-      const tooManyFiles = rejectedFiles.some(item => 
-        item.errors.some(err => err.code === 'too-many-files')
-      );
-      
-      if (typeRejected.length > 0) {
-        toast.error(`${typeRejected.length} file(s) have an invalid file type. Only JPG, PNG, and WebP formats are accepted.`);
-      }
-      
-      individualSizeRejected.forEach(item => {
-        toast.error(`File "${item.file.name}" (${formatSizeInMB(item.file.size)}) exceeds the individual file limit of 10MB`);
-      });
-      
-      totalSizeRejected.forEach(item => {
-        const currentTotalSize = uploadedImages.reduce((total, file) => total + file.size, 0);
-        const wouldBeTotalSize = formatSizeInMB(currentTotalSize + item.file.size);
-        toast.error(`Adding "${item.file.name}" would make total size ${wouldBeTotalSize} (max 200MB)`);
-      });
-
-      if (tooManyFiles) {
-        const remainingSlots = MAX_IMAGES - uploadedImages.length;
-        if (remainingSlots > 0) {
-          toast.error(`You can add a maximum of ${remainingSlots} more image(s).`);
-        } else {
-          toast.error(`You already have ${MAX_IMAGES} images. Please remove some before adding more.`);
-        }
-      }
-    }
-  });
-
-  // Remove an image from the uploaded images
-  const removeImage = (index: number) => {
-    const newImages = [...uploadedImages];
-    newImages.splice(index, 1);
-    setUploadedImages(newImages);
-    // Show message about how many more images are needed
-    const remainingNeeded = Math.max(MIN_IMAGES - newImages.length, 0);
-    if (newImages.length < MIN_IMAGES) {
-      toast.info(`Add ${remainingNeeded} more image(s) to reach the minimum of ${MIN_IMAGES}.`);
-    } else {
-      toast.info(`${newImages.length} image(s) selected.`);
-    }
-  };
-
-  // Check if the dragged items contain image files
-  const containsImageFiles = (items: DataTransferItemList): boolean => {
-    for (let i = 0; i < items.length; i++) {
-      const item = items[i];
-      if (item.kind === 'file' && item.type.startsWith('image/')) {
-        return true;
-      }
-    }
-    return false;
-  };
-
-  // Handle page-level drag events
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    
-    // Only show overlay if dragging image files
-    if (e.dataTransfer.items && containsImageFiles(e.dataTransfer.items)) {
-      setDragActive(true);
-    }
-  };
-
-  const handleDragEnter = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    
-    if (e.dataTransfer.items && containsImageFiles(e.dataTransfer.items)) {
-      setDragActive(true);
-    }
-  };
-
-  const handleDragLeave = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    
-    // Only set to false if we're leaving the main container
-    if (e.currentTarget === e.target) {
-      setDragActive(false);
-    }
-  };
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setDragActive(false);
-    
-    // If the dragged items are not files, do nothing
-    if (!e.dataTransfer.files || e.dataTransfer.files.length === 0) {
-      return;
-    }
-    
-    // Create an array from the FileList and filter only image files
-    const fileArray = Array.from(e.dataTransfer.files);
-    const imageFiles = fileArray.filter(file => file.type.startsWith('image/'));
-    
-    if (imageFiles.length === 0) {
-      toast.error('Only image files are accepted (JPG, PNG, WebP).');
-      return;
-    }
-
-    const potentialTotalImages = uploadedImages.length + imageFiles.length;
-
-    // Check only if the drop would exceed the absolute maximum.
-    // The main onDrop handler (from useDropzone) will manage messages related to MIN_IMAGES.
-    if (potentialTotalImages > MAX_IMAGES) {
-      toast.error(
-        `Cannot add ${imageFiles.length} image(s). Maximum is ${MAX_IMAGES} images. ` +
-        `(Current: ${uploadedImages.length}, adding these would make ${potentialTotalImages} total).`
-      );
-      return;
-    }
-    
-    // Delegate to the main onDrop handler from useDropzone.
-    // This handler will process files, check sizes, and manage MIN_IMAGES/MAX_IMAGES logic consistently.
-    onDrop(imageFiles);
-  };
-
-  // Update effect for handling dragActive changes
-  useEffect(() => {
-    // Dispatch event to hide/show ActionButtons when drag overlay state changes
-    const event = new CustomEvent('imageDropOverlayStateChange', { 
-      detail: { isOpen: dragActive } 
-    });
-    window.dispatchEvent(event);
-  }, [dragActive]);
-
-  // Add global event listeners for drag and drop
-  useEffect(() => {
-    const handleGlobalDragOver = (e: DragEvent) => {
-      e.preventDefault();
-      if (e.dataTransfer?.items && containsImageFiles(e.dataTransfer.items)) {
-        setDragActive(true);
-      }
-    };
-    
-    const handleGlobalDragLeave = (e: DragEvent) => {
-      e.preventDefault();
-      // Only consider leaving if it's to the document.body or document.documentElement
-      if (e.target === document.body || e.target === document.documentElement) {
-        setDragActive(false);
-      }
-    };
-    
-    const handleGlobalDragEnd = () => {
-      setDragActive(false);
-    };
-
-    const handleGlobalDrop = () => {
-      setDragActive(false);
-    };
-
-    const handleGlobalMouseLeave = () => {
-      setDragActive(false);
-    };
-
-    const handleGlobalKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        setDragActive(false);
-      }
-    };
-    
-    document.addEventListener('dragover', handleGlobalDragOver);
-    document.addEventListener('dragleave', handleGlobalDragLeave);
-    document.addEventListener('dragend', handleGlobalDragEnd);
-    document.addEventListener('drop', handleGlobalDrop);
-    document.addEventListener('mouseleave', handleGlobalMouseLeave);
-    document.addEventListener('keydown', handleGlobalKeyDown);
-    
-    return () => {
-      document.removeEventListener('dragover', handleGlobalDragOver);
-      document.removeEventListener('dragleave', handleGlobalDragLeave);
-      document.removeEventListener('dragend', handleGlobalDragEnd);
-      document.removeEventListener('drop', handleGlobalDrop);
-      document.removeEventListener('mouseleave', handleGlobalMouseLeave);
-      document.removeEventListener('keydown', handleGlobalKeyDown);
-    };
-  }, []);
-
-  // Replace the effect for Object URLs with thumbnail generation
-  useEffect(() => {
-    const generateThumbnails = async () => {
-      if (uploadedImages.length === 0) {
-        setThumbnails([]);
-        return;
-      }
-      
-      // Set loading state
-      setIsGeneratingPreviews(true);
-      
-      try {
-        // Process images in small batches to avoid memory pressure
-        // Note: These thumbnails are only for UI preview - the original full-resolution images
-        // will be used for actual model training
-        const newThumbnails: string[] = [];
-        const batchSize = 2;
-        const numBatches = Math.ceil(uploadedImages.length / batchSize);
-        
-        for (let batchIndex = 0; batchIndex < numBatches; batchIndex++) {
-          const start = batchIndex * batchSize;
-          const end = Math.min(start + batchSize, uploadedImages.length);
-          const batch = uploadedImages.slice(start, end);
-          
-          // Process each image in the batch
-          const batchThumbnails = await Promise.all(
-            batch.map(file => createThumbnail(file))
-          );
-          
-          newThumbnails.push(...batchThumbnails);
-          
-          // Small delay to prevent UI freezing
-          if (batchIndex < numBatches - 1) {
-            await new Promise(resolve => setTimeout(resolve, 10));
-          }
-        }
-        
-        setThumbnails(newThumbnails);
-      } catch (error) {
-        console.error("Error generating thumbnails:", error);
-        toast.error("Failed to generate image previews");
-      } finally {
-        setIsGeneratingPreviews(false);
-      }
-    };
-    
-    generateThumbnails();
-    
-    // No need for cleanup as we're using data URLs, not object URLs
-  }, [uploadedImages]);
-
-  // Clean up Supabase resources when component unmounts - remove since no realtime
-  useEffect(() => {
-    // No cleanup needed anymore
-  }, []);
-
-  // Handle gender selection
-  const handleGenderSelect = (genderValue: string) => {
-    if (selectedGender === genderValue) {
-      setSelectedGender(null);
-      setGenderError("Please select the gender of the subject for better model results");
-    } else {
-      setSelectedGender(genderValue);
-      setGenderError(null);
-    }
-  };
+  // Show loading state while checking subscription
+  if (isLoadingSubscription) {
+    return (
+      <ErrorBoundary>
+        <div className="w-full bg-gradient-to-br from-card/95 via-card to-card/90 border border-border/60 rounded-2xl overflow-hidden shadow-xl backdrop-blur-sm">
+          <div className="p-6 flex items-center justify-center">
+            <div className="text-center space-y-4">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+              <p className="text-muted-foreground">Loading subscription information...</p>
+            </div>
+          </div>
+        </div>
+      </ErrorBoundary>
+    );
+  }
+  
+  // Show error state if subscription check failed
+  if (subscriptionError) {
+    return (
+      <ErrorBoundary>
+        <div className="w-full bg-gradient-to-br from-card/95 via-card to-card/90 border border-border/60 rounded-2xl overflow-hidden shadow-xl backdrop-blur-sm">
+          <div className="p-6">
+            <div className="text-center space-y-4">
+              <div className="p-4 rounded-lg bg-destructive/10 text-destructive">
+                <h3 className="font-semibold mb-2">Subscription Error</h3>
+                <p className="text-sm">{subscriptionError}</p>
+              </div>
+              <Button
+                onClick={() => window.location.href = '/plans'}
+                className="bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary/80"
+              >
+                View Plans
+              </Button>
+            </div>
+          </div>
+        </div>
+      </ErrorBoundary>
+    );
+  }
+  
+  // Show upgrade message if no models remaining
+  if (subscription && subscription.models_remaining <= 0) {
+    return (
+      <ErrorBoundary>
+        <div className="min-h-[60vh] flex items-center justify-center p-4">
+          <div className="w-full max-w-md bg-gradient-to-br from-card/95 via-card to-card/90 border border-border/60 rounded-2xl overflow-hidden shadow-xl backdrop-blur-sm">
+            <div className="p-6">
+              <div className="text-center space-y-5">
+                <div className="space-y-3">
+                  <div className="mx-auto w-14 h-14 bg-gradient-to-br from-blue-100 to-blue-200 dark:from-blue-900/50 dark:to-blue-800/50 rounded-full flex items-center justify-center">
+                    <svg className="w-7 h-7 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                    </svg>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <h2 className="text-xl font-bold text-foreground">Need More Models?</h2>
+                    <p className="text-sm text-muted-foreground leading-relaxed">
+                      You&apos;ve successfully used all your model trainings this month! To continue creating amazing AI models, consider upgrading your plan.
+                    </p>
+                  </div>
+                </div>
+                
+                <div className="space-y-2">
+                  <Button
+                    onClick={() => window.location.href = '/plans'}
+                    size="sm"
+                    className="w-full bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary/80 text-primary-foreground shadow-md hover:shadow-lg font-medium"
+                  >
+                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                    </svg>
+                    Explore Plans
+                  </Button>
+                  
+                  <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+                    <DialogTrigger asChild>
+                      <Button 
+                        variant="outline"
+                        size="sm"
+                        className="w-full bg-background/50 backdrop-blur-sm border-border/60 hover:border-border hover:bg-background/80 transition-all duration-200"
+                      >
+                        <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                        </svg>
+                        My Models
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent className="sm:max-w-4xl">
+                      <DialogHeader>
+                        <DialogTitle>My Models</DialogTitle>
+                        <DialogDescription>
+                          Manage your trained models and ongoing trainings.
+                        </DialogDescription>
+                      </DialogHeader>
+                      <ModelListTable 
+                        newTraining={trainingStatus} 
+                        onClearNewTraining={() => onTrainingStatusChange(null)}
+                      />
+                    </DialogContent>
+                  </Dialog>
+                </div>
+                
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  Meanwhile, you can still use your existing models for generating images ✨
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </ErrorBoundary>
+    );
+  }
 
   if (currentStep === 1) {
     return (
@@ -1016,12 +1183,12 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus }: TrainFormP
                     <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
                     </svg>
-                    View Your Models
+                    My Models
                   </Button>
                 </DialogTrigger>
                 <DialogContent className="sm:max-w-4xl">
                   <DialogHeader>
-                    <DialogTitle>Your Models</DialogTitle>
+                    <DialogTitle>My Models</DialogTitle>
                     <DialogDescription>
                       Manage your trained models and ongoing trainings.
                     </DialogDescription>

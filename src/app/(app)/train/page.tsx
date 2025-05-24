@@ -16,6 +16,7 @@ function TrainPageContent() {
   const [activeTraining, setActiveTraining] = useState<TrainingStatus | null>(null); // Initialized to null
   const [isLoadingPersistentTraining, setIsLoadingPersistentTraining] = useState(true);
   const [internalTrainingStatus, setInternalTrainingStatus] = useState<TrainingStatus | null>(null); // Initialized to null
+  const [hasModelsRemaining, setHasModelsRemaining] = useState<boolean>(true); // Track if user has models remaining
 
   useEffect(() => {
     const storedDetailsStr = localStorage.getItem(ACTIVE_TRAINING_DETAILS_KEY);
@@ -171,7 +172,7 @@ function TrainPageContent() {
     <div className="max-w-4xl mx-auto p-4 sm:p-8 md:p-12 relative min-h-[60vh]">
       {showOverlay && <TrainingInProgressOverlay />}
       
-      {!showOverlay && (
+      {!showOverlay && hasModelsRemaining && (
         <div className="mb-8"> {/* Wrapper for the animated images when form is visible */}
           <AnimatedTrainingImages />
         </div>
@@ -180,7 +181,8 @@ function TrainPageContent() {
       <div style={{ visibility: showOverlay ? 'hidden' : 'visible', height: showOverlay ? '0px' : 'auto', overflow: showOverlay ? 'hidden': 'visible' }}>
         <TrainForm
           onTrainingStatusChange={handleTrainingFormStatusChange}
-          trainingStatus={internalTrainingStatus} 
+          trainingStatus={internalTrainingStatus}
+          onModelsRemainingChange={setHasModelsRemaining}
         />
       </div>
     </div>
