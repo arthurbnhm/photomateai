@@ -9,7 +9,7 @@ import { creditEvents } from "./CreditCounter"
 import { cn } from "@/lib/utils"
 import TextareaAutosize from 'react-textarea-autosize'
 import Image from 'next/image'
-import { Plus, UserSquare2, ImageIcon, Type, Bug, ChevronDown, ChevronUp } from 'lucide-react'
+import { Plus, UserSquare2, ImageIcon, Type } from 'lucide-react'
 
 import { Button } from "@/components/ui/button"
 import {
@@ -171,8 +171,6 @@ export function PromptForm({
   const [selectedGender, setSelectedGender] = useState<string | null>(null);
   const [uploadedImageDataUrl, setUploadedImageDataUrl] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState("prompt"); // To track active tab
-  const [showDebugLogs, setShowDebugLogs] = useState(false);
-  const [debugLogs, setDebugLogs] = useState<Array<{timestamp: string, level: 'info' | 'error' | 'warn', message: string}>>([]);
 
   const placeholderExamples = useMemo(() => [
     "A woman portrait on studio grey background, smiling",
@@ -290,17 +288,6 @@ export function PromptForm({
     // No longer disabling aspect ratio here, backend will handle it.
   }, []);
   
-  // Debug logging function
-  const addDebugLog = useCallback((level: 'info' | 'error' | 'warn', message: string) => {
-    const timestamp = new Date().toLocaleTimeString();
-    setDebugLogs(prev => [...prev, { timestamp, level, message }]);
-  }, []);
-
-  // Clear debug logs
-  const clearDebugLogs = useCallback(() => {
-    setDebugLogs([]);
-  }, []);
-  
   // Add a pending generation
   const addPendingGeneration = (generation: PendingGeneration) => {
     // Add start time if not provided
@@ -329,22 +316,13 @@ export function PromptForm({
       setError(null);
       setErrorDetails(null);
       onGenerationStart?.();
-      
-      addDebugLog('info', '🚀 Starting image generation process...');
 
       const { prompt, aspectRatio, outputFormat, modelId, imageDataUrl } = submissionData;
 
       if (!modelId) {
-        addDebugLog('error', '❌ No model selected');
         setError("Please select a model.");
         onGenerationComplete?.();
         return;
-      }
-
-      addDebugLog('info', `📋 Generation parameters: prompt="${prompt.substring(0, 50)}...", aspectRatio="${aspectRatio}", format="${outputFormat}"`);
-      
-      if (imageDataUrl) {
-        addDebugLog('info', `🖼️ Image provided: ${imageDataUrl.length} characters, format: ${imageDataUrl.substring(0, 30)}`);
       }
 
       const tempId = Date.now().toString();
@@ -375,7 +353,6 @@ export function PromptForm({
         modelDisplayName = selectedModel.display_name || selectedModel.model_id || '';
         modelVersion = selectedModel.version || null;
         modelGender = selectedModel.gender || null;
-        addDebugLog('info', `✅ Model found: ${modelDisplayName} (${modelApiId}), version: ${modelVersion}, gender: ${modelGender}`);
       }
 
       addPendingGeneration({
@@ -404,17 +381,14 @@ export function PromptForm({
               // setCreditDeducting(true);
               creditEvents.update(currentCredits - 1);
               // setTimeout(() => setCreditDeducting(false), 2000);
-              addDebugLog('info', `💳 Credits updated: ${currentCredits} → ${currentCredits - 1}`);
             }
           }
         }
       } catch (err) {
         console.error('Error fetching current credits for UI update:', err);
-        addDebugLog('warn', '⚠️ Could not update credit counter in UI');
       }
 
       if (!modelApiId) {
-        addDebugLog('error', '❌ No valid model API ID found');
         setError("Please select a valid model.");
         removePendingGeneration(tempId);
         onGenerationComplete?.();
@@ -423,13 +397,12 @@ export function PromptForm({
 
       const supabase = getSupabase();
       const abortController = new AbortController();
-      const timeoutId = setTimeout(() => abortController.abort(), 60000);
+      const timeoutId = setTimeout(() => abortController.abort(), 60000); // Increased from 30s to 60s
       let authHeader = {};
       if (userId) {
         const { data: { session } } = await supabase.auth.getSession();
         if (session?.access_token) {
           authHeader = { 'Authorization': `Bearer ${session.access_token}` };
-          addDebugLog('info', '🔐 Authentication header added');
         }
       }
 
@@ -458,12 +431,10 @@ export function PromptForm({
 
       if (imageDataUrl) {
         requestBody.image_data_url = imageDataUrl;
-        addDebugLog('info', `🔗 Image data attached to request (${imageDataUrl.length} chars)`);
       }
 
       let response;
       try {
-        addDebugLog('info', '📤 Sending request to /api/generate...');
         console.log('🚀 Sending request to /api/generate...');
         console.log('📋 Request body preview:', {
           prompt: prompt.substring(0, 100) + (prompt.length > 100 ? '...' : ''),
@@ -486,22 +457,15 @@ export function PromptForm({
           signal: abortController.signal
         });
         
-        addDebugLog('info', `📨 API response received: status ${response.status} (${response.statusText})`);
-        
       } catch (err) {
         console.error('❌ Network error sending request:', err);
         console.error('📍 Error type:', typeof err);
         console.error('📋 Error details:', err instanceof Error ? err.message : 'Unknown');
         
-        const errorMsg = err instanceof Error ? err.message : 'Unknown network error';
-        addDebugLog('error', `❌ Network error: ${errorMsg}`);
-        
         if (err instanceof Error && err.name === 'AbortError') {
-          addDebugLog('error', '⏰ Request timed out (60s limit exceeded)');
           setError('Request timed out. The image processing is taking longer than expected. Please try again.');
         } else if (err instanceof Error && err.message.includes('string did not match')) {
           console.error('🎯 FOUND "string did not match" error in network request!');
-          addDebugLog('error', '🎯 FOUND "string did not match" error in network layer!');
           setError('Failed to process image. The image format may be unsupported. Please try a different image.');
         } else {
           setError('Failed to send request. Please try again.');
@@ -514,11 +478,9 @@ export function PromptForm({
 
       if (!response.ok) {
         console.error('❌ API response not OK:', response.status, response.statusText);
-        addDebugLog('error', `❌ API error: ${response.status} ${response.statusText}`);
         
         // Handle different types of error responses
         if (response.status === 504) {
-          addDebugLog('error', '⏰ Gateway timeout - API processing took too long');
           setError('The request timed out on the server. This usually happens with large images. Please try with a smaller image or try again.');
           removePendingGeneration(tempId);
           onGenerationComplete?.();
@@ -529,22 +491,18 @@ export function PromptForm({
         let errorData: {error?: string, details?: string, debugLogs?: Array<{timestamp: string, step: string, details: unknown}>} | null = null;
         try {
           const responseText = await response.text();
-          addDebugLog('info', `📄 Raw response text length: ${responseText.length}`);
           
           // Try to parse as JSON
           try {
             errorData = JSON.parse(responseText);
-            addDebugLog('info', '✅ Successfully parsed error response as JSON');
           } catch {
             // If JSON parsing fails, the response is probably HTML (like 504 pages)
-            addDebugLog('error', `❌ Failed to parse as JSON - response is likely HTML/text: ${responseText.substring(0, 200)}...`);
             setError(`Server error (${response.status}): The request could not be processed. Please try again.`);
             removePendingGeneration(tempId);
             onGenerationComplete?.();
             return;
           }
-        } catch (textError) {
-          addDebugLog('error', `❌ Failed to read response text: ${textError instanceof Error ? textError.message : 'Unknown'}`);
+        } catch {
           setError(`Server error (${response.status}): Unable to read error details.`);
           removePendingGeneration(tempId);
           onGenerationComplete?.();
@@ -553,19 +511,9 @@ export function PromptForm({
         
         if (errorData) {
           console.error('📋 Error response data:', errorData);
-          addDebugLog('error', `📋 API error details: ${JSON.stringify(errorData)}`);
-          
-          // Merge API debug logs from error response if they exist
-          if (errorData.debugLogs && Array.isArray(errorData.debugLogs)) {
-            addDebugLog('error', '📋 Merging API error debug logs...');
-            errorData.debugLogs.forEach((apiLog: {timestamp: string, step: string, details: unknown}) => {
-              addDebugLog('error', `[API] ${apiLog.step}: ${JSON.stringify(apiLog.details)}`);
-            });
-          }
           
           if (errorData.error && errorData.error.includes('string did not match')) {
             console.error('🎯 FOUND "string did not match" error in API response!');
-            addDebugLog('error', '🎯 FOUND "string did not match" error in API response!');
           }
           
           setError(errorData.error || 'Failed to generate image');
@@ -579,15 +527,6 @@ export function PromptForm({
 
       const result = await response.json();
       console.log('✅ API request successful:', result);
-      addDebugLog('info', `✅ Generation started successfully! ID: ${result.replicate_id || result.id}`);
-      
-      // Merge API debug logs if they exist
-      if (result.debugLogs && Array.isArray(result.debugLogs)) {
-        addDebugLog('info', '📋 Merging API debug logs...');
-        result.debugLogs.forEach((apiLog: {timestamp: string, step: string, details: unknown}) => {
-          addDebugLog('info', `[API] ${apiLog.step}: ${JSON.stringify(apiLog.details)}`);
-        });
-      }
       
       if (result && result.replicate_id) {
         setPendingGenerations(prev =>
@@ -599,12 +538,10 @@ export function PromptForm({
       onGenerationComplete?.();
     } catch (fetchError) {
       if (fetchError instanceof Error && fetchError.name === 'AbortError') {
-        addDebugLog('error', '⏰ Request timed out (30s limit exceeded)');
         setError('Request timed out. Please try again.');
       } else {
         console.error('Error in generation execution:', fetchError);
         const errorMsg = fetchError instanceof Error ? fetchError.message : 'An unexpected error occurred';
-        addDebugLog('error', `💥 Unexpected error: ${errorMsg}`);
         setError(errorMsg);
       }
       onGenerationComplete?.();
@@ -1221,63 +1158,6 @@ export function PromptForm({
             <p className="text-sm text-destructive/90 leading-relaxed">{error}</p>
             {errorDetails && (
               <p className="text-xs text-destructive/70 mt-2 leading-relaxed">{errorDetails}</p>
-            )}
-          </div>
-        )}
-      </div>
-      
-      {/* Debug Panel - Discreet debug button and logs */}
-      <div className="mt-4 border border-border/40 rounded-xl bg-muted/20 overflow-hidden">
-        <div className="p-3 flex items-center justify-between">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setShowDebugLogs(!showDebugLogs)}
-            className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground"
-          >
-            <Bug size={14} />
-            Debug Logs ({debugLogs.length})
-            {showDebugLogs ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-          </Button>
-          {debugLogs.length > 0 && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={clearDebugLogs}
-              className="text-xs text-muted-foreground hover:text-foreground"
-            >
-              Clear
-            </Button>
-          )}
-        </div>
-        
-        {showDebugLogs && (
-          <div className="border-t border-border/40 bg-muted/10 p-4 max-h-64 overflow-y-auto">
-            {debugLogs.length === 0 ? (
-              <p className="text-xs text-muted-foreground italic">No debug logs yet. Try generating an image to see detailed logs here.</p>
-            ) : (
-              <div className="space-y-1">
-                {debugLogs.map((log, index) => (
-                  <div key={index} className="flex items-start gap-2 text-xs font-mono">
-                    <span className="text-muted-foreground shrink-0">{log.timestamp}</span>
-                    <span className={cn(
-                      "shrink-0",
-                      log.level === 'error' ? 'text-red-500' : 
-                      log.level === 'warn' ? 'text-yellow-500' : 
-                      'text-blue-500'
-                    )}>
-                      [{log.level.toUpperCase()}]
-                    </span>
-                    <span className={cn(
-                      log.level === 'error' ? 'text-red-600 dark:text-red-400' : 
-                      log.level === 'warn' ? 'text-yellow-600 dark:text-yellow-400' : 
-                      'text-muted-foreground'
-                    )}>
-                      {log.message}
-                    </span>
-                  </div>
-                ))}
-              </div>
             )}
           </div>
         )}
