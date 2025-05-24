@@ -139,6 +139,68 @@ interface PromptFormProps {
   onGenerationComplete?: () => void; // Optional prop
 }
 
+// Add localStorage utilities
+const LAST_USED_MODEL_KEY = 'photomateai_last_used_model_id';
+const LAST_USED_ASPECT_RATIO_KEY = 'photomateai_last_used_aspect_ratio';
+const LAST_USED_OUTPUT_FORMAT_KEY = 'photomateai_last_used_output_format';
+
+const getLastUsedModelId = (): string | null => {
+  if (typeof window === 'undefined') return null;
+  try {
+    return localStorage.getItem(LAST_USED_MODEL_KEY);
+  } catch (error) {
+    console.warn('Failed to get last used model from localStorage:', error);
+    return null;
+  }
+};
+
+const setLastUsedModelId = (modelId: string): void => {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(LAST_USED_MODEL_KEY, modelId);
+  } catch (error) {
+    console.warn('Failed to save last used model to localStorage:', error);
+  }
+};
+
+const getLastUsedAspectRatio = (): string | null => {
+  if (typeof window === 'undefined') return null;
+  try {
+    return localStorage.getItem(LAST_USED_ASPECT_RATIO_KEY);
+  } catch (error) {
+    console.warn('Failed to get last used aspect ratio from localStorage:', error);
+    return null;
+  }
+};
+
+const setLastUsedAspectRatio = (aspectRatio: string): void => {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(LAST_USED_ASPECT_RATIO_KEY, aspectRatio);
+  } catch (error) {
+    console.warn('Failed to save last used aspect ratio to localStorage:', error);
+  }
+};
+
+const getLastUsedOutputFormat = (): string | null => {
+  if (typeof window === 'undefined') return null;
+  try {
+    return localStorage.getItem(LAST_USED_OUTPUT_FORMAT_KEY);
+  } catch (error) {
+    console.warn('Failed to get last used output format from localStorage:', error);
+    return null;
+  }
+};
+
+const setLastUsedOutputFormat = (outputFormat: string): void => {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(LAST_USED_OUTPUT_FORMAT_KEY, outputFormat);
+  } catch (error) {
+    console.warn('Failed to save last used output format to localStorage:', error);
+  }
+};
+
 export function PromptForm({
   pendingGenerations, 
   setPendingGenerations,
@@ -202,8 +264,8 @@ export function PromptForm({
     resolver: zodResolver(formSchema),
     defaultValues: {
       prompt: "",
-      aspectRatio: "1:1",
-      outputFormat: "webp",
+      aspectRatio: getLastUsedAspectRatio() || "1:1",
+      outputFormat: getLastUsedOutputFormat() || "webp",
       modelId: "",
     },
   })
@@ -278,7 +340,16 @@ export function PromptForm({
   // Set default model when models are loaded
   useEffect(() => {
     if (models.length > 0 && !form.getValues().modelId) {
-      form.setValue('modelId', models[0].id);
+      // Try to get the last used model from localStorage
+      const lastUsedModelId = getLastUsedModelId();
+      
+      // Check if the last used model still exists in the current models list
+      const lastUsedModel = lastUsedModelId ? models.find(m => m.id === lastUsedModelId) : null;
+      
+      // Use the last used model if it exists, otherwise use the first model alphabetically
+      const defaultModelId = lastUsedModel ? lastUsedModel.id : models[0].id;
+      
+      form.setValue('modelId', defaultModelId);
     }
   }, [models, form]);
   
@@ -394,6 +465,13 @@ export function PromptForm({
         onGenerationComplete?.();
         return;
       }
+
+      // Save the selected model to localStorage for future use
+      setLastUsedModelId(modelId);
+
+      // Save the selected aspect ratio and output format to localStorage for future use
+      setLastUsedAspectRatio(aspectRatio);
+      setLastUsedOutputFormat(outputFormat);
 
       const supabase = getSupabase();
       const abortController = new AbortController();
