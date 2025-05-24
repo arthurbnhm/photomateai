@@ -10,34 +10,34 @@ interface ImageUploadProps {
   onImageChange: (imageDataUrl: string | null) => void;
   currentImageUrl: string | null;
   className?: string;
-  maxSizeMB?: number; // Optional size limit
-  maxDimension?: number; // Optional dimension limit
 }
 
-export function ImageUpload({ 
-  onImageChange, 
-  currentImageUrl, 
-  className,
-  maxSizeMB = 5, // Default 5MB limit
-  maxDimension = 2048 // Default 2048px max dimension
-}: ImageUploadProps) {
+export function ImageUpload({ onImageChange, currentImageUrl, className }: ImageUploadProps) {
   const [dragActive, setDragActive] = useState(false);
   const [uploadedFileName, setUploadedFileName] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Native image resizing using canvas
-  const resizeImage = useCallback((file: File): Promise<string> => {
+  // Simple, reliable image processing using canvas
+  const processImageFile = useCallback(async (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
-      const reader = new FileReader();
+      // Create image element
+      const img = new Image();
       
-      reader.onload = (e) => {
-        const img = new Image();
-        
-        img.onload = () => {
-          // Calculate new dimensions
-          let width = img.width;
-          let height = img.height;
+      img.onload = () => {
+        try {
+          // Create canvas
+          const canvas = document.createElement('canvas');
+          const ctx = canvas.getContext('2d');
+          
+          if (!ctx) {
+            reject(new Error('Failed to get canvas context'));
+            return;
+          }
+
+          // Calculate dimensions (max 1920px, maintain aspect ratio)
+          const maxDimension = 1920;
+          let { width, height } = img;
           
           if (width > maxDimension || height > maxDimension) {
             if (width > height) {
@@ -48,41 +48,79 @@ export function ImageUpload({
               height = maxDimension;
             }
           }
-          
-          // Create canvas and resize
-          const canvas = document.createElement('canvas');
+
           canvas.width = width;
           canvas.height = height;
+
+          // Draw image
+          ctx.drawImage(img, 0, 0, width, height);
+
+          // Convert to standardized data URL (always JPEG for consistency)
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
           
+          // Validate the data URL format is exactly what we expect
+          if (!dataUrl || !dataUrl.startsWith('data:image/jpeg;base64,')) {
+            reject(new Error('Failed to create valid data URL'));
+            return;
+          }
+
+          resolve(dataUrl);
+        } catch (error) {
+          reject(error);
+        }
+      };
+
+      img.onerror = () => {
+        reject(new Error('Failed to load image'));
+      };
+
+      // Create object URL and clean up afterwards
+      const objectUrl = URL.createObjectURL(file);
+      img.src = objectUrl;
+      
+      // Clean up object URL after image loads
+      img.onload = () => {
+        URL.revokeObjectURL(objectUrl);
+        try {
+          const canvas = document.createElement('canvas');
           const ctx = canvas.getContext('2d');
+          
           if (!ctx) {
             reject(new Error('Failed to get canvas context'));
             return;
           }
+
+          const maxDimension = 1920;
+          let { width, height } = img;
           
-          ctx.drawImage(img, 0, 0, width, height);
-          
-          // Convert to data URL with quality adjustment for size
-          let quality = 0.9;
-          let dataUrl = canvas.toDataURL(file.type === 'image/png' ? 'image/png' : 'image/jpeg', quality);
-          
-          // Reduce quality if still too large
-          while (dataUrl.length > maxSizeMB * 1024 * 1024 * 1.37 && quality > 0.1) { // 1.37 for base64 overhead
-            quality -= 0.1;
-            dataUrl = canvas.toDataURL('image/jpeg', quality);
+          if (width > maxDimension || height > maxDimension) {
+            if (width > height) {
+              height = (height / width) * maxDimension;
+              width = maxDimension;
+            } else {
+              width = (width / height) * maxDimension;
+              height = maxDimension;
+            }
           }
+
+          canvas.width = width;
+          canvas.height = height;
+          ctx.drawImage(img, 0, 0, width, height);
+
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
           
+          if (!dataUrl || !dataUrl.startsWith('data:image/jpeg;base64,')) {
+            reject(new Error('Failed to create valid data URL'));
+            return;
+          }
+
           resolve(dataUrl);
-        };
-        
-        img.onerror = () => reject(new Error('Failed to load image'));
-        img.src = e.target?.result as string;
+        } catch (error) {
+          reject(error);
+        }
       };
-      
-      reader.onerror = () => reject(new Error('Failed to read file'));
-      reader.readAsDataURL(file);
     });
-  }, [maxDimension, maxSizeMB]);
+  }, []);
 
   const processFile = useCallback(async (file: File | null) => {
     if (!file) {
@@ -94,52 +132,21 @@ export function ImageUpload({
     // Validate file type
     if (!file.type.startsWith('image/')) {
       console.error('Invalid file type:', file.type);
-      onImageChange(null);
-      setUploadedFileName(null);
+      return;
+    }
+
+    // Check file size (10MB limit)
+    if (file.size > 10 * 1024 * 1024) {
+      console.error('File too large:', file.size);
       return;
     }
 
     setIsProcessing(true);
 
     try {
-      // Check if file needs resizing
-      const needsResize = file.size > maxSizeMB * 1024 * 1024;
-      
-      if (needsResize) {
-        // Resize image using canvas
-        const dataUrl = await resizeImage(file);
-        
-        // Validate the data URL format
-        if (dataUrl && /^data:image\/(jpeg|jpg|png|webp|gif);base64,/.test(dataUrl)) {
-          onImageChange(dataUrl);
-          setUploadedFileName(file.name);
-        } else {
-          throw new Error('Invalid data URL format');
-        }
-      } else {
-        // For small files, just read directly
-        const reader = new FileReader();
-        
-        reader.onload = (e) => {
-          const result = e.target?.result;
-          if (typeof result === 'string' && /^data:image\/(jpeg|jpg|png|webp|gif);base64,/.test(result)) {
-            onImageChange(result);
-            setUploadedFileName(file.name);
-          } else {
-            console.error('Invalid data URL format');
-            onImageChange(null);
-            setUploadedFileName(null);
-          }
-        };
-        
-        reader.onerror = () => {
-          console.error('Failed to read file');
-          onImageChange(null);
-          setUploadedFileName(null);
-        };
-        
-        reader.readAsDataURL(file);
-      }
+      const dataUrl = await processImageFile(file);
+      onImageChange(dataUrl);
+      setUploadedFileName(file.name);
     } catch (error) {
       console.error('Error processing image:', error);
       onImageChange(null);
@@ -147,7 +154,7 @@ export function ImageUpload({
     } finally {
       setIsProcessing(false);
     }
-  }, [onImageChange, maxSizeMB, resizeImage]);
+  }, [onImageChange, processImageFile]);
 
   const handleFileChange = useCallback((event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -206,7 +213,7 @@ export function ImageUpload({
       <input
         ref={fileInputRef}
         type="file"
-        accept="image/jpeg,image/jpg,image/png,image/webp,image/gif"
+        accept="image/jpeg,image/jpg,image/png,image/webp"
         onChange={handleFileChange}
         className="hidden"
         disabled={isProcessing}
