@@ -25,6 +25,7 @@ interface Model {
   trainings: Training[];
   training_id?: string;
   training_status?: string;
+  gender?: string;
 }
 
 export async function GET(request: NextRequest) {

@@ -85,6 +85,7 @@ export async function POST(request: NextRequest) {
       modelName?: string;
       modelVersion?: string;
       image_data_url?: string;
+      modelGender?: string | null;
       // Add any other expected properties from the request body here
     }
 
@@ -97,7 +98,8 @@ export async function POST(request: NextRequest) {
         outputFormat, 
         modelId: requestModelId, 
         modelName: requestModelName, 
-        modelVersion 
+        modelVersion,
+        modelGender: requestModelGender 
     } = fullRequestBody;
     const originalPrompt = prompt; // Keep original prompt for fallback
     
@@ -128,6 +130,7 @@ export async function POST(request: NextRequest) {
 
     // Initialize model variables
     let finalModelVersion = null;
+    let modelGender: string | null = requestModelGender || null;
     
     // If model name is provided directly in the request, use it
     if (requestModelName) {
@@ -164,6 +167,11 @@ export async function POST(request: NextRequest) {
           // Use the model's version if available and not already set
           if (trainedModel.version && !finalModelVersion) {
             finalModelVersion = trainedModel.version;
+          }
+          
+          // Get the gender from the model if not provided in request
+          if (!modelGender && trainedModel.gender) {
+            modelGender = trainedModel.gender;
           }
         }
       } catch (err) {
@@ -253,6 +261,12 @@ export async function POST(request: NextRequest) {
       // For now, let's use a generic prompt. Consider making this behavior more sophisticated.
       prompt = "A generated image based on the provided reference."; 
       console.warn("Prompt was empty after OpenAI step (image provided, but no description and no original prompt). Using a generic prompt for Replicate.");
+    }
+
+    // Append gender to the prompt if available
+    if (modelGender && (modelGender === 'male' || modelGender === 'female')) {
+      const genderText = modelGender === 'male' ? ', the subject is a male' : ', the subject is a female';
+      prompt = prompt.trim() + genderText;
     }
 
     // Define a type for the Replicate input parameters
@@ -370,7 +384,6 @@ export async function POST(request: NextRequest) {
             status: prediction.status,
             input: inputForLogging, // Use the modified input for logging
             model_id: modelName
-            // user_id is now handled by Supabase trigger
           })
           .select()
           .single();

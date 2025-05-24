@@ -22,6 +22,7 @@ interface Model {
   training_id?: string;
   is_cancelled?: boolean;
   training_status?: string;
+  gender?: string;
 }
 
 interface ModelListResponse {

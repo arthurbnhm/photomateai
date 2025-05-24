@@ -48,6 +48,7 @@ interface Model {
   model_owner: string;     // Owner of the model
   display_name: string;    // Human-readable name chosen by the user
   version?: string;        // Optional version information
+  gender?: string;         // Gender of the model (male/female)
   // Other fields like created_at, is_deleted, user_id exist in DB but not needed in UI
 }
 
@@ -224,7 +225,7 @@ export function PromptForm({
         
         while (hasMorePages) {
           // Fetch one page at a time with fields parameter
-          const response = await fetch(`/api/model/list?is_cancelled=false&is_deleted=false&status=succeeded&page=${currentPage}&fields=id,display_name,model_id,model_owner,version`);
+          const response = await fetch(`/api/model/list?is_cancelled=false&is_deleted=false&status=succeeded&page=${currentPage}&fields=id,display_name,model_id,model_owner,version,gender`);
           if (!response.ok) {
             throw new Error('Failed to fetch models');
           }
@@ -345,11 +346,13 @@ export function PromptForm({
       let modelApiId: string | null = null;
       let modelVersion: string | null = null;
       let modelDisplayName = '';
+      let modelGender: string | null = null;
       const selectedModel = models.find(m => m.id === modelId);
       if (selectedModel) {
         modelApiId = selectedModel.model_id;
         modelDisplayName = selectedModel.display_name || selectedModel.model_id || '';
         modelVersion = selectedModel.version || null;
+        modelGender = selectedModel.gender || null;
       }
 
       addPendingGeneration({
@@ -412,6 +415,7 @@ export function PromptForm({
         modelName: string | null;
         userId: string | null;
         image_data_url?: string;
+        modelGender?: string | null;
       }
 
       const requestBody: GenerateRequestBody = {
@@ -422,6 +426,7 @@ export function PromptForm({
         modelVersion: modelVersion,
         modelName: modelApiId,
         userId: userId,
+        modelGender: modelGender,
       };
 
       if (imageDataUrl) {
