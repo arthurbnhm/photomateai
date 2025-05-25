@@ -41,7 +41,27 @@ export default function PlanForm({ plan, className, variant = 'outline' }: PlanF
       // Redirect to Stripe checkout
       if (data.url) {
         console.log('✅ Redirecting to:', data.url);
-        window.location.href = data.url; // Use window.location.href instead of router.push for external URLs
+        
+        // Try multiple redirect methods for better browser compatibility
+        try {
+          // Method 1: Direct location assignment (most reliable)
+          window.location.href = data.url;
+        } catch (redirectError) {
+          console.error('❌ Direct redirect failed, trying alternatives:', redirectError);
+          
+          // Method 2: Try window.open as backup
+          try {
+            const newWindow = window.open(data.url, '_self');
+            if (!newWindow) {
+              throw new Error('Popup blocked');
+            }
+          } catch (popupError) {
+            console.error('❌ Popup redirect failed:', popupError);
+            
+            // Method 3: Show manual link as last resort
+            alert(`Please click this link to complete your subscription: ${data.url}`);
+          }
+        }
       } else {
         throw new Error('No checkout URL returned from server');
       }
