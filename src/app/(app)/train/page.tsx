@@ -3,7 +3,7 @@
 import { useState, useEffect, Suspense } from "react";
 import { TrainForm, TrainingStatus } from "@/components/TrainForm";
 import { TrainingInProgressOverlay } from "@/components/TrainingInProgressOverlay";
-import { AnimatedTrainingImages } from "@/components/AnimatedTrainingImages";
+import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 
 const ACTIVE_TRAINING_DETAILS_KEY = 'photomate_activeTrainingDetails';
@@ -13,10 +13,9 @@ const ACTIVE_TRAINING_DETAILS_KEY = 'photomate_activeTrainingDetails';
 // --- End Debug Configuration ---
 
 function TrainPageContent() {
+  const { user, isLoading: isAuthLoading } = useAuth();
   const [activeTraining, setActiveTraining] = useState<TrainingStatus | null>(null); // Initialized to null
-  const [isLoadingPersistentTraining, setIsLoadingPersistentTraining] = useState(true);
   const [internalTrainingStatus, setInternalTrainingStatus] = useState<TrainingStatus | null>(null); // Initialized to null
-  const [hasModelsRemaining, setHasModelsRemaining] = useState<boolean>(true); // Track if user has models remaining
 
   useEffect(() => {
     const storedDetailsStr = localStorage.getItem(ACTIVE_TRAINING_DETAILS_KEY);
@@ -44,7 +43,6 @@ function TrainPageContent() {
       setActiveTraining(null);
       setInternalTrainingStatus(null);
     }
-    setIsLoadingPersistentTraining(false);
   }, []); // Empty dependency array, runs once on mount
 
   const handleTrainingFormStatusChange = (newStatus: TrainingStatus | null) => {
@@ -155,10 +153,6 @@ function TrainPageContent() {
     };
   }, [activeTraining, internalTrainingStatus]); // Added internalTrainingStatus dependency
 
-  if (isLoadingPersistentTraining) {
-    return <div className="max-w-4xl mx-auto p-4 sm:p-8 md:p-12 text-center">Loading training status...</div>;
-  }
-
   // Use local variable for clarity in JSX, `activeTraining` state is the source of truth
   const currentDisplayTraining = activeTraining;
 
@@ -172,17 +166,12 @@ function TrainPageContent() {
     <div className="max-w-4xl mx-auto p-4 sm:p-8 md:p-12 relative min-h-[60vh]">
       {showOverlay && <TrainingInProgressOverlay />}
       
-      {!showOverlay && hasModelsRemaining && (
-        <div className="mb-8"> {/* Wrapper for the animated images when form is visible */}
-          <AnimatedTrainingImages />
-        </div>
-      )}
-
       <div style={{ visibility: showOverlay ? 'hidden' : 'visible', height: showOverlay ? '0px' : 'auto', overflow: showOverlay ? 'hidden': 'visible' }}>
         <TrainForm
+          user={user}
+          isAuthLoading={isAuthLoading}
           onTrainingStatusChange={handleTrainingFormStatusChange}
           trainingStatus={internalTrainingStatus}
-          onModelsRemainingChange={setHasModelsRemaining}
         />
       </div>
     </div>

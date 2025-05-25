@@ -97,7 +97,7 @@ async function trainModel(modelOwner: string, modelName: string, zipUrl: string,
     const training = await replicate.trainings.create(
       "replicate",
       "fast-flux-trainer",
-      "d0f6d9aa8257e0fd535c4d20b3dc4d91d26d6329a45c5ff5109c6fbff107efd8",
+      "8b10794665aed907bb98a1a5324cd1d3a8bea0e9b31e65210967fb9c9e2e08ed",
       {
         destination: `${modelOwner}/${modelName}`,
         input: { ...TRAINING_PARAMS, input_images: zipUrl },

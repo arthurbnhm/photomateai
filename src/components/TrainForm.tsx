@@ -12,8 +12,10 @@ import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { useTheme } from "next-themes";
+import { User } from '@supabase/supabase-js';
 import JSZip from 'jszip';
 import { ModelListTable } from "@/components/ModelListTable";
+import { motion } from "framer-motion";
 import {
   Dialog,
   DialogContent,
@@ -69,6 +71,9 @@ interface TrainFormProps {
   onTrainingStatusChange: (status: TrainingStatus | null) => void;
   trainingStatus: TrainingStatus | null;
   onModelsRemainingChange?: (hasModelsRemaining: boolean) => void;
+  onSubscriptionLoadingChange?: (isLoading: boolean) => void;
+  user: User | null;
+  isAuthLoading: boolean;
 }
 
 // Add helper function to format bytes to MB with 2 decimal places
@@ -187,7 +192,102 @@ const createThumbnail = async (file: File, maxWidth = 500, maxHeight = 500): Pro
   });
 };
 
-export function TrainForm({ onTrainingStatusChange, trainingStatus, onModelsRemainingChange }: TrainFormProps) {
+// AnimatedTrainingImages component
+const AnimatedTrainingImages = () => {
+  const imageConfigs = [
+    { src: "/landing/01.webp", alt: "Sample 1", id: 'left', initialRotate: -8 },
+    { src: "/landing/02.webp", alt: "Sample 2", id: 'center', initialRotate: 0, initialScale: 1.05, initialZ: 10 },
+    { src: "/landing/03.webp", alt: "Sample 3", id: 'right', initialRotate: 8 },
+  ];
+
+  const animationProps = (config: typeof imageConfigs[0]) => {
+    if (config.id === 'center') {
+      return {
+        initial: {
+          rotate: config.initialRotate,
+          scale: config.initialScale,
+          zIndex: config.initialZ,
+        },
+        animate: {
+          rotate: config.initialRotate,
+          scale: config.initialScale,
+          zIndex: config.initialZ,
+        }
+      };
+    }
+
+    const direction = config.id === 'left' ? 1 : -1;
+    const initialX = 0;
+    const alignWithCenterTranslation = 72;
+    const nestedX = alignWithCenterTranslation * direction;
+    const nestedScale = 0.75;
+
+    const timeToNested = 0.8;
+    const timeHoldNested = 1.0;
+    const timeToInitial = 0.8;
+    const timeHoldInitial = 2.0;
+    const totalDuration = timeToNested + timeHoldNested + timeToInitial + timeHoldInitial;
+
+    return {
+      initial: {
+        rotate: config.initialRotate,
+        x: initialX,
+        scale: 1,
+        zIndex: 0,
+      },
+      animate: {
+        x: [initialX, nestedX, nestedX, initialX, initialX],
+        rotate: [config.initialRotate, 0, 0, config.initialRotate, config.initialRotate],
+        scale: [1, nestedScale, nestedScale, 1, 1],
+        zIndex: [0, 5, 5, 0, 0],
+      },
+      transition: {
+        duration: totalDuration,
+        repeat: Infinity,
+        ease: "easeInOut",
+        times: [
+          0,
+          timeToNested / totalDuration,
+          (timeToNested + timeHoldNested) / totalDuration,
+          (timeToNested + timeHoldNested + timeToInitial) / totalDuration,
+          1,
+        ],
+        delay: config.id === 'left' ? 0 : 0.2,
+      }
+    };
+  };
+
+  return (
+    <div className="flex justify-center items-center h-24 mb-6"> 
+      {imageConfigs.map((imgConfig, index) => {
+        const anim = animationProps(imgConfig);
+        return (
+          <motion.div
+            key={imgConfig.id}
+            className={`relative w-20 h-20 rounded-lg overflow-hidden shadow-md border-4 border-white 
+                       ${imgConfig.id === 'center' ? 'mx-1' : (imgConfig.id === 'left' ? 'mr-[-12px]' : 'ml-[-12px]')}`}
+            initial={anim.initial}
+            animate={anim.animate}
+            transition={anim.transition}
+          >
+            <div className="absolute inset-[-1px]">
+              <Image
+                src={imgConfig.src}
+                alt={imgConfig.alt}
+                fill
+                className="object-cover"
+                sizes="80px"
+                priority={index < 3}
+              />
+            </div>
+          </motion.div>
+        );
+      })}
+    </div>
+  );
+};
+
+export function TrainForm({ onTrainingStatusChange, trainingStatus, onModelsRemainingChange, onSubscriptionLoadingChange, user, isAuthLoading }: TrainFormProps) {
   // Initialize Supabase client
   const supabaseRef = useRef(createSupabaseBrowserClient());
   const getSupabase = useCallback(() => supabaseRef.current, []);
@@ -420,11 +520,15 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus, onModelsRema
   // Fetch user's subscription to check models_remaining
   useEffect(() => {
     const fetchSubscription = async () => {
+      // Don't fetch subscription while auth is still loading
+      if (isAuthLoading) {
+        return;
+      }
+      
       try {
         setIsLoadingSubscription(true);
         setSubscriptionError(null);
         
-        const { data: { user } } = await getSupabase().auth.getUser();
         if (!user) {
           setSubscriptionError("You must be logged in to train models");
           setIsLoadingSubscription(false);
@@ -454,7 +558,7 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus, onModelsRema
     };
     
     fetchSubscription();
-  }, [getSupabase]);
+  }, [getSupabase, user, isAuthLoading]);
 
   // Notify parent component about models remaining status
   useEffect(() => {
@@ -463,6 +567,14 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus, onModelsRema
       onModelsRemainingChange(hasModelsRemaining);
     }
   }, [subscription, isLoadingSubscription, subscriptionError, onModelsRemainingChange]);
+
+  // Notify parent component about subscription loading status
+  useEffect(() => {
+    if (onSubscriptionLoadingChange) {
+      // Consider subscription as loading if either auth is loading or subscription is loading
+      onSubscriptionLoadingChange(isAuthLoading || isLoadingSubscription);
+    }
+  }, [isLoadingSubscription, onSubscriptionLoadingChange, isAuthLoading]);
 
   // Update actual model name whenever display name changes
   useEffect(() => {
@@ -699,6 +811,12 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus, onModelsRema
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    // Check if user is authenticated
+    if (!user) {
+      toast.error("You must be logged in to train a model");
+      return;
+    }
+    
     // Validate gender selection
     if (!selectedGender) {
       setGenderError("Please select the gender of the subject for better model results");
@@ -717,14 +835,6 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus, onModelsRema
     setUploadProgress(0);
     
     try {
-      // Get the authenticated user
-      const { data: { user } } = await getSupabase().auth.getUser();
-      if (!user) {
-        toast.error("You must be logged in to train a model");
-        setIsProcessing(false);
-        return;
-      }
-      
       // Get the session for the access token
       const { data: { session } } = await getSupabase().auth.getSession();
       if (!session) {
@@ -930,19 +1040,8 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus, onModelsRema
   };
 
   // Show loading state while checking subscription
-  if (isLoadingSubscription) {
-    return (
-      <ErrorBoundary>
-        <div className="w-full bg-gradient-to-br from-card/95 via-card to-card/90 border border-border/60 rounded-2xl overflow-hidden shadow-xl backdrop-blur-sm">
-          <div className="p-6 flex items-center justify-center">
-            <div className="text-center space-y-4">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
-              <p className="text-muted-foreground">Loading subscription information...</p>
-            </div>
-          </div>
-        </div>
-      </ErrorBoundary>
-    );
+  if (isLoadingSubscription || isAuthLoading) {
+    return null;
   }
   
   // Show error state if subscription check failed
@@ -1046,50 +1145,54 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus, onModelsRema
   if (currentStep === 1) {
     return (
       <ErrorBoundary>
-        <div className="w-full bg-gradient-to-br from-card/95 via-card to-card/90 border border-border/60 rounded-2xl overflow-hidden shadow-xl backdrop-blur-sm">
-          <div className="p-6 space-y-6">
-            <div className="text-center space-y-2">
-              <h2 className="text-2xl font-bold bg-gradient-to-r from-foreground to-foreground/80 bg-clip-text text-transparent">Quick Tips for Great Training Images!</h2> 
-              <p className="text-sm text-muted-foreground leading-relaxed">
-                Good photos help create an amazing AI model of your subject. Here&rsquo;s what to aim for:
-              </p>
-            </div>
+        <div className="min-h-[60vh] flex items-center justify-center p-4">
+          <div className="w-full max-w-2xl bg-gradient-to-br from-card/95 via-card to-card/90 border border-border/60 rounded-2xl overflow-hidden shadow-xl backdrop-blur-sm">
+            <div className="p-6 space-y-6">
+              <AnimatedTrainingImages />
+              
+              <div className="text-center space-y-2">
+                <h2 className="text-2xl font-bold bg-gradient-to-r from-foreground to-foreground/80 bg-clip-text text-transparent">Quick Tips for Great Training Images!</h2> 
+                <p className="text-sm text-muted-foreground leading-relaxed">
+                  Good photos help create an amazing AI model of your subject. Here&rsquo;s what to aim for:
+                </p>
+              </div>
 
-            <div className="bg-gradient-to-br from-muted/30 via-muted/20 to-background/80 border border-border/40 rounded-xl p-6 space-y-4 backdrop-blur-sm">
-              <ul className="space-y-3 text-sm">
-                <li className="flex items-start gap-3 p-3 rounded-lg bg-background/50 border border-green-200/20 dark:border-green-800/20">
-                  <div className="flex-shrink-0 w-6 h-6 rounded-full bg-green-100 dark:bg-green-900/50 flex items-center justify-center mt-0.5">
-                    <svg className="w-4 h-4 text-green-600 dark:text-green-400" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"></path></svg>
-                  </div>
-                  <span className="text-foreground"><strong className="font-semibold">Variety is Key:</strong> <span className="text-muted-foreground">Use different poses, backgrounds, and expressions.</span></span>
-                </li>
-                <li className="flex items-start gap-3 p-3 rounded-lg bg-background/50 border border-green-200/20 dark:border-green-800/20">
-                  <div className="flex-shrink-0 w-6 h-6 rounded-full bg-green-100 dark:bg-green-900/50 flex items-center justify-center mt-0.5">
-                    <svg className="w-4 h-4 text-green-600 dark:text-green-400" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"></path></svg>
-                  </div>
-                  <span className="text-foreground"><strong className="font-semibold">Clear Subject:</strong> <span className="text-muted-foreground">Ensure the face is well-lit, visible, and the only person in the shot.</span></span>
-                </li>
-                <li className="flex items-start gap-3 p-3 rounded-lg bg-background/50 border border-green-200/20 dark:border-green-800/20">
-                  <div className="flex-shrink-0 w-6 h-6 rounded-full bg-green-100 dark:bg-green-900/50 flex items-center justify-center mt-0.5">
-                    <svg className="w-4 h-4 text-green-600 dark:text-green-400" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"></path></svg>
-                  </div>
-                  <span className="text-foreground"><strong className="font-semibold">Good Quality:</strong> <span className="text-muted-foreground">Use sharp, clear photos. Avoid very blurry or pixelated images.</span></span>
-                </li>
-                <li className="flex items-start gap-3 p-3 rounded-lg bg-background/50 border border-red-200/20 dark:border-red-800/20">
-                  <div className="flex-shrink-0 w-6 h-6 rounded-full bg-red-100 dark:bg-red-900/50 flex items-center justify-center mt-0.5">
-                    <svg className="w-4 h-4 text-red-600 dark:text-red-400" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd"></path></svg>
-                  </div>
-                  <span className="text-foreground"><strong className="font-semibold">Avoid Face Obstructions:</strong> <span className="text-muted-foreground">No sunglasses or heavy face-altering accessories/filters.</span></span>
-                </li>
-              </ul>
-            </div>
+              <div className="bg-gradient-to-br from-muted/30 via-muted/20 to-background/80 border border-border/40 rounded-xl p-6 space-y-4 backdrop-blur-sm">
+                <ul className="space-y-3 text-sm">
+                  <li className="flex items-start gap-3 p-3 rounded-lg bg-background/50 border border-green-200/20 dark:border-green-800/20">
+                    <div className="flex-shrink-0 w-6 h-6 rounded-full bg-green-100 dark:bg-green-900/50 flex items-center justify-center mt-0.5">
+                      <svg className="w-4 h-4 text-green-600 dark:text-green-400" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"></path></svg>
+                    </div>
+                    <span className="text-foreground"><strong className="font-semibold">Variety is Key:</strong> <span className="text-muted-foreground">Use different poses, backgrounds, and expressions.</span></span>
+                  </li>
+                  <li className="flex items-start gap-3 p-3 rounded-lg bg-background/50 border border-green-200/20 dark:border-green-800/20">
+                    <div className="flex-shrink-0 w-6 h-6 rounded-full bg-green-100 dark:bg-green-900/50 flex items-center justify-center mt-0.5">
+                      <svg className="w-4 h-4 text-green-600 dark:text-green-400" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"></path></svg>
+                    </div>
+                    <span className="text-foreground"><strong className="font-semibold">Clear Subject:</strong> <span className="text-muted-foreground">Ensure the face is well-lit, visible, and the only person in the shot.</span></span>
+                  </li>
+                  <li className="flex items-start gap-3 p-3 rounded-lg bg-background/50 border border-green-200/20 dark:border-green-800/20">
+                    <div className="flex-shrink-0 w-6 h-6 rounded-full bg-green-100 dark:bg-green-900/50 flex items-center justify-center mt-0.5">
+                      <svg className="w-4 h-4 text-green-600 dark:text-green-400" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"></path></svg>
+                    </div>
+                    <span className="text-foreground"><strong className="font-semibold">Good Quality:</strong> <span className="text-muted-foreground">Use sharp, clear photos. Avoid very blurry or pixelated images.</span></span>
+                  </li>
+                  <li className="flex items-start gap-3 p-3 rounded-lg bg-background/50 border border-red-200/20 dark:border-red-800/20">
+                    <div className="flex-shrink-0 w-6 h-6 rounded-full bg-red-100 dark:bg-red-900/50 flex items-center justify-center mt-0.5">
+                      <svg className="w-4 h-4 text-red-600 dark:text-red-400" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd"></path></svg>
+                    </div>
+                    <span className="text-foreground"><strong className="font-semibold">Avoid Face Obstructions:</strong> <span className="text-muted-foreground">No sunglasses or heavy face-altering accessories/filters.</span></span>
+                  </li>
+                </ul>
+              </div>
 
-            <Button
-              onClick={() => setCurrentStep(2)}
-              className="w-full py-3 bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary/80 text-primary-foreground shadow-lg hover:shadow-xl font-medium"
-            >
-              Got it, Let&rsquo;s Upload Photos!
-            </Button>
+              <Button
+                onClick={() => setCurrentStep(2)}
+                className="w-full py-3 bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary/80 text-primary-foreground shadow-lg hover:shadow-xl font-medium"
+              >
+                Got it, Let&rsquo;s Upload Photos!
+              </Button>
+            </div>
           </div>
         </div>
       </ErrorBoundary>

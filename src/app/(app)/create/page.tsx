@@ -339,11 +339,7 @@ function CreatePageContent() {
 
   // Conditional rendering for the initial model loading screen
   if (isLoadingUserModels && allowModelLoadingScreen) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] p-4 text-center">
-        <p>Checking your AI models...</p>
-      </div>
-    );
+    return null;
   }
 
   // Conditional rendering for "no models" screen
