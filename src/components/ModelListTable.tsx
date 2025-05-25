@@ -19,9 +19,18 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Trash2, XCircle } from "lucide-react";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
+import { Trash2, XCircle, User, Sparkles, Clock } from "lucide-react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { cn } from "@/lib/utils";
 
 // Initialize Supabase client
 const supabase = createSupabaseBrowserClient();
@@ -77,6 +86,12 @@ interface ModelListTableProps {
   onClearNewTraining?: () => void;
 }
 
+interface ConfirmationState {
+  type: 'delete' | 'cancel';
+  model?: Model;
+  trainingToCancel?: {id: string, modelId: string};
+}
+
 export function ModelListTable({ newTraining, onClearNewTraining }: ModelListTableProps = {}) {
   const { user } = useAuth();
   
@@ -86,10 +101,10 @@ export function ModelListTable({ newTraining, onClearNewTraining }: ModelListTab
   const [error, setError] = useState<string | null>(null);
   
   // UI state
-  const [modelToDelete, setModelToDelete] = useState<Model | null>(null);
+  const [confirmation, setConfirmation] = useState<ConfirmationState | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
-  const [trainingToCancel, setTrainingToCancel] = useState<{id: string, modelId: string} | null>(null);
+  const [isMobile, setIsMobile] = useState(false);
   
   // Refs for buttons that triggered the dialogs
   const deleteButtonRef = useRef<HTMLButtonElement | null>(null);
@@ -98,6 +113,17 @@ export function ModelListTable({ newTraining, onClearNewTraining }: ModelListTab
   // Ref to track if we've done the initial fetch
   const hasInitialFetched = useRef(false);
   const lastNewTrainingId = useRef<string | null>(null);
+
+  // Check if we're on mobile
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
   
   // Data fetching logic
   const fetchModels = useCallback(async () => {
@@ -189,12 +215,9 @@ export function ModelListTable({ newTraining, onClearNewTraining }: ModelListTab
 
   // Focus management for dialogs
   useEffect(() => {
-    // Track previous focus state when dialog opens
-    if (modelToDelete) {
-      // Dialog is opening, save current focused element
+    if (confirmation?.type === 'delete') {
       deleteButtonRef.current = document.activeElement as HTMLButtonElement;
-    } else if (deleteButtonRef.current) {
-      // Focus the button that opened the dialog if it exists
+    } else if (deleteButtonRef.current && !confirmation) {
       setTimeout(() => {
         if (deleteButtonRef.current) {
           deleteButtonRef.current.focus();
@@ -202,14 +225,12 @@ export function ModelListTable({ newTraining, onClearNewTraining }: ModelListTab
         }
       }, 0);
     }
-  }, [modelToDelete]);
+  }, [confirmation]);
 
   useEffect(() => {
-    if (trainingToCancel) {
-      // Dialog is opening, save current focused element
+    if (confirmation?.type === 'cancel') {
       cancelButtonRef.current = document.activeElement as HTMLButtonElement;
-    } else if (cancelButtonRef.current) {
-      // Focus the button that opened the dialog if it exists
+    } else if (cancelButtonRef.current && !confirmation) {
       setTimeout(() => {
         if (cancelButtonRef.current) {
           cancelButtonRef.current.focus();
@@ -217,16 +238,13 @@ export function ModelListTable({ newTraining, onClearNewTraining }: ModelListTab
         }
       }, 0);
     }
-  }, [trainingToCancel]);
+  }, [confirmation]);
 
   // Get the effective status for a model
   const getEffectiveStatus = (model: Model) => {
-    // Check if model is valid
     if (!model || Object.keys(model).length === 0) {
       return "";
     }
-
-    // Return the training status if available
     return model.training_status || "";
   };
 
@@ -239,23 +257,12 @@ export function ModelListTable({ newTraining, onClearNewTraining }: ModelListTab
            status === "processing";
   };
 
-  // Determine if we should show the cancel button for a model
-  const shouldShowCancelButton = (model: Model): boolean => {
-    // Check if model is valid
-    if (!model || Object.keys(model).length === 0) {
-      return false;
-    }
-    return hasActiveTraining(model);
-  };
-
   // Get the training ID to use for cancellation
   const getTrainingIdForCancellation = (model: Model): string | null => {
-    // Look for trainings in the trainings array
     if (!model.trainings || model.trainings.length === 0) {
       return null;
     }
     
-    // First try to find an active training
     const activeTraining = model.trainings.find(t => 
       t.status === "training" || 
       t.status === "starting" || 
@@ -266,7 +273,6 @@ export function ModelListTable({ newTraining, onClearNewTraining }: ModelListTab
       return activeTraining.training_id;
     }
     
-    // Otherwise use the most recent training - avoid expensive sort if possible
     if (model.trainings.length === 1) {
       const training = model.trainings[0];
       if (training?.training_id) {
@@ -274,7 +280,6 @@ export function ModelListTable({ newTraining, onClearNewTraining }: ModelListTab
       }
     }
     
-    // Find most recent training by created_at date
     let mostRecent = model.trainings[0];
     let mostRecentTime = new Date(mostRecent.created_at).getTime();
     
@@ -291,91 +296,75 @@ export function ModelListTable({ newTraining, onClearNewTraining }: ModelListTab
       return mostRecent.training_id;
     }
     
-    // No valid training ID found
     return null;
-  };
-
-  // Render the cancel button for a model
-  const renderCancelButton = (model: Model) => {
-    return (
-      <Button
-        variant="outline"
-        size="icon"
-        className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/20"
-        onClick={() => {
-          // Check if model is empty or invalid
-          if (!model || !model.id || Object.keys(model).length === 0) {
-            toast.error("Invalid model data");
-            return;
-          }
-          
-          const trainingId = getTrainingIdForCancellation(model);
-          if (trainingId) {
-            setTrainingToCancel({
-              id: trainingId,
-              modelId: model.id
-            });
-          } else {
-            toast.error("Could not find a training ID to cancel");
-          }
-        }}
-      >
-        <XCircle className="h-4 w-4" />
-        <span className="sr-only">Cancel</span>
-      </Button>
-    );
-  };
-
-  // Render the delete button for a model
-  const renderDeleteButton = (model: Model) => {
-    return (
-      <Button
-        variant="outline"
-        size="icon"
-        onClick={() => setModelToDelete(model)}
-        className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/20"
-      >
-        <Trash2 className="h-4 w-4" />
-        <span className="sr-only">Delete</span>
-      </Button>
-    );
   };
 
   const getStatusBadge = (status: string) => {
     switch (status.toLowerCase()) {
       case "training":
       case "processing":
+        return (
+          <Badge variant="secondary" className="bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/20 dark:text-blue-300 dark:border-blue-800">
+            <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse mr-2"></div>
+            Training
+          </Badge>
+        );
       case "starting":
       case "queued":
         return (
-          <Badge variant="secondary" className="flex items-center gap-1">
-            <span className="h-2 w-2 rounded-full bg-blue-400 animate-pulse"></span>
+          <Badge variant="secondary" className="bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/20 dark:text-amber-300 dark:border-amber-800">
+            <Clock className="w-3 h-3 mr-1" />
             {status.charAt(0).toUpperCase() + status.slice(1)}
           </Badge>
         );
       case "succeeded":
         return (
-          <Badge variant="secondary" className="flex items-center gap-1">
-            <span className="h-2 w-2 rounded-full bg-green-500"></span>
-            Trained
+          <Badge variant="secondary" className="bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/20 dark:text-emerald-300 dark:border-emerald-800">
+            <Sparkles className="w-3 h-3 mr-1" />
+            Ready
           </Badge>
         );
       case "failed":
-        return <Badge variant="destructive">Failed</Badge>;
+        return (
+          <Badge variant="destructive" className="bg-red-50 text-red-700 border-red-200 dark:bg-red-950/20 dark:text-red-300 dark:border-red-800">
+            Failed
+          </Badge>
+        );
       case "canceled":
-        return <Badge variant="outline" className="bg-yellow-100 text-yellow-800 hover:bg-yellow-200 border-yellow-300">Canceled</Badge>;
+        return (
+          <Badge variant="outline" className="bg-gray-50 text-gray-600 border-gray-200 dark:bg-gray-950/20 dark:text-gray-400 dark:border-gray-800">
+            Canceled
+          </Badge>
+        );
       default:
-        return <Badge variant="outline">{status || "New"}</Badge>;
+        return (
+          <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/20 dark:text-purple-300 dark:border-purple-800">
+            New
+          </Badge>
+        );
+    }
+  };
+
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffInHours = (now.getTime() - date.getTime()) / (1000 * 60 * 60);
+    
+    if (diffInHours < 24) {
+      return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    } else if (diffInHours < 24 * 7) {
+      return date.toLocaleDateString([], { weekday: 'short', hour: '2-digit', minute: '2-digit' });
+    } else {
+      return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
     }
   };
 
   // Handle cancelling a training
   const handleCancelTraining = async () => {
-    if (!trainingToCancel) return;
+    if (!confirmation?.trainingToCancel) return;
     
     setIsCancelling(true);
     try {
-      // Get the authenticated user
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
         toast.error("You must be logged in to cancel a training");
@@ -383,7 +372,6 @@ export function ModelListTable({ newTraining, onClearNewTraining }: ModelListTab
         return;
       }
       
-      // Get the session for the access token
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
         toast.error("Unable to get authentication token");
@@ -391,7 +379,6 @@ export function ModelListTable({ newTraining, onClearNewTraining }: ModelListTab
         return;
       }
       
-      // Make API request to cancel training
       const response = await fetch(`/api/cancel`, {
         method: 'POST',
         headers: {
@@ -400,16 +387,15 @@ export function ModelListTable({ newTraining, onClearNewTraining }: ModelListTab
         },
         body: JSON.stringify({
           action: 'cancelTraining',
-          trainingId: typeof trainingToCancel === 'string' ? trainingToCancel : trainingToCancel.id,
+          trainingId: confirmation.trainingToCancel.id,
         }),
       });
       
-      // Try to parse as JSON
       let data;
       try {
         data = await response.json();
       } catch (_parseError) {
-        void _parseError; // Explicitly indicate we're ignoring this variable
+        void _parseError;
         throw new Error(`Invalid response from server: ${await response.text()}`);
       }
       
@@ -417,26 +403,19 @@ export function ModelListTable({ newTraining, onClearNewTraining }: ModelListTab
         throw new Error(data.error || 'Failed to cancel training');
       }
       
-      // Remove the model from the list
-      removeModelFromState(trainingToCancel.modelId);
-      
+      removeModelFromState(confirmation.trainingToCancel.modelId);
       toast.success("Training cancelled successfully");
-      
-      // Force a refresh of the models 
       fetchModels();
     } catch (err) {
       toast.error(`Error: ${err instanceof Error ? err.message : 'Failed to cancel training'}`);
     } finally {
       setIsCancelling(false);
-      setTrainingToCancel(null);
+      setConfirmation(null);
     }
   };
 
-  /**
-   * Handles deleting a model
-   */
   const handleDeleteModel = async () => {
-    if (!modelToDelete) return;
+    if (!confirmation?.model) return;
     
     setIsDeleting(true);
     try {
@@ -447,7 +426,7 @@ export function ModelListTable({ newTraining, onClearNewTraining }: ModelListTab
         },
         body: JSON.stringify({
           action: 'markAsDeleted',
-          modelId: modelToDelete.id,
+          modelId: confirmation.model.id,
         }),
       });
       
@@ -457,176 +436,322 @@ export function ModelListTable({ newTraining, onClearNewTraining }: ModelListTab
         throw new Error(data.error || 'Failed to delete model');
       }
       
-      // Remove the model from the state
-      removeModelFromState(modelToDelete.id);
-      
-      toast.success("Model marked as deleted successfully");
+      removeModelFromState(confirmation.model.id);
+      toast.success("Model deleted successfully");
     } catch (err) {
       toast.error(`Error: ${err instanceof Error ? err.message : 'Failed to delete model'}`);
     } finally {
       setIsDeleting(false);
-      setModelToDelete(null);
+      setConfirmation(null);
     }
   };
 
-  // Render the cancel button for a new training
-  const renderNewTrainingCancelButton = () => {
-    return (
-      <Button
-        variant="outline"
-        size="icon"
-        className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/20"
-        onClick={async () => {
-          // Check if newTraining exists and has an ID
-          if (!newTraining) {
-            toast.error("Invalid training data");
-            return;
-          }
-          
-          if (newTraining.id) {
-            // Get the authenticated user
-            try {
-              const { data: { user } } = await supabase.auth.getUser();
-              if (!user) {
-                toast.error("You must be logged in to cancel a training");
-                return;
-              }
-              
-              // Get the session for the access token
-              const { data: { session } } = await supabase.auth.getSession();
-              if (!session) {
-                toast.error("Unable to get authentication token");
-                return;
-              }
-              
-              // Make API request to cancel training
-              const response = await fetch(`/api/cancel`, {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  'Authorization': `Bearer ${session.access_token}`
-                },
-                body: JSON.stringify({
-                  action: 'cancelTraining',
-                  trainingId: newTraining.id,
-                }),
-              });
-              
-              // Try to parse as JSON
-              let data;
-              try {
-                data = await response.json();
-              } catch (_parseError) {
-                void _parseError; // Explicitly indicate we're ignoring this variable
-                throw new Error(`Invalid response from server: ${await response.text()}`);
-              }
-              
-              if (!data.success) {
-                throw new Error(data.error || 'Failed to cancel training');
-              }
-              
-              // Remove the model from the list
-              if (newTraining.modelId) {
-                removeModelFromState(newTraining.modelId);
-              }
-              
-              toast.success("Training cancelled successfully");
-              
-              // Force a refresh of the models
-              fetchModels();
-            } catch (error) {
-              toast.error(`Error: ${error instanceof Error ? error.message : 'Failed to cancel training'}`);
-            }
-          } else {
-            toast.error("Could not find a valid training ID");
-          }
-        }}
-      >
-        <XCircle className="h-4 w-4" />
-        <span className="sr-only">Cancel</span>
-      </Button>
-    );
+  const handleNewTrainingCancel = async () => {
+    if (!newTraining) {
+      toast.error("Invalid training data");
+      return;
+    }
+    
+    if (newTraining.id) {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) {
+          toast.error("You must be logged in to cancel a training");
+          return;
+        }
+        
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) {
+          toast.error("Unable to get authentication token");
+          return;
+        }
+        
+        const response = await fetch(`/api/cancel`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`
+          },
+          body: JSON.stringify({
+            action: 'cancelTraining',
+            trainingId: newTraining.id,
+          }),
+        });
+        
+        let data;
+        try {
+          data = await response.json();
+        } catch (_parseError) {
+          void _parseError;
+          throw new Error(`Invalid response from server: ${await response.text()}`);
+        }
+        
+        if (!data.success) {
+          throw new Error(data.error || 'Failed to cancel training');
+        }
+        
+        if (newTraining.modelId) {
+          removeModelFromState(newTraining.modelId);
+        }
+        
+        toast.success("Training cancelled successfully");
+        fetchModels();
+      } catch (error) {
+        toast.error(`Error: ${error instanceof Error ? error.message : 'Failed to cancel training'}`);
+      }
+    } else {
+      toast.error("Could not find a valid training ID");
+    }
   };
 
+  // Loading state
   if (loading && models.length === 0 && !newTraining) {
-    return <div className="text-center py-8">Loading models...</div>;
+    return (
+      <div className="space-y-4">
+        <div className="rounded-lg border bg-white dark:bg-gray-950 overflow-hidden">
+          <Table>
+            <TableHeader>
+              <TableRow className="bg-gray-50/50 dark:bg-gray-900/50">
+                <TableHead className="font-semibold">
+                  <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded animate-pulse w-24"></div>
+                </TableHead>
+                <TableHead className="font-semibold">
+                  <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded animate-pulse w-16"></div>
+                </TableHead>
+                <TableHead className="font-semibold hidden sm:table-cell">
+                  <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded animate-pulse w-16"></div>
+                </TableHead>
+                <TableHead className="text-right font-semibold">
+                  <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded animate-pulse w-16 ml-auto"></div>
+                </TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {Array.from({ length: 3 }).map((_, i) => (
+                <TableRow key={i} className="hover:bg-gray-50/50 dark:hover:bg-gray-900/50">
+                  <TableCell className="font-medium">
+                    <div className="flex items-center gap-2">
+                      <div className="w-4 h-4 bg-gray-200 dark:bg-gray-700 rounded animate-pulse"></div>
+                      <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded animate-pulse w-20"></div>
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <div className="h-6 w-16 bg-gray-200 dark:bg-gray-700 rounded-full animate-pulse"></div>
+                  </TableCell>
+                  <TableCell className="text-sm text-gray-500 hidden sm:table-cell">
+                    <div className="h-3 w-12 bg-gray-200 dark:bg-gray-700 rounded animate-pulse"></div>
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <div className="flex justify-end">
+                      <div className="h-8 w-8 bg-gray-200 dark:bg-gray-700 rounded animate-pulse"></div>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      </div>
+    );
   }
 
+  // Error state
   if (error && !newTraining) {
-    return <div className="text-center py-8 text-red-500">Error: {error}</div>;
+    return (
+      <div className="rounded-lg border border-red-200 bg-red-50/50 dark:border-red-800 dark:bg-red-950/20">
+        <div className="p-6 text-center">
+          <div className="text-red-600 font-medium dark:text-red-400">Error loading models</div>
+          <div className="text-red-500 text-sm mt-1 dark:text-red-400">{error}</div>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            className="mt-3"
+            onClick={fetchModels}
+          >
+            Try Again
+          </Button>
+        </div>
+      </div>
+    );
   }
 
   const showNewTraining = newTraining && !isNewTrainingInModels();
 
   return (
     <div className="space-y-4">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Model Name</TableHead>
-            <TableHead>Status</TableHead>
-            <TableHead className="text-right">Actions</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {/* Show the new training at the top if available and not a duplicate */}
-          {showNewTraining && (
-            <TableRow className="animate-pulse bg-muted/20">
-              <TableCell className="font-medium">
-                {newTraining.displayName}
-              </TableCell>
-              <TableCell>
-                {getStatusBadge("training")}
-              </TableCell>
-              <TableCell className="text-right space-x-2">
-                {renderNewTrainingCancelButton()}
-              </TableCell>
+      {/* Consistent Table Design for All Devices */}
+      <div className="rounded-lg border bg-white dark:bg-gray-950 overflow-hidden">
+        <Table>
+          <TableHeader>
+            <TableRow className="bg-gray-50/50 dark:bg-gray-900/50">
+              <TableHead className="font-semibold">Model Name</TableHead>
+              <TableHead className="font-semibold">Status</TableHead>
+              <TableHead className="font-semibold hidden sm:table-cell">Created</TableHead>
+              <TableHead className="text-right font-semibold">Actions</TableHead>
             </TableRow>
-          )}
-          
-          {models.length === 0 && !showNewTraining ? (
-            <TableRow>
-              <TableCell colSpan={3} className="text-center">
-                No models found. Create your first model above!
-              </TableCell>
-            </TableRow>
-          ) : (
-            models.map((model) => {
-              const effectiveStatus = getEffectiveStatus(model);
-              
-              return (
-                <TableRow key={model.id}>
-                  <TableCell className="font-medium">
-                    {model.display_name}
-                  </TableCell>
-                  <TableCell>{getStatusBadge(effectiveStatus)}</TableCell>
-                  <TableCell className="text-right space-x-2">
-                    {shouldShowCancelButton(model) ? (
-                      renderCancelButton(model)
-                    ) : (
-                      renderDeleteButton(model)
-                    )}
-                  </TableCell>
-                </TableRow>
-              );
-            })
-          )}
-        </TableBody>
-      </Table>
+          </TableHeader>
+          <TableBody>
+            {showNewTraining && (
+              <TableRow className="animate-pulse bg-gradient-to-r from-blue-50/30 to-purple-50/30 border-l-4 border-l-blue-400">
+                <TableCell className="font-medium">
+                  <div className="flex items-center gap-2">
+                    <User className="w-4 h-4 text-gray-500" />
+                    <span className="truncate">{newTraining.displayName}</span>
+                  </div>
+                </TableCell>
+                <TableCell>{getStatusBadge("training")}</TableCell>
+                <TableCell className="text-sm text-gray-500 hidden sm:table-cell">
+                  Just now
+                </TableCell>
+                <TableCell className="text-right">
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/20"
+                    onClick={handleNewTrainingCancel}
+                  >
+                    <XCircle className="h-4 w-4" />
+                  </Button>
+                </TableCell>
+              </TableRow>
+            )}
+            
+            {models.length === 0 && !showNewTraining ? (
+              <TableRow>
+                <TableCell colSpan={4} className="text-center py-12">
+                  <div className="flex flex-col items-center gap-3 text-gray-500">
+                    <Sparkles className="w-8 h-8" />
+                    <div>No models found</div>
+                    <div className="text-sm">Create your first model above!</div>
+                  </div>
+                </TableCell>
+              </TableRow>
+            ) : (
+              models.map((model) => {
+                const effectiveStatus = getEffectiveStatus(model);
+                const showCancel = hasActiveTraining(model);
+                
+                return (
+                  <TableRow key={model.id} className="hover:bg-gray-50/50 dark:hover:bg-gray-900/50 transition-colors">
+                    <TableCell className="font-medium">
+                      <div className="flex items-center gap-2">
+                        <User className="w-4 h-4 text-gray-500" />
+                        <span className="truncate">{model.display_name}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell>{getStatusBadge(effectiveStatus)}</TableCell>
+                    <TableCell className="text-sm text-gray-500 hidden sm:table-cell">
+                      {formatDate(model.created_at)}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {showCancel ? (
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/20"
+                          onClick={() => {
+                            const trainingId = getTrainingIdForCancellation(model);
+                            if (trainingId) {
+                              setConfirmation({
+                                type: 'cancel',
+                                trainingToCancel: { id: trainingId, modelId: model.id }
+                              });
+                            } else {
+                              toast.error("Could not find a training ID to cancel");
+                            }
+                          }}
+                        >
+                          <XCircle className="h-4 w-4" />
+                        </Button>
+                      ) : (
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          onClick={() => setConfirmation({ type: 'delete', model })}
+                          className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/20"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                );
+              })
+            )}
+          </TableBody>
+        </Table>
+      </div>
 
-      {/* Alert dialog for cancelling training */}
+      {/* iOS-Style Mobile Bottom Sheet */}
+      <Sheet open={isMobile && !!confirmation} onOpenChange={(open) => {
+        if (!open) setConfirmation(null);
+      }}>
+        <SheetContent 
+          side="bottom" 
+          className={cn(
+            "rounded-t-[20px] border-t-0 p-0 max-h-[90vh]",
+            "bg-white dark:bg-gray-950",
+            "shadow-2xl"
+          )}
+        >
+          <div className="w-12 h-1.5 bg-gray-300 dark:bg-gray-600 rounded-full mx-auto mt-3 mb-6"></div>
+          
+          <SheetHeader className="text-center pb-6 px-6">
+            <SheetTitle className="text-xl font-semibold">
+              {confirmation?.type === 'delete' ? 'Delete Model' : 'Cancel Training'}
+            </SheetTitle>
+            <SheetDescription className="text-base text-gray-600 dark:text-gray-400 mt-2 leading-relaxed">
+              {confirmation?.type === 'delete' 
+                ? "This action will permanently remove the model from your account. This cannot be undone."
+                : "This action will stop the training process immediately. This cannot be undone."
+              }
+            </SheetDescription>
+          </SheetHeader>
+
+          <div className="flex justify-center py-8">
+            <div className="w-16 h-16 rounded-full bg-red-100 dark:bg-red-950/30 flex items-center justify-center">
+              {confirmation?.type === 'delete' ? (
+                <Trash2 className="w-8 h-8 text-red-500" />
+              ) : (
+                <XCircle className="w-8 h-8 text-red-500" />
+              )}
+            </div>
+          </div>
+
+          <SheetFooter className="flex-col gap-3 p-6 pt-0">
+            <Button
+              onClick={confirmation?.type === 'delete' ? handleDeleteModel : handleCancelTraining}
+              disabled={isDeleting || isCancelling}
+              variant="destructive"
+              className="w-full h-12 text-base font-medium rounded-xl"
+            >
+              {confirmation?.type === 'delete' 
+                ? (isDeleting ? "Deleting..." : "Delete Model")
+                : (isCancelling ? "Cancelling..." : "Cancel Training")
+              }
+            </Button>
+            <Button
+              variant="outline"
+              className="w-full h-12 text-base font-medium rounded-xl border-gray-200 dark:border-gray-700"
+              onClick={() => setConfirmation(null)}
+              disabled={isDeleting || isCancelling}
+            >
+              Keep Model
+            </Button>
+          </SheetFooter>
+        </SheetContent>
+      </Sheet>
+
+      {/* Desktop Alert Dialogs (unchanged) */}
       <AlertDialog 
-        open={!!trainingToCancel} 
+        open={!isMobile && confirmation?.type === 'cancel'} 
         onOpenChange={(open) => {
-          if (!open) {
-            // Use setTimeout to ensure we're not updating state during render
-            setTimeout(() => setTrainingToCancel(null), 0);
-          }
+          if (!open) setConfirmation(null);
         }}
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Are you sure you want to cancel this training?</AlertDialogTitle>
+            <AlertDialogTitle>Cancel Training</AlertDialogTitle>
             <AlertDialogDescription>
               This action will stop the training process. This cannot be undone.
             </AlertDialogDescription>
@@ -636,28 +761,23 @@ export function ModelListTable({ newTraining, onClearNewTraining }: ModelListTab
             <Button
               onClick={handleCancelTraining} 
               disabled={isCancelling}
-              variant="outline"
-              className="border-red-200 bg-white text-red-500 hover:bg-red-50 hover:text-red-600 dark:border-red-800 dark:bg-background dark:hover:bg-red-950/20"
+              variant="destructive"
             >
-              {isCancelling ? "Cancelling..." : "Yes, Cancel Training"}
+              {isCancelling ? "Cancelling..." : "Cancel Training"}
             </Button>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
       
-      {/* Alert dialog for deleting model */}
       <AlertDialog 
-        open={!!modelToDelete} 
+        open={!isMobile && confirmation?.type === 'delete'} 
         onOpenChange={(open) => {
-          if (!open) {
-            // Use setTimeout to ensure we're not updating state during render
-            setTimeout(() => setModelToDelete(null), 0);
-          }
+          if (!open) setConfirmation(null);
         }}
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Are you sure you want to delete this model?</AlertDialogTitle>
+            <AlertDialogTitle>Delete Model</AlertDialogTitle>
             <AlertDialogDescription>
               This action will mark the model as deleted. It won&apos;t be visible in your model list anymore.
             </AlertDialogDescription>
@@ -667,10 +787,9 @@ export function ModelListTable({ newTraining, onClearNewTraining }: ModelListTab
             <Button
               onClick={handleDeleteModel} 
               disabled={isDeleting}
-              variant="outline"
-              className="border-red-200 bg-white text-red-500 hover:bg-red-50 hover:text-red-600 dark:border-red-800 dark:bg-background dark:hover:bg-red-950/20"
+              variant="destructive"
             >
-              {isDeleting ? "Deleting..." : "Delete"}
+              {isDeleting ? "Deleting..." : "Delete Model"}
             </Button>
           </AlertDialogFooter>
         </AlertDialogContent>
