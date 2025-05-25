@@ -15,31 +15,52 @@ export const PRICE_IDS = {
 
 // Get or create a Stripe customer for a user
 export async function getOrCreateStripeCustomer(userId: string, email: string): Promise<string> {
+  console.log('🔍 getOrCreateStripeCustomer called:', { userId, email });
+  
   const supabase = createSupabaseAdminClient();
   
   // Check if user already has a Stripe customer ID
+  console.log('🔍 Checking existing customer in database...');
   const { data: subscription } = await supabase
     .from('subscriptions')
     .select('stripe_customer_id')
     .eq('user_id', userId)
     .single();
   
+  console.log('🔍 Database query result:', { 
+    hasSubscription: !!subscription, 
+    hasCustomerId: !!subscription?.stripe_customer_id 
+  });
+  
   if (subscription?.stripe_customer_id) {
+    console.log('✅ Found existing Stripe customer ID:', subscription.stripe_customer_id);
     return subscription.stripe_customer_id;
   }
   
   // Create a new Stripe customer
-  const customer = await stripe.customers.create({
-    email,
-    metadata: {
+  console.log('🆕 Creating new Stripe customer...');
+  try {
+    const customer = await stripe.customers.create({
+      email,
+      metadata: {
+        userId,
+      },
+    });
+    
+    console.log('✅ Stripe customer created:', { 
+      customerId: customer.id, 
+      email: customer.email 
+    });
+    
+    return customer.id;
+  } catch (error) {
+    console.error('❌ Error creating Stripe customer:', {
+      error: error instanceof Error ? error.message : 'Unknown error',
       userId,
-    },
-  });
-  
-  // We no longer create an initial subscription row here
-  // The row will be created after successful payment
-  
-  return customer.id;
+      email
+    });
+    throw error;
+  }
 }
 
 // Create a checkout session for subscription
@@ -56,24 +77,50 @@ export async function createCheckoutSession({
   cancelUrl: string;
   userId: string;
 }) {
-  const session = await stripe.checkout.sessions.create({
-    customer: customerId,
-    payment_method_types: ['card'],
-    line_items: [
-      {
-        price: priceId,
-        quantity: 1,
-      },
-    ],
-    mode: 'subscription',
-    success_url: successUrl,
-    cancel_url: cancelUrl,
-    metadata: {
-      userId,
-    },
+  console.log('🔍 createCheckoutSession called:', {
+    customerId,
+    priceId,
+    successUrl,
+    cancelUrl,
+    userId
   });
   
-  return session;
+  try {
+    const session = await stripe.checkout.sessions.create({
+      customer: customerId,
+      payment_method_types: ['card'],
+      line_items: [
+        {
+          price: priceId,
+          quantity: 1,
+        },
+      ],
+      mode: 'subscription',
+      success_url: successUrl,
+      cancel_url: cancelUrl,
+      metadata: {
+        userId,
+      },
+    });
+    
+    console.log('✅ Stripe checkout session created:', {
+      sessionId: session.id,
+      customerId: session.customer,
+      url: session.url,
+      mode: session.mode
+    });
+    
+    return session;
+  } catch (error) {
+    console.error('❌ Error creating Stripe checkout session:', {
+      error: error instanceof Error ? error.message : 'Unknown error',
+      stripeErrorType: error instanceof Stripe.errors.StripeError ? error.type : undefined,
+      stripeErrorCode: error instanceof Stripe.errors.StripeError ? error.code : undefined,
+      customerId,
+      priceId
+    });
+    throw error;
+  }
 }
 
 // Retrieve subscription details
