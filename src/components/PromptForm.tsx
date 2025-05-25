@@ -562,6 +562,29 @@ export function PromptForm({
             gen.id === tempId ? { ...gen, replicate_id: result.replicate_id, id: result.id || tempId } : gen
           )
         );
+        
+        // Fetch updated credits after successful generation
+        try {
+          const supabase = createSupabaseBrowserClient();
+          const { data: { user } } = await supabase.auth.getUser();
+          
+          if (user) {
+            const { data: subscription } = await supabase
+              .from('subscriptions')
+              .select('credits_remaining')
+              .eq('user_id', user.id)
+              .eq('is_active', true)
+              .single();
+            
+            if (subscription && typeof subscription.credits_remaining === 'number') {
+              // Trigger credit update event
+              creditEvents.update(subscription.credits_remaining);
+            }
+          }
+        } catch (error) {
+          console.error('Error fetching updated credits:', error);
+          // Continue without blocking, the credit counter will eventually sync
+        }
       }
       onGenerationComplete?.();
     } catch (fetchError) {

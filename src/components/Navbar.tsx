@@ -401,6 +401,9 @@ export function Navbar({
                       </div>
                     ) : isFavoritesPage ? (
                       <div className="flex gap-2 items-center">
+                        {/* Credit counter temporarily hidden
+                        <CreditCounter />
+                        */}
                         <Button 
                           variant="ghost" 
                           className="h-9 w-auto px-3"
@@ -647,6 +650,13 @@ export function Navbar({
                     </>
                   ) : isFavoritesPage ? (
                     <>
+                      <li className="menu-item">
+                        <div className="flex justify-center mb-2">
+                          {/* Credit counter temporarily hidden
+                          <CreditCounter />
+                          */}
+                        </div>
+                      </li>
                       <li className="menu-item">
                         <Link 
                           href="/create" 
