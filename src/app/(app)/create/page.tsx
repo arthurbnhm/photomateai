@@ -106,6 +106,66 @@ const processOutput = (storageUrls: string[] | null, likedImages: string[] | nul
 // Define default images as a constant outside the component
 const DEFAULT_HEADER_IMAGES = ["/landing/01.webp", "/landing/02.webp", "/landing/03.webp"];
 
+// Add localStorage utilities for header image selection
+const HEADER_IMAGES_KEY = 'photomate_header_images';
+const HEADER_IMAGES_TIMESTAMP_KEY = 'photomate_header_images_timestamp';
+
+const getStoredHeaderImages = (): string[] | null => {
+  if (typeof window === 'undefined') return null;
+  try {
+    const stored = localStorage.getItem(HEADER_IMAGES_KEY);
+    return stored ? JSON.parse(stored) : null;
+  } catch (error) {
+    console.warn('Failed to get stored header images:', error);
+    return null;
+  }
+};
+
+const setStoredHeaderImages = (images: string[]): void => {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(HEADER_IMAGES_KEY, JSON.stringify(images));
+    localStorage.setItem(HEADER_IMAGES_TIMESTAMP_KEY, Date.now().toString());
+  } catch (error) {
+    console.warn('Failed to store header images:', error);
+  }
+};
+
+const getStoredHeaderImagesTimestamp = (): number => {
+  if (typeof window === 'undefined') return 0;
+  try {
+    const timestamp = localStorage.getItem(HEADER_IMAGES_TIMESTAMP_KEY);
+    return timestamp ? parseInt(timestamp, 10) : 0;
+  } catch (error) {
+    console.warn('Failed to get stored header images timestamp:', error);
+    return 0;
+  }
+};
+
+// Helper function to select header images deterministically
+const selectHeaderImages = (allImageUrls: string[], userId?: string): string[] => {
+  if (allImageUrls.length < 3) return DEFAULT_HEADER_IMAGES;
+  
+  // Use user ID as seed for consistent selection per user
+  const seed = userId ? userId.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) : 12345;
+  
+  // Simple seeded random function
+  const seededRandom = (seed: number) => {
+    const x = Math.sin(seed) * 10000;
+    return x - Math.floor(x);
+  };
+  
+  // Create indices array and shuffle with seeded random
+  const indices = Array.from({ length: allImageUrls.length }, (_, i) => i);
+  for (let i = indices.length - 1; i > 0; i--) {
+    const j = Math.floor(seededRandom(seed + i) * (i + 1));
+    [indices[i], indices[j]] = [indices[j], indices[i]];
+  }
+  
+  // Return first 3 images from shuffled indices
+  return indices.slice(0, 3).map(i => allImageUrls[i]);
+};
+
 // Create a client component for the Create page content
 function CreatePageContent() {
   const [pendingGenerations, setPendingGenerations] = useState<PendingGeneration[]>([]);
@@ -326,15 +386,35 @@ function CreatePageContent() {
 
     if (generations && generations.length > 0) {
       const allImageUrls = generations.flatMap(g => g.images.map(img => img.url)).filter(url => url && typeof url === 'string');
+      
       if (allImageUrls.length >= 3) {
-        const shuffled = [...allImageUrls].sort(() => 0.5 - Math.random());
-        return shuffled.slice(0, 3);
+        // Check if we have stored header images
+        const storedImages = getStoredHeaderImages();
+        const storedTimestamp = getStoredHeaderImagesTimestamp();
+        
+        // Get the timestamp of the most recent generation
+        const mostRecentGenTimestamp = generations.length > 0 
+          ? new Date(generations[0].timestamp).getTime() 
+          : 0;
+        
+        // Use stored images if they exist and are still valid (no newer generations)
+        if (storedImages && 
+            storedImages.length === 3 && 
+            storedTimestamp >= mostRecentGenTimestamp &&
+            storedImages.every(url => allImageUrls.includes(url))) {
+          return storedImages;
+        }
+        
+        // Select new images deterministically and store them
+        const selectedImages = selectHeaderImages(allImageUrls, user?.id);
+        setStoredHeaderImages(selectedImages);
+        return selectedImages;
       } else {
         return DEFAULT_HEADER_IMAGES;
       }
     }
     return DEFAULT_HEADER_IMAGES;
-  }, [generations, isLoadingHistory, isLoadingUserModels, allowModelLoadingScreen]);
+  }, [generations, isLoadingHistory, isLoadingUserModels, allowModelLoadingScreen, user?.id]);
 
 
   // Conditional rendering for the initial model loading screen
@@ -349,26 +429,59 @@ function CreatePageContent() {
       <div className="flex flex-col items-center justify-center min-h-[calc(100vh-200px)] sm:min-h-[60vh] p-4 text-center">
         <div className="max-w-xl">
           <div className="mb-8 flex items-center justify-center space-x-4">
-            <div className="flex items-center cursor-default">
+            <div className="flex items-center cursor-default relative">
+              {/* Subtle background glow effect */}
+              <div className="absolute inset-0 bg-gradient-to-r from-primary/5 via-primary/10 to-primary/5 rounded-full blur-3xl scale-150 opacity-60 animate-pulse" />
+              
               {DEFAULT_HEADER_IMAGES.map((src, index) => (
                 <div 
                   key={src || index}
-                  className={`relative w-10 h-10 sm:w-12 sm:h-12 rounded-lg overflow-hidden shadow-md border-2 border-white transition-all duration-300 ease-out hover:-translate-y-1 hover:z-20 ${index === 0 ? 'transform -rotate-6 mr-[-12px] sm:mr-[-15px] hover:rotate-[-10deg] hover:scale-110' : index === 1 ? 'z-10 transform scale-110 hover:scale-125' : 'transform rotate-6 ml-[-12px] sm:ml-[-15px] hover:rotate-[10deg] hover:scale-110'}`}
+                  className={`group relative w-10 h-10 sm:w-12 sm:h-12 rounded-lg overflow-hidden shadow-lg border-2 border-white/90 backdrop-blur-sm
+                    transition-all duration-500 ease-out
+                    hover:-translate-y-2 hover:z-30 hover:shadow-2xl hover:shadow-primary/25
+                    ${index === 0 ? 
+                      'transform -rotate-6 mr-[-12px] sm:mr-[-15px] hover:rotate-[-12deg] hover:scale-125 animate-float-1' : 
+                      index === 1 ? 
+                      'z-10 transform scale-110 hover:scale-140 animate-float-2' : 
+                      'transform rotate-6 ml-[-12px] sm:ml-[-15px] hover:rotate-[12deg] hover:scale-125 animate-float-3'
+                    }
+                    animate-fade-in-up focus:outline-none focus:ring-0`}
+                  style={{
+                    animationDelay: `${index * 100}ms`,
+                    animationFillMode: 'both',
+                    borderColor: 'rgba(255, 255, 255, 0.9)', // Explicit white border override
+                    outline: 'none' // Remove any outline
+                  }}
                 >
-                  <Image src={src} alt={`Illustrative image ${index + 1}`} fill className="object-cover" sizes="(max-width: 640px) 40px, 48px" />
+                  {/* Shimmer effect overlay */}
+                  <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700 ease-out" />
+                  
+                  {/* Glow effect on hover */}
+                  <div className="absolute inset-0 bg-gradient-to-br from-primary/0 to-primary/0 group-hover:from-primary/20 group-hover:to-primary/10 transition-all duration-500 ease-out rounded-lg" />
+                  
+                  {/* Main image */}
+                  <Image 
+                    src={src} 
+                    alt={`Illustrative image ${index + 1}`} 
+                    fill 
+                    className="object-cover group-hover:brightness-110 group-hover:contrast-105 transition-all duration-500 ease-out" 
+                    sizes="(max-width: 640px) 40px, 48px" 
+                  />
                 </div>
               ))}
             </div>
           </div>
-          <h1 className="text-3xl font-semibold mb-4">Create Your First AI Model</h1>
-          <p className="text-muted-foreground mb-6">
+          <h1 className="text-3xl font-semibold mb-4 animate-fade-in-up" style={{animationDelay: '300ms', animationFillMode: 'both'}}>Create Your First AI Model</h1>
+          <p className="text-muted-foreground mb-6 animate-fade-in-up" style={{animationDelay: '400ms', animationFillMode: 'both'}}>
             You haven&apos;t trained any AI models yet. Train a model with your photos to start generating unique images of yourself!
           </p>
-          <Link href="/train" passHref>
-            <Button size="lg" variant="default">
-              Train Your Model
-            </Button>
-          </Link>
+          <div className="animate-fade-in-up" style={{animationDelay: '500ms', animationFillMode: 'both'}}>
+            <Link href="/train" passHref>
+              <Button size="lg" variant="default">
+                Train Your Model
+              </Button>
+            </Link>
+          </div>
         </div>
       </div>
     );
@@ -381,32 +494,66 @@ function CreatePageContent() {
   return (
     <div className="max-w-4xl mx-auto p-4 sm:p-8 md:p-12">
       <div className="mb-8 hidden sm:flex items-center justify-center space-x-4">
-        <div className="flex items-center cursor-default">
+        <div className="flex items-center cursor-default relative">
+          {/* Subtle background glow effect */}
+          <div className="absolute inset-0 bg-gradient-to-r from-primary/5 via-primary/10 to-primary/5 rounded-full blur-3xl scale-150 opacity-60 animate-pulse" />
+          
           { /* Loading state for header images based on selectedHeaderImages logic */ }
           {selectedHeaderImages === DEFAULT_HEADER_IMAGES && (isLoadingHistory || (isLoadingUserModels && allowModelLoadingScreen)) ? (
             <>
-              <div className="relative w-8 h-8 rounded-md overflow-hidden shadow-sm border-2 border-white transform -rotate-6 mr-[-10px]">
-                <div className="w-full h-full bg-gray-300 animate-pulse"></div>
+              <div className="relative w-8 h-8 rounded-md overflow-hidden shadow-sm border-2 border-white transform -rotate-6 mr-[-10px] animate-pulse">
+                <div className="w-full h-full bg-gradient-to-br from-gray-200 to-gray-300 animate-pulse"></div>
               </div>
-              <div className="relative w-8 h-8 rounded-md overflow-hidden shadow-sm border-2 border-white z-10 transform scale-110">
-                <div className="w-full h-full bg-gray-300 animate-pulse"></div>
+              <div className="relative w-8 h-8 rounded-md overflow-hidden shadow-sm border-2 border-white z-10 transform scale-110 animate-pulse">
+                <div className="w-full h-full bg-gradient-to-br from-gray-200 to-gray-300 animate-pulse"></div>
               </div>
-              <div className="relative w-8 h-8 rounded-md overflow-hidden shadow-sm border-2 border-white transform rotate-6 ml-[-10px]">
-                <div className="w-full h-full bg-gray-300 animate-pulse"></div>
+              <div className="relative w-8 h-8 rounded-md overflow-hidden shadow-sm border-2 border-white transform rotate-6 ml-[-10px] animate-pulse">
+                <div className="w-full h-full bg-gradient-to-br from-gray-200 to-gray-300 animate-pulse"></div>
               </div>
             </>
           ) : (
             selectedHeaderImages.map((src: string, index: number) => (
               <div 
                 key={src || index}
-                className={`relative w-8 h-8 rounded-md overflow-hidden shadow-sm border-2 border-white transition-all duration-300 ease-out hover:-translate-y-1 hover:z-20 ${index === 0 ? 'transform -rotate-6 mr-[-10px] hover:rotate-[-10deg] hover:scale-110' : index === 1 ? 'z-10 transform scale-110 hover:scale-125' : 'transform rotate-6 ml-[-10px] hover:rotate-[10deg] hover:scale-110'}`}
+                className={`group relative w-8 h-8 rounded-md overflow-hidden shadow-lg border-2 border-white/90 backdrop-blur-sm
+                  transition-all duration-500 ease-out
+                  hover:-translate-y-2 hover:z-30 hover:shadow-2xl hover:shadow-primary/25
+                  ${index === 0 ? 
+                    'transform -rotate-6 mr-[-10px] hover:rotate-[-12deg] hover:scale-125 animate-float-1' : 
+                    index === 1 ? 
+                    'z-10 transform scale-110 hover:scale-140 animate-float-2' : 
+                    'transform rotate-6 ml-[-10px] hover:rotate-[12deg] hover:scale-125 animate-float-3'
+                  }
+                  animate-fade-in-up focus:outline-none focus:ring-0`}
+                style={{
+                  animationDelay: `${index * 100}ms`,
+                  animationFillMode: 'both',
+                  borderColor: 'rgba(255, 255, 255, 0.9)', // Explicit white border override
+                  outline: 'none' // Remove any outline
+                }}
               >
-                <Image src={src} alt={`Header image ${index + 1}`} fill className="object-cover" sizes="32px" unoptimized={!src.startsWith("/landing/")} />
+                {/* Shimmer effect overlay */}
+                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700 ease-out" />
+                
+                {/* Glow effect on hover */}
+                <div className="absolute inset-0 bg-gradient-to-br from-primary/0 to-primary/0 group-hover:from-primary/20 group-hover:to-primary/10 transition-all duration-500 ease-out rounded-md" />
+                
+                {/* Main image */}
+                <Image 
+                  src={src} 
+                  alt={`Header image ${index + 1}`} 
+                  fill 
+                  className="object-cover group-hover:brightness-110 group-hover:contrast-105 transition-all duration-500 ease-out" 
+                  sizes="32px" 
+                  unoptimized={!src.startsWith("/landing/")} 
+                />
               </div>
             ))
           )}
         </div>
-        <h1 className="text-3xl font-semibold">Create images of yourself</h1>
+        <h1 className="text-3xl font-semibold animate-fade-in-up" style={{animationDelay: '300ms', animationFillMode: 'both'}}>
+          Create images of yourself
+        </h1>
       </div>
       
       <PromptForm 
