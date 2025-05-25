@@ -12,7 +12,7 @@ const replicate = new Replicate({
 const TRAINING_PARAMS = {
   lora_type: "subject",
   trigger_word: "TOK",
-  training_steps: 1500
+  training_steps: 3
 };
 
 export async function POST(request: NextRequest) {
@@ -51,21 +51,113 @@ export async function POST(request: NextRequest) {
 
     // Parse the body
     const body = await request.json();
-    const { modelOwner, modelName, zipUrl } = body;
-    
-    if (!modelOwner || !modelName || !zipUrl) {
-      return NextResponse.json(
-        { error: 'Missing required parameters: modelOwner, modelName, and zipUrl are required', success: false },
-        { status: 400 }
-      );
+    const action = body.action;
+
+    // Handle different actions
+    switch (action) {
+      case 'create':
+        const { modelName, owner, displayName, gender } = body;
+        
+        if (!modelName || !owner || !displayName) {
+          return NextResponse.json(
+            { error: 'Missing required parameters: modelName, owner, and displayName are required', success: false },
+            { status: 400 }
+          );
+        }
+        
+        return await createModel(modelName, owner, displayName, gender, supabase);
+
+      case 'train':
+        const { modelOwner, modelName: trainModelName, zipUrl } = body;
+        
+        if (!modelOwner || !trainModelName || !zipUrl) {
+          return NextResponse.json(
+            { error: 'Missing required parameters: modelOwner, modelName, and zipUrl are required', success: false },
+            { status: 400 }
+          );
+        }
+        
+        return await trainModel(modelOwner, trainModelName, zipUrl, supabase);
+
+      case 'initBucket':
+        // Initialize the storage bucket
+        return await initializeBucket(supabase);
+
+      default:
+        return NextResponse.json(
+          { error: 'Invalid action. Supported actions: create, train, initBucket', success: false },
+          { status: 400 }
+        );
     }
-    
-    return await trainModel(modelOwner, modelName, zipUrl, supabase);
   } catch (error) {
     console.error('Error processing request:', error);
     return NextResponse.json(
       { 
         error: error instanceof Error ? error.message : 'An unexpected error occurred',
+        success: false
+      },
+      { status: 500 }
+    );
+  }
+}
+
+// Create a model in Replicate
+async function createModel(modelName: string, owner: string, displayName: string, gender: string, supabase: SupabaseClient) {
+  // Validate model name format
+  const validPattern = /^[a-z0-9][a-z0-9_.-]*[a-z0-9]$|^[a-z0-9]$/;
+  if (!validPattern.test(modelName)) {
+    return NextResponse.json(
+      { 
+        error: 'Model name can only contain lowercase letters, numbers, dashes, underscores, or periods, and cannot start or end with a dash, underscore, or period',
+        success: false 
+      },
+      { status: 400 }
+    );
+  }
+
+  try {
+    // Create the model in Replicate
+    const model = await replicate.models.create(
+      owner, 
+      modelName,
+      {
+        visibility: 'private',
+        hardware: 'gpu-t4'
+      }
+    );
+
+    // Store the model in Supabase
+    const { data: modelData, error: modelError } = await supabase
+      .from('models')
+      .insert({
+        model_id: modelName,
+        model_owner: model.owner,
+        display_name: displayName,
+        gender: gender
+        // user_id is now handled by Supabase trigger
+      })
+      .select()
+      .single();
+
+    if (modelError) {
+      console.error('Error storing model in Supabase:', modelError);
+      // Continue anyway since the model was created in Replicate
+    }
+
+    return NextResponse.json({
+      success: true,
+      model: {
+        id: modelData?.id || null,
+        name: model.name,
+        owner: model.owner,
+        url: `https://replicate.com/${model.owner}/${model.name}`
+      }
+    });
+  } catch (error) {
+    console.error('Error creating model:', error);
+    return NextResponse.json(
+      { 
+        error: error instanceof Error ? error.message : 'Failed to create model',
         success: false
       },
       { status: 500 }
@@ -133,6 +225,42 @@ async function trainModel(modelOwner: string, modelName: string, zipUrl: string,
         error: error instanceof Error ? error.message : 'Failed to create training',
         success: false
       },
+      { status: 500 }
+    );
+  }
+}
+
+// Initialize the storage bucket
+async function initializeBucket(supabase: SupabaseClient) {
+  try {
+    // Check if the bucket exists
+    const { data: buckets, error: bucketsError } = await supabase.storage.listBuckets();
+    void buckets; // Explicitly indicate we're ignoring this variable
+    void bucketsError; // Explicitly indicate we're ignoring this variable
+    const bucketExists = buckets?.some(bucket => bucket.name === 'training-files');
+    
+    if (!bucketExists) {
+      try {
+        // Try to create the bucket
+        const { error: createBucketError } = await supabase.storage.createBucket('training-files', {
+          public: false, // Set to private as per RLS policies
+          fileSizeLimit: 250 * 1024 * 1024, // 250MB limit
+        });
+        
+        if (createBucketError) {
+          // Continue anyway, as the bucket might already exist but not be visible to this user
+        }
+      } catch (error) {
+        void error; // Explicitly indicate we're ignoring this variable
+        // Continue anyway, as the bucket might already exist
+      }
+    }
+    
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error('Error initializing bucket:', error);
+    return NextResponse.json(
+      { error: 'Failed to initialize storage bucket', success: false },
       { status: 500 }
     );
   }

@@ -859,7 +859,7 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus, onModelsRema
         return fetch(url, fetchOptions);
       };
       
-      const createModelResponse = await customFetch('/api/model', {
+      const createModelResponse = await customFetch('/api/model/train', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -976,7 +976,7 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus, onModelsRema
         setUploadProgress(85);
         
         // Step 3: Start model training with the zip URL
-        const trainResponse = await customFetch('/api/model', {
+        const trainResponse = await customFetch('/api/model/train', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
