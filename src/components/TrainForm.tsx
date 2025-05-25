@@ -17,13 +17,13 @@ import JSZip from 'jszip';
 import { ModelListTable } from "@/components/ModelListTable";
 import { motion } from "framer-motion";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-  DialogDescription
-} from "@/components/ui/dialog";
+  Drawer,
+  DrawerContent,
+  DrawerDescription,
+  DrawerHeader,
+  DrawerTitle,
+  DrawerTrigger,
+} from "@/components/ui/drawer";
 import { cn } from "@/lib/utils";
 
 // Reusable upload icon component
@@ -306,8 +306,8 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus, onModelsRema
   const [genderError, setGenderError] = useState<string | null>(null);
   const [thumbnails, setThumbnails] = useState<string[]>([]);
   const { resolvedTheme } = useTheme();
-  // State for the models dialog
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  // State for the models drawer
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   
   // Subscription state
   const [subscription, setSubscription] = useState<{models_remaining: number} | null>(null);
@@ -1103,8 +1103,8 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus, onModelsRema
                     Explore Plans
                   </Button>
                   
-                  <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-                    <DialogTrigger asChild>
+                  <Drawer open={isDrawerOpen} onOpenChange={setIsDrawerOpen} direction="bottom">
+                    <DrawerTrigger asChild>
                       <Button 
                         variant="outline"
                         size="sm"
@@ -1115,20 +1115,22 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus, onModelsRema
                         </svg>
                         My Models
                       </Button>
-                    </DialogTrigger>
-                    <DialogContent className="sm:max-w-4xl">
-                      <DialogHeader>
-                        <DialogTitle>My Models</DialogTitle>
-                        <DialogDescription>
+                    </DrawerTrigger>
+                    <DrawerContent className="h-full overflow-hidden max-h-[80vh] rounded-t-xl">
+                      <DrawerHeader className="border-b border-border/20">
+                        <DrawerTitle>My Models</DrawerTitle>
+                        <DrawerDescription>
                           Manage your trained models and ongoing trainings.
-                        </DialogDescription>
-                      </DialogHeader>
-                      <ModelListTable 
-                        newTraining={trainingStatus} 
-                        onClearNewTraining={() => onTrainingStatusChange(null)}
-                      />
-                    </DialogContent>
-                  </Dialog>
+                        </DrawerDescription>
+                      </DrawerHeader>
+                      <div className="flex-1 overflow-auto p-4">
+                        <ModelListTable 
+                          newTraining={trainingStatus} 
+                          onClearNewTraining={() => onTrainingStatusChange(null)}
+                        />
+                      </div>
+                    </DrawerContent>
+                  </Drawer>
                 </div>
                 
                 <p className="text-xs text-muted-foreground leading-relaxed">
@@ -1245,7 +1247,7 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus, onModelsRema
                 <p className="text-base font-medium" style={{ color: resolvedTheme === 'dark' ? '#93c5fd' : '#2563eb' }}>
                   JPG, PNG, WebP formats supported
                 </p>
-                <p className="text-sm opacity-80" style={{ color: resolvedTheme === 'dark' ? '#93c5fd' : '#2563eb' }}>
+                <p className="text-sm text-muted-foreground">
                   {MIN_IMAGES}-{MAX_IMAGES} images • Max 200MB total • Max 10MB per file
                 </p>
               </div>
@@ -1269,7 +1271,7 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus, onModelsRema
               <Button 
                 variant="outline" 
                 onClick={() => setCurrentStep(1)} 
-                className="bg-background/50 backdrop-blur-sm border-border/60 hover:border-border hover:bg-background/80 transition-all duration-200 order-1 sm:order-1"
+                className="bg-background/50 backdrop-blur-sm border-border/60 hover:border-border hover:bg-background/80 transition-all duration-200"
               >
                 <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -1277,31 +1279,33 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus, onModelsRema
                 Back to Guidelines
               </Button>
               
-              <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-                <DialogTrigger asChild>
+              <Drawer open={isDrawerOpen} onOpenChange={setIsDrawerOpen} direction="bottom">
+                <DrawerTrigger asChild>
                   <Button 
                     variant="outline"
-                    className="bg-background/50 backdrop-blur-sm border-border/60 hover:border-border hover:bg-background/80 transition-all duration-200 order-2 sm:order-2"
+                    className="bg-background/50 backdrop-blur-sm border-border/60 hover:border-border hover:bg-background/80 transition-all duration-200"
                   >
                     <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
                     </svg>
                     My Models
                   </Button>
-                </DialogTrigger>
-                <DialogContent className="sm:max-w-4xl">
-                  <DialogHeader>
-                    <DialogTitle>My Models</DialogTitle>
-                    <DialogDescription>
+                </DrawerTrigger>
+                <DrawerContent className="h-full overflow-hidden max-h-[80vh] rounded-t-xl">
+                  <DrawerHeader className="border-b border-border/20">
+                    <DrawerTitle>My Models</DrawerTitle>
+                    <DrawerDescription>
                       Manage your trained models and ongoing trainings.
-                    </DialogDescription>
-                  </DialogHeader>
-                  <ModelListTable 
-                    newTraining={trainingStatus} 
-                    onClearNewTraining={() => onTrainingStatusChange(null)}
-                  />
-                </DialogContent>
-              </Dialog>
+                    </DrawerDescription>
+                  </DrawerHeader>
+                  <div className="flex-1 overflow-auto p-4">
+                    <ModelListTable 
+                      newTraining={trainingStatus} 
+                      onClearNewTraining={() => onTrainingStatusChange(null)}
+                    />
+                  </div>
+                </DrawerContent>
+              </Drawer>
             </div>
           </div>
           
@@ -1399,7 +1403,7 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus, onModelsRema
                           Drag and drop images here, or click to select files
                         </p>
                         <p className="text-sm text-muted-foreground">
-                          JPG, PNG, WebP • {MIN_IMAGES}-{MAX_IMAGES} images • Max 200MB total • Max 10MB per file
+                          {MIN_IMAGES}-{MAX_IMAGES} images • Max 200MB total • Max 10MB per file
                         </p>
                       </div>
                     </div>
