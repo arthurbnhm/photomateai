@@ -10,9 +10,10 @@ interface ImageUploadProps {
   onImageChange: (imageDataUrl: string | null) => void;
   currentImageUrl: string | null;
   className?: string;
+  externalFileName?: string | null;
 }
 
-export function ImageUpload({ onImageChange, currentImageUrl, className }: ImageUploadProps) {
+export function ImageUpload({ onImageChange, currentImageUrl, className, externalFileName }: ImageUploadProps) {
   const [dragActive, setDragActive] = useState(false);
   const [uploadedFileName, setUploadedFileName] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -27,6 +28,11 @@ export function ImageUpload({ onImageChange, currentImageUrl, className }: Image
       }
     }
   }, [currentImageUrl]);
+
+  // Function to get the display filename (prioritize external, then uploaded)
+  const getDisplayFileName = () => {
+    return externalFileName || uploadedFileName;
+  };
 
   // Simple, reliable image processing using canvas
   const processImageFile = useCallback(async (file: File): Promise<string> => {
@@ -260,15 +266,17 @@ export function ImageUpload({ onImageChange, currentImageUrl, className }: Image
         ) : currentImageUrl ? (
           <>
             <div className="flex items-center gap-2 overflow-hidden">
-              <NextImage
-                src={currentImageUrl}
-                alt="Uploaded thumbnail"
-                width={24} 
-                height={24}
-                className="object-contain rounded bg-muted/30 shrink-0" 
-              />
+              <div className="w-6 h-6 rounded bg-muted/30 shrink-0 overflow-hidden">
+                <NextImage
+                  src={currentImageUrl}
+                  alt="Uploaded thumbnail"
+                  width={24} 
+                  height={24}
+                  className="w-full h-full object-cover" 
+                />
+              </div>
               <span className="truncate text-sm text-foreground">
-                {truncateFileName(uploadedFileName)}
+                {truncateFileName(getDisplayFileName())}
               </span>
             </div>
             <div

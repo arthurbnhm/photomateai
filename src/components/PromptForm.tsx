@@ -50,6 +50,7 @@ interface Model {
   display_name: string;    // Human-readable name chosen by the user
   version?: string;        // Optional version information
   gender?: string;         // Gender of the model (male/female)
+  attributes?: string[];   // Model attributes like "has tattoo", "brown eyes", etc.
   // Other fields like created_at, is_deleted, user_id exist in DB but not needed in UI
 }
 
@@ -62,6 +63,7 @@ type PendingGeneration = {
   startTime?: string       // When the generation started
   format?: string
   modelDisplayName?: string // Human-readable display name
+  abortController?: AbortController // Add AbortController for cancellation
 }
 
 // Aspect Ratio Frame component
@@ -140,6 +142,12 @@ interface PromptFormProps {
   isLoadingUserModels?: boolean; // Make optional for backward compatibility
   onGenerationStart?: () => void; // Optional prop
   onGenerationComplete?: () => void; // Optional prop
+  referenceImageData?: {
+    imageUrl: string;
+    originalPrompt: string;
+  } | null; // Optional prop for receiving reference image from ImageHistory
+  handleReferenceImageUsed?: () => void; // Optional callback to clear reference data
+  onCancelPendingGeneration?: (cancelFn: (id: string) => boolean) => void; // Callback to provide cancel function
 }
 
 // Add localStorage utilities
@@ -211,7 +219,10 @@ export function PromptForm({
   userModels,
   isLoadingUserModels,
   onGenerationStart, // Destructure new props
-  onGenerationComplete // Destructure new props
+  onGenerationComplete, // Destructure new props
+  referenceImageData, // Destructure new prop
+  handleReferenceImageUsed, // Destructure new callback
+  onCancelPendingGeneration // Destructure new callback
 }: PromptFormProps) { // Use the new interface here
   // Initialize Supabase client with useRef for stability
   const supabaseRef = useRef(createSupabaseBrowserClient());
@@ -238,6 +249,37 @@ export function PromptForm({
   const [selectedGender, setSelectedGender] = useState<string | null>(null);
   const [uploadedImageDataUrl, setUploadedImageDataUrl] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState("prompt"); // To track active tab
+  const [externalFileName, setExternalFileName] = useState<string | null>(null); // For external reference images
+
+  // Store AbortControllers for pending generations to enable cancellation
+  const pendingControllers = useRef<Map<string, AbortController>>(new Map());
+  
+  // Function to add a controller for a pending generation
+  const addPendingController = (id: string, controller: AbortController) => {
+    pendingControllers.current.set(id, controller);
+  };
+  
+  // Function to remove and abort a controller for a pending generation
+  const removePendingController = (id: string, shouldAbort: boolean = false) => {
+    const controller = pendingControllers.current.get(id);
+    if (controller) {
+      if (shouldAbort && !controller.signal.aborted) {
+        controller.abort();
+      }
+      pendingControllers.current.delete(id);
+    }
+  };
+  
+  // Function to cancel a pending generation (called from ImageHistory)
+  const cancelPendingGeneration = useCallback((id: string): boolean => {
+    const controller = pendingControllers.current.get(id);
+    if (controller && !controller.signal.aborted) {
+      controller.abort();
+      removePendingGeneration(id);
+      return true;
+    }
+    return false;
+  }, []);
 
   const placeholderExamples = useMemo(() => [
     "A woman portrait on studio grey background, smiling",
@@ -300,18 +342,50 @@ export function PromptForm({
     }
   }, [effectiveModels, form]);
   
+  // Handle external reference image setting from ImageHistory
+  useEffect(() => {
+    if (referenceImageData) {
+      // Instead of converting to data URL, just set the URL directly
+      setUploadedImageDataUrl(referenceImageData.imageUrl);
+      // Generate a filename based on the original prompt
+      const promptWords = referenceImageData.originalPrompt.split(' ').slice(0, 3).join('_');
+      const filename = `${promptWords}_reference.webp`;
+      setExternalFileName(filename);
+      setActiveTab("reference"); // Switch to reference tab
+      form.setValue("prompt", referenceImageData.originalPrompt); // Set the original prompt
+      handleReferenceImageUsed?.(); // Clear the reference data
+    }
+  }, [referenceImageData, form, handleReferenceImageUsed]);
+  
+  // Provide cancel function to parent component
+  useEffect(() => {
+    if (onCancelPendingGeneration) {
+      onCancelPendingGeneration(cancelPendingGeneration);
+    }
+  }, [onCancelPendingGeneration, cancelPendingGeneration]);
+  
   const handleImageChange = useCallback((imageDataUrl: string | null) => {
     setUploadedImageDataUrl(imageDataUrl);
+    // Clear external filename when a new image is uploaded normally
+    if (imageDataUrl === null) {
+      setExternalFileName(null);
+    }
     // If an image is uploaded, the aspect ratio is determined by the image
     // No longer disabling aspect ratio here, backend will handle it.
   }, []);
   
   // Add a pending generation
-  const addPendingGeneration = (generation: PendingGeneration) => {
+  const addPendingGeneration = (generation: PendingGeneration, controller?: AbortController) => {
     // Add start time if not provided
     const genWithStartTime = {
       ...generation,
-      startTime: generation.startTime || new Date().toISOString()
+      startTime: generation.startTime || new Date().toISOString(),
+      abortController: controller
+    }
+    
+    // Store the controller for cancellation if provided
+    if (controller) {
+      addPendingController(generation.id, controller);
     }
     
     setPendingGenerations(prev => [...prev, genWithStartTime])
@@ -319,6 +393,8 @@ export function PromptForm({
 
   // Remove a pending generation
   const removePendingGeneration = (id: string) => {
+    // Clean up the controller when removing
+    removePendingController(id, false);
     setPendingGenerations(prev => prev.filter(gen => gen.id !== id))
   }
 
@@ -331,6 +407,9 @@ export function PromptForm({
     imageDataUrl?: string | null; // Optional image data
     isImageReference?: boolean; // Optional flag to indicate if this is from image reference tab
   }) => {
+    let abortController: AbortController | null = null;
+    let tempId: string | null = null;
+    
     try {
       setError(null);
       setErrorDetails(null);
@@ -344,7 +423,8 @@ export function PromptForm({
         return;
       }
 
-      const tempId = Date.now().toString();
+      tempId = Date.now().toString();
+      abortController = new AbortController();
       
       // Preserve current form values for reset, but use submissionData for API
       const formValuesForReset = form.getValues();
@@ -366,14 +446,17 @@ export function PromptForm({
       let modelVersion: string | null = null;
       let modelDisplayName = '';
       let modelGender: string | null = null;
+      let modelAttributes: string[] = [];
       const selectedModel = effectiveModels.find(m => m.id === modelId);
       if (selectedModel) {
         modelApiId = selectedModel.model_id;
         modelDisplayName = selectedModel.display_name || selectedModel.model_id || '';
         modelVersion = selectedModel.version || null;
         modelGender = selectedModel.gender || null;
+        modelAttributes = selectedModel.attributes || [];
       }
 
+      // Add pending generation with the AbortController
       addPendingGeneration({
         id: tempId,
         prompt: prompt, // Use the prompt from submissionData
@@ -381,7 +464,7 @@ export function PromptForm({
         startTime: new Date().toISOString(),
         format: outputFormat,
         modelDisplayName: modelDisplayName
-      });
+      }, abortController);
 
       let currentCredits = 0;
       try {
@@ -424,8 +507,7 @@ export function PromptForm({
       }
       setLastUsedOutputFormat(outputFormat);
 
-      const abortController = new AbortController();
-      const timeoutId = setTimeout(() => abortController.abort(), 60000); // Increased from 30s to 60s
+      const timeoutId = setTimeout(() => abortController?.abort(), 60000); // Increased from 30s to 60s
       let authHeader = {};
       if (user) {
         const { data: { session } } = await getSupabase().auth.getSession();
@@ -444,6 +526,7 @@ export function PromptForm({
         userId: string | null;
         image_data_url?: string;
         modelGender?: string | null;
+        modelAttributes?: string[];
       }
 
       const requestBody: GenerateRequestBody = {
@@ -455,6 +538,7 @@ export function PromptForm({
         modelName: modelApiId,
         userId: user ? user.id : null,
         modelGender: modelGender,
+        modelAttributes: modelAttributes,
       };
 
       if (imageDataUrl) {
@@ -482,7 +566,7 @@ export function PromptForm({
           method: 'POST',
           headers: { 'Content-Type': 'application/json', ...authHeader },
           body: JSON.stringify(requestBody),
-          signal: abortController.signal
+          signal: abortController?.signal
         });
         
       } catch (err) {
@@ -557,6 +641,11 @@ export function PromptForm({
       console.log('✅ API request successful:', result);
       
       if (result && result.replicate_id) {
+        // Remove the controller since the request completed successfully
+        if (tempId) {
+          removePendingController(tempId, false);
+        }
+        
         setPendingGenerations(prev =>
           prev.map(gen =>
             gen.id === tempId ? { ...gen, replicate_id: result.replicate_id, id: result.id || tempId } : gen
@@ -594,6 +683,10 @@ export function PromptForm({
         console.error('Error in generation execution:', fetchError);
         const errorMsg = fetchError instanceof Error ? fetchError.message : 'An unexpected error occurred';
         setError(errorMsg);
+      }
+      // Clean up on any error
+      if (tempId) {
+        removePendingGeneration(tempId);
       }
       onGenerationComplete?.();
     }
@@ -1053,6 +1146,7 @@ export function PromptForm({
                         onImageChange={handleImageChange} 
                         currentImageUrl={uploadedImageDataUrl}
                         className="w-full"
+                        externalFileName={externalFileName}
                       />
                     </div>
 

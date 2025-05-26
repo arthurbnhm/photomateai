@@ -90,6 +90,7 @@ export async function POST(request: NextRequest) {
       modelVersion?: string;
       image_data_url?: string;
       modelGender?: string | null;
+      modelAttributes?: string[]; // Add model attributes
       // Add any other expected properties from the request body here
     }
 
@@ -103,7 +104,8 @@ export async function POST(request: NextRequest) {
         modelId: requestModelId, 
         modelName: requestModelName, 
         modelVersion,
-        modelGender: requestModelGender 
+        modelGender: requestModelGender,
+        modelAttributes: requestModelAttributes
     } = fullRequestBody;
     const originalPrompt = prompt; // Keep original prompt for fallback
     
@@ -135,6 +137,7 @@ export async function POST(request: NextRequest) {
     // Initialize model variables
     let finalModelVersion = null;
     let modelGender: string | null = requestModelGender || null;
+    let modelAttributes: string[] = requestModelAttributes || [];
     
     // If model name is provided directly in the request, use it
     if (requestModelName) {
@@ -176,6 +179,11 @@ export async function POST(request: NextRequest) {
           // Get the gender from the model if not provided in request
           if (!modelGender && trainedModel.gender) {
             modelGender = trainedModel.gender;
+          }
+          
+          // Get the attributes from the model
+          if (trainedModel.attributes && Array.isArray(trainedModel.attributes)) {
+            modelAttributes = trainedModel.attributes;
           }
         }
       } catch (err) {
@@ -273,6 +281,13 @@ export async function POST(request: NextRequest) {
       prompt = prompt.trim() + genderText;
     }
 
+    // Append model attributes to the prompt if available
+    if (modelAttributes && modelAttributes.length > 0) {
+      // Create a more natural description of the attributes
+      const attributesText = modelAttributes.join(', ');
+      prompt = prompt.trim() + `, with the following characteristics: ${attributesText}`;
+    }
+
     // Define a type for the Replicate input parameters
     interface ReplicateInputParams {
       prompt: string;
@@ -314,25 +329,48 @@ export async function POST(request: NextRequest) {
       try {
         console.log('🔍 Processing image data URL...');
         
-        // Basic validation - check if it starts with data:image
-        if (!image_data_url.startsWith('data:image/')) {
-          throw new Error("Invalid image data URL format");
-        }
+        let imageBuffer: Buffer;
         
-        // Extract base64 data
-        const base64Part = image_data_url.split(',')[1];
-        if (!base64Part) {
-          throw new Error("No base64 data found in image data URL");
+        // Check if it's a data URL or a direct URL
+        if (image_data_url.startsWith('data:image/')) {
+          // Handle data URL (uploaded files)
+          console.log('📄 Processing data URL...');
+          
+          // Extract base64 data
+          const base64Part = image_data_url.split(',')[1];
+          if (!base64Part) {
+            throw new Error("No base64 data found in image data URL");
+          }
+          
+          // Validate base64 format
+          const base64Regex = /^[A-Za-z0-9+/]*={0,2}$/;
+          if (!base64Regex.test(base64Part)) {
+            throw new Error("Invalid base64 format in image data URL");
+          }
+          
+          // Convert to Buffer
+          imageBuffer = Buffer.from(base64Part, 'base64');
+        } else if (image_data_url.startsWith('http://') || image_data_url.startsWith('https://')) {
+          // Handle direct URL (Use as Reference feature)
+          console.log('🌐 Processing direct image URL...');
+          
+          try {
+            const imageResponse = await fetch(image_data_url);
+            if (!imageResponse.ok) {
+              throw new Error(`Failed to fetch image: ${imageResponse.status} ${imageResponse.statusText}`);
+            }
+            
+            const arrayBuffer = await imageResponse.arrayBuffer();
+            imageBuffer = Buffer.from(arrayBuffer);
+            
+            console.log(`✅ Successfully fetched image (${imageBuffer.length} bytes)`);
+          } catch (fetchError) {
+            console.error('❌ Failed to fetch image from URL:', fetchError);
+            throw new Error(`Failed to fetch reference image: ${fetchError instanceof Error ? fetchError.message : 'Unknown error'}`);
+          }
+        } else {
+          throw new Error("Invalid image format. Must be a data URL or HTTP(S) URL");
         }
-        
-        // Validate base64 format
-        const base64Regex = /^[A-Za-z0-9+/]*={0,2}$/;
-        if (!base64Regex.test(base64Part)) {
-          throw new Error("Invalid base64 format in image data URL");
-        }
-        
-        // Convert to Buffer
-        const imageBuffer = Buffer.from(base64Part, 'base64');
         
         // Basic size check
         if (imageBuffer.length === 0) {

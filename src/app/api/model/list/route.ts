@@ -267,6 +267,56 @@ export async function POST(request: NextRequest) {
           message: 'Training status updated successfully'
         });
 
+      case 'updateAttributes':
+        if (!modelId) {
+          return NextResponse.json(
+            { error: 'Model ID is required', success: false },
+            { status: 400 }
+          );
+        }
+
+        const { attributes } = body;
+        
+        if (!Array.isArray(attributes)) {
+          return NextResponse.json(
+            { error: 'Attributes must be an array', success: false },
+            { status: 400 }
+          );
+        }
+
+        // Verify the model belongs to the authenticated user
+        const { data: modelForAttributes, error: attributesModelFetchError } = await supabase
+          .from('models')
+          .select('user_id')
+          .eq('id', modelId)
+          .single();
+
+        if (attributesModelFetchError || !modelForAttributes || modelForAttributes.user_id !== user.id) {
+          return NextResponse.json(
+            { error: 'Unauthorized to update this model or model not found', success: false },
+            { status: 403 }
+          );
+        }
+
+        // Update the model's attributes
+        const { error: updateAttributesError } = await supabase
+          .from('models')
+          .update({ attributes })
+          .eq('id', modelId);
+
+        if (updateAttributesError) {
+          console.error('Error updating model attributes:', updateAttributesError);
+          return NextResponse.json(
+            { error: 'Failed to update model attributes', success: false },
+            { status: 500 }
+          );
+        }
+
+        return NextResponse.json({
+          success: true,
+          message: 'Model attributes updated successfully'
+        });
+
       case 'markAsDeleted':
         if (!modelId) {
           return NextResponse.json(

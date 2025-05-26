@@ -9,7 +9,13 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Badge } from "@/components/ui/badge"
 import { createSupabaseBrowserClient } from "@/lib/supabase/client"
 import { MediaFocus } from "@/components/MediaFocus"
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, MoreHorizontal, Copy, Trash2, Camera } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 
 // Define the type for image generation (now passed as prop)
 export type ImageGeneration = {
@@ -87,6 +93,9 @@ interface ImageHistoryProps {
   pendingGenerations: PendingGeneration[];
   setPendingGenerations: React.Dispatch<React.SetStateAction<PendingGeneration[]>>;
   setPromptValue: (value: string) => void;
+  handleUseAsReference: (imageUrl: string, originalPrompt: string) => void;
+  handleReferenceImageUsed?: () => void;
+  cancelPendingGeneration?: ((id: string) => boolean) | null;
 }
 
 export function ImageHistory({ 
@@ -97,10 +106,16 @@ export function ImageHistory({
   loadGenerations, 
   pendingGenerations, 
   setPendingGenerations, 
-  setPromptValue 
+  setPromptValue, 
+  handleUseAsReference, 
+  handleReferenceImageUsed, // eslint-disable-line @typescript-eslint/no-unused-vars
+  cancelPendingGeneration // eslint-disable-line @typescript-eslint/no-unused-vars
 }: ImageHistoryProps) {
   const [isDeleting, setIsDeleting] = useState<string | null>(null)
   const [isCancelling, setIsCancelling] = useState<string | null>(null)
+  const [copiedStates, setCopiedStates] = useState<Record<string, boolean>>({}) // Add state for copy feedback
+  const [deletingStates, setDeletingStates] = useState<Record<string, 'deleting' | 'success' | 'error'>>({}) // Add state for delete feedback
+  const [referenceStates, setReferenceStates] = useState<Record<string, boolean>>({}) // Add state for reference feedback
   const [elapsedTimes, setElapsedTimes] = useState<Record<string, number>>({}) 
   const [isMounted, setIsMounted] = useState(false)
   
@@ -488,8 +503,7 @@ export function ImageHistory({
         throw new Error('Failed to update favorite status')
       }
 
-      // Show success toast
-      // toast.success(newLikedStatus ? 'Added to favorites' : 'Removed from favorites')
+      // API call completed successfully
 
     } catch (error) {
       console.error('Error toggling favorite:', error)
@@ -521,20 +535,33 @@ export function ImageHistory({
     
     if (isPending) {
       setIsCancelling(id);
-      const pendingGen = pendingGenerations.find(gen => gen.id === id);
       try {
-        const success = await cancelGeneration(id, pendingGen?.replicate_id);
-        if (success) {
-          toast.success('Generation cancelled successfully');
-          // Parent will refresh via loadGenerations(true) called in cancelGeneration
+        // Use the cancelPendingGeneration function from PromptForm if available
+        if (cancelPendingGeneration) {
+          const success = cancelPendingGeneration(id);
+          if (success) {
+            // Brief success indication instead of toast
+            setIsCancelling(null);
+            // Parent will refresh via loadGenerations(true) called in cancelGeneration
+          } else {
+            setIsCancelling(null);
+            toast.error('Failed to cancel generation');
+          }
         } else {
-          toast.error('Failed to cancel generation');
+          // Fallback to the old method if cancelPendingGeneration is not available
+          const pendingGen = pendingGenerations.find(gen => gen.id === id);
+          const success = await cancelGeneration(id, pendingGen?.replicate_id);
+          if (success) {
+            setIsCancelling(null);
+          } else {
+            setIsCancelling(null);
+            toast.error('Failed to cancel generation');
+          }
         }
       } catch (e) {
         console.error("Error during cancellation in handleDelete:", e);
-        toast.error('An error occurred during cancellation.');
-      } finally {
         setIsCancelling(null);
+        toast.error('An error occurred during cancellation.');
       }
       return;
     }
@@ -546,7 +573,8 @@ export function ImageHistory({
     }
     const generationToDelete = { ...generations[generationIndex] };
 
-    // Optimistic UI update using setGenerations prop
+    // Set deleting state and optimistic UI update
+    setDeletingStates(prev => ({ ...prev, [id]: 'deleting' }));
     setGenerations(prevGenerations => prevGenerations.filter(g => g.id !== id));
     
     setIsDeleting(id);
@@ -554,10 +582,27 @@ export function ImageHistory({
     sendDeleteRequest(generationToDelete.replicate_id, generationToDelete.images.map(img => img.url))
       .then(success => {
         if (success) {
-          // toast.success("Image deleted successfully"); // Optional: parent handles refresh
+          // Show success state briefly
+          setDeletingStates(prev => ({ ...prev, [id]: 'success' }));
+          setTimeout(() => {
+            setDeletingStates(prev => {
+              const newState = { ...prev };
+              delete newState[id];
+              return newState;
+            });
+          }, 1500);
           loadGenerations(true); // Ensure parent re-fetches to confirm deletion
         } else {
-          toast.error("Failed to delete image. Restoring...");
+          // Show error state and rollback
+          setDeletingStates(prev => ({ ...prev, [id]: 'error' }));
+          setTimeout(() => {
+            setDeletingStates(prev => {
+              const newState = { ...prev };
+              delete newState[id];
+              return newState;
+            });
+          }, 3000);
+          
           // Rollback UI by calling setGenerations with the original item re-inserted
           setGenerations(prev => {
             const restored = [...prev];
@@ -568,7 +613,15 @@ export function ImageHistory({
       })
       .catch(error => {
         console.error('Error during background image deletion:', error);
-        toast.error("Deletion error. Restoring...");
+        setDeletingStates(prev => ({ ...prev, [id]: 'error' }));
+        setTimeout(() => {
+          setDeletingStates(prev => {
+            const newState = { ...prev };
+            delete newState[id];
+            return newState;
+          });
+        }, 3000);
+        
         setGenerations(prev => {
           const restored = [...prev];
           restored.splice(generationIndex, 0, generationToDelete);
@@ -580,10 +633,16 @@ export function ImageHistory({
       });
   };
 
-  const copyPromptToClipboard = (prompt: string) => {
+  const copyPromptToClipboard = (prompt: string, generationId: string) => {
     navigator.clipboard.writeText(prompt)
       .then(() => {
         setPromptValue(prompt);
+        // Set copied state for visual feedback
+        setCopiedStates(prev => ({ ...prev, [generationId]: true }));
+        // Reset after 2 seconds
+        setTimeout(() => {
+          setCopiedStates(prev => ({ ...prev, [generationId]: false }));
+        }, 2000);
       })
       .catch((err) => {
         console.error('Failed to copy prompt:', err);
@@ -759,67 +818,80 @@ export function ImageHistory({
                     </div>
                     
                     <div className="flex items-center gap-2 ml-auto shrink-0">
-                      <Button 
-                        variant="outline" 
-                        size="icon"
-                        onClick={() => copyPromptToClipboard(generation.prompt)}
-                        className="h-8 w-8"
-                        aria-label="Copy Prompt"
-                        title="Copy Prompt"
-                      >
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-clipboard">
-                          <rect width="8" height="4" x="8" y="2" rx="1" ry="1"/>
-                          <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>
-                        </svg>
-                      </Button>
-                      
                       {isGenPending ? (
-                        <Button 
-                          variant="outline" 
-                          size="icon"
-                          onClick={() => cancelGeneration(generation.id, generation.replicate_id)}
+                        <button 
+                          onClick={() => handleDelete(generation.id)}
                           disabled={isCancelling === generation.id}
-                          className="h-8 w-8"
+                          className="h-8 w-8 rounded-lg backdrop-blur-sm bg-orange-500/20 hover:bg-orange-500/30 border border-orange-400/30 hover:border-orange-400/50 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-110 flex items-center justify-center group disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 dark:bg-orange-500/30 dark:hover:bg-orange-500/40"
                           aria-label="Cancel"
                           title="Cancel Generation"
                         >
                           {isCancelling === generation.id ? (
-                            <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <svg className="animate-spin h-3.5 w-3.5 text-orange-600 dark:text-orange-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                             </svg>
                           ) : (
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-x">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-orange-600 group-hover:text-orange-700 transition-colors duration-300 dark:text-orange-400 dark:group-hover:text-orange-300">
                               <path d="M18 6 6 18"/>
                               <path d="m6 6 12 12"/>
                             </svg>
                           )}
-                        </Button>
+                        </button>
                       ) : (
-                        <Button 
-                          variant="outline" 
-                          size="icon"
-                          onClick={() => handleDelete(generation.id)}
-                          disabled={isDeleting === generation.id}
-                          className="h-8 w-8"
-                          aria-label="Delete"
-                          title="Delete"
-                        >
-                          {isDeleting === generation.id ? (
-                            <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                            </svg>
-                          ) : (
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-trash-2">
-                              <path d="M3 6h18"/>
-                              <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/>
-                              <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>
-                              <line x1="10" x2="10" y1="11" y2="17"/>
-                              <line x1="14" x2="14" y1="11" y2="17"/>
-                            </svg>
-                          )}
-                        </Button>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <button 
+                              className={`h-8 w-8 rounded-lg backdrop-blur-sm shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-110 flex items-center justify-center group border ${
+                                copiedStates[generation.id] || deletingStates[generation.id] === 'success'
+                                  ? 'bg-green-400/80 hover:bg-green-400/90 border-green-300/60 hover:border-green-300/80' 
+                                  : deletingStates[generation.id] === 'error'
+                                  ? 'bg-yellow-500/90 hover:bg-yellow-500 border-yellow-400/50 hover:border-yellow-300'
+                                  : 'bg-black/20 hover:bg-black/40 border-white/20 hover:border-white/40'
+                              }`}
+                              aria-label="Actions"
+                              title="Actions"
+                            >
+                              {copiedStates[generation.id] || deletingStates[generation.id] === 'success' ? (
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-white">
+                                  <path d="M20 6 9 17l-5-5"/>
+                                </svg>
+                              ) : deletingStates[generation.id] === 'error' ? (
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-white">
+                                  <path d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                  <path d="M12 16h.01"/>
+                                </svg>
+                              ) : (
+                                <MoreHorizontal className="h-4 w-4 text-white hover:text-gray-200 transition-colors duration-300" />
+                              )}
+                            </button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-48">
+                            <DropdownMenuItem 
+                              onClick={() => copyPromptToClipboard(generation.prompt, generation.id)}
+                              className="cursor-pointer"
+                            >
+                              <Copy className="h-4 w-4" />
+                              Copy Prompt
+                            </DropdownMenuItem>
+                            <DropdownMenuItem 
+                              onClick={() => handleDelete(generation.id)}
+                              disabled={isDeleting === generation.id}
+                              variant="destructive"
+                              className="cursor-pointer"
+                            >
+                              {isDeleting === generation.id ? (
+                                <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                              ) : (
+                                <Trash2 className="h-4 w-4" />
+                              )}
+                              {isDeleting === generation.id ? 'Deleting...' : 'Delete'}
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       )}
                     </div>
                   </div>
@@ -842,33 +914,91 @@ export function ImageHistory({
                           >
                             <div className="absolute inset-0 bg-gradient-to-br from-primary/10 to-primary/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-10"></div>
                             
-                            {/* Heart Icon for Favorite */}
+                            {/* Use as Reference Icon - Top Left */}
                             <button
-                              className="absolute top-2 right-2 z-20 p-1.5 transition-all duration-200 group-hover:scale-110"
+                              className={`absolute top-2 left-2 z-20 p-2 transition-all duration-300 group-hover:scale-110 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 rounded-lg backdrop-blur-sm shadow-lg hover:shadow-xl border ${
+                                referenceStates[`${generation.id}-${index}`] 
+                                  ? 'bg-blue-400/80 hover:bg-blue-400/90 border-blue-300/60 hover:border-blue-300/80' 
+                                  : 'bg-black/20 hover:bg-black/40 border-white/20 hover:border-white/40'
+                              }`}
                               onClick={(e) => {
                                 e.stopPropagation(); // Prevent opening the viewer
+                                handleUseAsReference(image.url, generation.prompt);
+                                
+                                // Show toast notification
+                                toast.success("📸 Image set as reference!", {
+                                  description: "Your prompt has been updated with this reference image."
+                                });
+                                
+                                // Set reference state for visual feedback
+                                const key = `${generation.id}-${index}`;
+                                setReferenceStates(prev => ({ ...prev, [key]: true }));
+                                
+                                // Reset after 2 seconds
+                                setTimeout(() => {
+                                  setReferenceStates(prev => ({ ...prev, [key]: false }));
+                                }, 2000);
+                              }}
+                              aria-label="Use as reference"
+                              title="Use as reference"
+                            >
+                              {referenceStates[`${generation.id}-${index}`] ? (
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-white">
+                                  <path d="M20 6 9 17l-5-5"/>
+                                </svg>
+                              ) : (
+                                <Camera className="h-3.5 w-3.5 text-white hover:text-blue-300 transition-colors duration-300" />
+                              )}
+                            </button>
+                            
+                            {/* Heart Icon for Favorite */}
+                            <button
+                              className={`absolute top-2 right-2 z-20 p-2 transition-all duration-300 group-hover:scale-110 rounded-lg backdrop-blur-sm shadow-lg hover:shadow-xl border ${
+                                image.isLiked 
+                                  ? "bg-red-500/90 hover:bg-red-500 border-red-400/50 hover:border-red-300" 
+                                  : "bg-black/20 hover:bg-black/40 border-white/20 hover:border-white/40"
+                              }`}
+                              onClick={(e) => {
+                                e.stopPropagation(); // Prevent opening the viewer
+                                
+                                // Show toast notification
+                                if (!image.isLiked) {
+                                  // Adding to favorites
+                                  toast.success("💖 Added to favorites!", {
+                                    description: "View all your favorites",
+                                    action: {
+                                      label: "View Favorites",
+                                      onClick: () => {
+                                        window.location.href = "/favorites";
+                                      }
+                                    }
+                                  });
+                                } else {
+                                  // Removing from favorites
+                                  toast.success("Removed from favorites", {
+                                    description: "Image no longer saved to your collection"
+                                  });
+                                }
+                                
                                 toggleImageFavorite(generation.id, image.url, image.isLiked || false);
                               }}
                               aria-label={image.isLiked ? "Remove from favorites" : "Add to favorites"}
                             >
                               <svg 
                                 xmlns="http://www.w3.org/2000/svg" 
-                                width="16" 
-                                height="16" 
+                                width="14" 
+                                height="14" 
                                 viewBox="0 0 24 24" 
                                 fill={image.isLiked ? "currentColor" : "none"} 
                                 stroke="currentColor" 
-                                strokeWidth="2" 
+                                strokeWidth="2.5" 
                                 strokeLinecap="round" 
                                 strokeLinejoin="round" 
-                                className={`transition-colors duration-200 ${
+                                className={`transition-all duration-300 ${
                                   image.isLiked 
-                                    ? "text-red-500 drop-shadow-[0_2px_4px_rgba(255,255,255,0.8)]" 
-                                    : "text-white drop-shadow-[0_2px_4px_rgba(255,255,255,0.9)] hover:text-red-500"
+                                    ? "text-white" 
+                                    : "text-white hover:text-red-300 hover:fill-red-300/20"
                                 }`}
-                                style={{
-                                  filter: 'drop-shadow(0 0 3px rgba(255, 255, 255, 0.7))'
-                                }}
                               >
                                 <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
                               </svg>

@@ -17,7 +17,7 @@ export default async function PlansLayout({
 
   return (
     <>
-      <Navbar />
+      <Navbar hideThemeToggle={true} />
       {children}
     </>
   );

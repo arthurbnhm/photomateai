@@ -184,9 +184,28 @@ function CreatePageContent() {
   // Initialize to true to match SSR, then update in useEffect
   const [allowModelLoadingScreen, setAllowModelLoadingScreen] = useState(true);
 
+  // State for reference image communication between ImageHistory and PromptForm
+  const [referenceImageData, setReferenceImageData] = useState<{
+    imageUrl: string;
+    originalPrompt: string;
+  } | null>(null);
+
+  // Store the cancel function from PromptForm
+  const [cancelPendingGeneration, setCancelPendingGeneration] = useState<((id: string) => boolean) | null>(null);
+
   const [isMounted, setIsMounted] = useState(false);
   const { user } = useAuth();
   const supabaseClient = useRef(createSupabaseBrowserClient());
+
+  // Callback function to handle "Use as Reference" from ImageHistory
+  const handleUseAsReference = useCallback((imageUrl: string, originalPrompt: string) => {
+    setReferenceImageData({ imageUrl, originalPrompt });
+  }, []);
+
+  // Callback function to clear reference image data after it's been used
+  const handleReferenceImageUsed = useCallback(() => {
+    setReferenceImageData(null);
+  }, []);
 
   // Combined function to fetch all predictions and separate them
   const fetchAllPredictions = useCallback(async (silentUpdate: boolean = false) => {
@@ -564,6 +583,9 @@ function CreatePageContent() {
         isLoadingUserModels={isLoadingUserModels}
         onGenerationStart={() => { /* Potentially do nothing here if polling handles it */ }}
         onGenerationComplete={() => loadGenerations(true)} // Silent refresh
+        referenceImageData={referenceImageData}
+        handleReferenceImageUsed={handleReferenceImageUsed}
+        onCancelPendingGeneration={setCancelPendingGeneration}
       />
       <div className="w-full pt-8">
         <ImageHistory 
@@ -575,6 +597,8 @@ function CreatePageContent() {
           pendingGenerations={pendingGenerations}
           setPendingGenerations={setPendingGenerations}
           setPromptValue={setPromptValue}
+          handleUseAsReference={handleUseAsReference}
+          cancelPendingGeneration={cancelPendingGeneration}
         />
       </div>
     </div>

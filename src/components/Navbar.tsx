@@ -3,14 +3,29 @@
 import Link from "next/link";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
-import { Menu } from "lucide-react";
-import { useEffect, useState } from "react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { 
+  LogOut, 
+  Heart, 
+  Mail, 
+  CreditCard,
+  Sparkles,
+  Camera,
+  Menu,
+  Moon,
+  Sun
+} from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePathname, useRouter } from "next/navigation";
-/* Credit counter temporarily hidden
-import { CreditCounter } from "@/components/CreditCounter";
-*/
-import { ModeToggle } from "@/components/ModeToggle";
+import { useTheme } from "next-themes";
+import CryptoJS from 'crypto-js';
 
 type NavbarProps = {
   /**
@@ -22,182 +37,122 @@ type NavbarProps = {
    * Whether to hide sign-out button on homepage when user is signed in
    */
   hideSignOutOnHomepage?: boolean;
+  
+  /**
+   * Whether to hide app navigation (like Get Started button) - useful for subscription-required pages
+   */
+  hideAppNavigation?: boolean;
+  
+  /**
+   * Whether to hide theme toggle - useful for landing pages with forced themes
+   */
+  hideThemeToggle?: boolean;
 }
 
 export function Navbar({ 
   showLandingLinks = false,
-  hideSignOutOnHomepage = false 
+  hideSignOutOnHomepage = false,
+  hideAppNavigation = false,
+  hideThemeToggle = false
 }: NavbarProps) {
-  // State for mobile menu
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  // Add debounce state to prevent rapid clicks
-  const [isMenuButtonDisabled, setIsMenuButtonDisabled] = useState(false);
-  
-  // Get auth context, router and pathname
-  const { user, isLoading, signOut } = useAuth();
+  const { user, isLoading, signOut, mounted } = useAuth();
+  const { setTheme, resolvedTheme } = useTheme();
   const router = useRouter();
   const pathname = usePathname();
   const isHomePage = pathname === '/';
-  const isCreatePage = pathname?.startsWith('/create');
-  const isTrainPage = pathname?.startsWith('/train');
-  const isFavoritesPage = pathname?.startsWith('/favorites');
   const isPlansPage = pathname === '/plans';
   
-  // Handle sign out with redirect
   const handleSignOut = async () => {
     await signOut();
     router.push('/');
   };
 
-  // Function to handle menu toggle with debounce
-  const handleMenuToggle = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (!isMenuButtonDisabled) {
-      setIsMenuButtonDisabled(true);
-      setMobileMenuOpen(!mobileMenuOpen);
-      
-      // Enable the button after a short delay
-      setTimeout(() => {
-        setIsMenuButtonDisabled(false);
-      }, 300); // Match this with transition duration
-    }
+  const toggleTheme = () => {
+    setTheme(resolvedTheme === 'dark' ? 'light' : 'dark');
   };
-  
-  // Handle anchor link clicks with smooth scrolling (for landing page)
+
   const handleAnchorClick = (e: React.MouseEvent<HTMLAnchorElement>, href: string) => {
-    // Check if it's an anchor link
     if (href.startsWith('#')) {
       e.preventDefault();
-      
-      // Get the target element
       const targetId = href.substring(1);
       const targetElement = document.getElementById(targetId);
       
       if (targetElement) {
-        // Close mobile menu first
-        setMobileMenuOpen(false);
-        
-        // Scroll to the element
         targetElement.scrollIntoView({ 
           behavior: 'smooth',
           block: 'start'
         });
-        
-        // Update URL hash
         window.history.pushState(null, '', href);
       }
     }
   };
 
-  // Add effect to prevent scrolling when mobile menu is open
-  useEffect(() => {
-    if (mobileMenuOpen) {
-      document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = '';
+  const getUserInitials = () => {
+    if (!user) return 'U';
+    
+    const displayName = getUserDisplayName();
+    
+    // If we have a full name, use first letter of first and last name
+    if (displayName && displayName.includes(' ')) {
+      const names = displayName.trim().split(' ');
+      const firstInitial = names[0]?.charAt(0)?.toUpperCase() || '';
+      const lastInitial = names[names.length - 1]?.charAt(0)?.toUpperCase() || '';
+      return firstInitial + lastInitial;
     }
     
-    return () => {
-      document.body.style.overflow = '';
-    };
-  }, [mobileMenuOpen]);
-  
-  // Close mobile menu when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      const target = event.target as HTMLElement;
-      // If clicking outside the mobile menu and it's open, close it
-      if (mobileMenuOpen && !target.closest('.mobile-menu-items') && !target.closest('.menu-button')) {
-        setMobileMenuOpen(false);
-      }
-    };
+    // Otherwise use first letter of display name or email
+    return displayName?.charAt(0)?.toUpperCase() || user.email?.charAt(0)?.toUpperCase() || 'U';
+  };
+
+  const getUserDisplayName = () => {
+    if (!user) return '';
     
-    document.addEventListener('click', handleClickOutside);
-    return () => {
-      document.removeEventListener('click', handleClickOutside);
-    };
-  }, [mobileMenuOpen]);
+    // Try to get name from user metadata first (for OAuth providers)
+    if (user.user_metadata?.full_name) {
+      return user.user_metadata.full_name;
+    }
+    
+    if (user.user_metadata?.name) {
+      return user.user_metadata.name;
+    }
+    
+    // Fallback to email
+    return user.email || '';
+  };
+
+  const getUserAvatarUrl = () => {
+    if (!user) return undefined;
+    
+    // Try to get avatar from user metadata (for OAuth providers like Google)
+    if (user.user_metadata?.avatar_url) {
+      return user.user_metadata.avatar_url;
+    }
+    
+    // Try to get avatar from app metadata
+    if (user.app_metadata?.avatar_url) {
+      return user.app_metadata.avatar_url;
+    }
+    
+    // Try to get picture from user metadata (alternative field name)
+    if (user.user_metadata?.picture) {
+      return user.user_metadata.picture;
+    }
+    
+    // Generate Gravatar URL based on email
+    if (user.email) {
+      const emailHash = CryptoJS.MD5(user.email.toLowerCase().trim()).toString();
+      return `https://www.gravatar.com/avatar/${emailHash}?d=identicon&s=128`;
+    }
+    
+    return undefined;
+  };
 
   return (
-    <>
-      {/* Logo animation styles - MOVED HERE so they are not conditionally rendered */}
-      <style jsx global>{`
-        @keyframes pulse {
-          0% { opacity: 0.6; r: 10; }
-          50% { opacity: 1; r: 12; }
-          100% { opacity: 0.6; r: 10; }
-        }
-        
-        @keyframes glow {
-          0% { opacity: 0.2; r: 15; }
-          50% { opacity: 0.4; r: 20; }
-          100% { opacity: 0.2; r: 15; }
-        }
-        
-        @keyframes heartbeat {
-          0% { transform: scale(1); }
-          14% { transform: scale(1.1); }
-          28% { transform: scale(1); }
-          42% { transform: scale(1.1); }
-          70% { transform: scale(1); }
-          100% { transform: scale(1); }
-        }
-        
-        .red-dot {
-          animation: pulse 2s infinite ease-in-out;
-        }
-        
-        .red-glow {
-          animation: glow 2s infinite ease-in-out;
-        }
-        
-        .heart-beat {
-          animation: heartbeat 1.5s infinite ease-in-out;
-        }
-        
-        /* Menu item staggered animation */
-        .menu-item {
-          opacity: 0;
-          transform: translateY(10px);
-          transition: opacity 0.3s ease, transform 0.3s ease;
-          /* will-change: opacity, transform; */
-        }
-        
-        .mobile-menu.open .menu-item:nth-child(1) {
-          transition-delay: 0.05s;
-        }
-        
-        .mobile-menu.open .menu-item:nth-child(2) {
-          transition-delay: 0.1s;
-        }
-        
-        .mobile-menu.open .menu-item:nth-child(3) {
-          transition-delay: 0.15s;
-        }
-        
-        .mobile-menu.open .menu-item:nth-child(4) {
-          transition-delay: 0.2s;
-        }
-        
-        /* Combined rule for items when menu is open */
-        .mobile-menu.open .menu-item,
-        .mobile-menu.open .menu-cta {
-          opacity: 1;
-          transform: translateY(0);
-        }
-        
-        .menu-cta {
-          opacity: 0;
-          transform: translateY(10px);
-          transition: opacity 0.3s ease, transform 0.3s ease;
-          transition-delay: 0.25s; /* Delay for CTA to animate in */
-          /* will-change: opacity, transform; */
-        }
-      `}</style>
-      
-      <header className="py-4 px-6 bg-background relative z-30">
+    <header className="py-4 px-6 bg-background/80 backdrop-blur-sm">
         <div className="max-w-6xl mx-auto flex justify-between items-center">
-          <Link href="/" className="flex items-center space-x-2">
+        {/* Logo */}
+        <Link href="/" className="flex items-center space-x-2 hover:opacity-80 transition-opacity">
+          <div className="relative">
             <Image 
               src="/logo.svg"
               alt="PhotomateAI Logo"
@@ -206,537 +161,294 @@ export function Navbar({
               priority
               className="hidden md:inline-block"
             />
-            <span className="font-bold text-xl">PhotomateAI</span>
+          </div>
+          <span className="font-bold text-xl bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">
+            PhotomateAI
+          </span>
           </Link>
           
-          {/* Desktop Navigation */}
-          <nav className="hidden md:flex items-center gap-2">
+        <div className="flex items-center gap-3">
+          {/* Landing page links for desktop */}
             {showLandingLinks && (
-              <ul className="flex space-x-2">
-                <li>
-                  <Button 
-                    variant="ghost" 
-                    className="h-9 w-auto px-3"
-                    asChild
-                  >
-                    <a 
-                      href="#features" 
-                      onClick={(e) => handleAnchorClick(e, '#features')}
-                    >
+            <nav className="hidden md:flex items-center gap-1">
+              <Button variant="ghost" size="sm" asChild>
+                <a href="#features" onClick={(e) => handleAnchorClick(e, '#features')}>
                       Features
                     </a>
                   </Button>
-                </li>
-                <li>
-                  <Button 
-                    variant="ghost" 
-                    className="h-9 w-auto px-3"
-                    asChild
-                  >
-                    <a 
-                      href="#pricing" 
-                      onClick={(e) => handleAnchorClick(e, '#pricing')}
-                    >
+              <Button variant="ghost" size="sm" asChild>
+                <a href="#pricing" onClick={(e) => handleAnchorClick(e, '#pricing')}>
                       Pricing
                     </a>
                   </Button>
-                </li>
-                <li>
-                  <Button 
-                    variant="ghost" 
-                    className="h-9 w-auto px-3"
-                    asChild
-                  >
-                    <a href="mailto:arthurbnhm@gmail.com?subject=PhotomateAI">Contact</a>
-                  </Button>
-                </li>
-              </ul>
-            )}
-          
-            {/* Auth/Navigation Buttons */}
-            {!isLoading && (
+            </nav>
+          )}
+
+          {/* Only render auth-dependent content after mounting to prevent hydration mismatch */}
+          {mounted && !isLoading && (
               <>
                 {user ? (
-                  <>
-                    {isHomePage ? (
-                      <div className="flex items-center gap-2">
-                        <Button 
-                          variant="outline" 
-                          className="h-9 w-auto px-3"
-                          asChild
-                        >
-                          <Link href="/create">Go to App</Link>
-                        </Button>
-                      </div>
-                    ) : isCreatePage ? (
-                      <div className="flex gap-2 items-center">
-                        {/* Credit counter temporarily hidden
-                        <CreditCounter />
-                        */}
-                        <Button 
-                          variant="ghost" 
-                          className="h-9 w-auto px-3"
-                          asChild
-                        >
-                          <Link href="/train">Train</Link>
-                        </Button>
-                        <Button 
-                          variant="ghost" 
-                          className="h-9 w-auto px-3"
-                          asChild
-                        >
-                          <a href="mailto:arthurbnhm@gmail.com?subject=PhotomateAI">Contact</a>
-                        </Button>
-                        <Button 
-                          variant="ghost" 
-                          className="h-9 w-auto px-3"
-                          asChild
-                        >
-                          <Link href="https://billing.stripe.com/p/login/6oE14c04k7BpeFGfYY" target="_blank" rel="noopener noreferrer">
-                            Billing
-                          </Link>
-                        </Button>
-                        {(!isHomePage || !hideSignOutOnHomepage) && (
-                          <Button 
-                            variant="ghost" 
-                            className="h-9 w-auto px-3"
-                            onClick={handleSignOut}
-                          >
-                            Sign Out
+                <div className="flex items-center gap-2">
+                  {/* Only show app navigation if not on plans page and not explicitly hidden */}
+                  {!isPlansPage && !hideAppNavigation && (
+                    <>
+                      {/* Primary action buttons for desktop */}
+                      <div className="hidden md:flex items-center gap-2">
+                        {isHomePage ? (
+                          <Button size="sm" asChild>
+                            <Link href="/create">
+                              <Camera className="w-4 h-4 mr-2" />
+                              Get Started
+                            </Link>
                           </Button>
-                        )}
-                        <Button 
-                          variant="outline" 
-                          className="h-9 w-auto px-3 flex items-center gap-2"
-                          asChild
-                          title="Favorites"
-                        >
-                          <Link href="/favorites">
-                            <svg 
-                              xmlns="http://www.w3.org/2000/svg" 
-                              width="16" 
-                              height="16" 
-                              viewBox="0 0 24 24" 
-                              fill="currentColor" 
-                              stroke="none" 
-                              className="text-red-500"
+                        ) : (
+                          <>
+                            <Button 
+                              size="sm" 
+                              variant={pathname?.startsWith('/create') ? "default" : "outline"}
+                              asChild
                             >
-                              <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
-                            </svg>
-                            Favorites
-                          </Link>
-                        </Button>
-                        <ModeToggle />
-                      </div>
-                    ) : isTrainPage ? (
-                      <div className="flex gap-2 items-center">
-                        {/* Credit counter temporarily hidden
-                        <CreditCounter />
-                        */}
-                        <Button 
-                          variant="ghost" 
-                          className="h-9 w-auto px-3"
-                          asChild
-                        >
-                          <Link href="/create">Create</Link>
-                        </Button>
-                        <Button 
-                          variant="ghost" 
-                          className="h-9 w-auto px-3"
-                          asChild
-                        >
-                          <a href="mailto:arthurbnhm@gmail.com?subject=PhotomateAI">Contact</a>
-                        </Button>
-                        <Button 
-                          variant="ghost" 
-                          className="h-9 w-auto px-3"
-                          asChild
-                        >
-                          <Link href="https://billing.stripe.com/p/login/6oE14c04k7BpeFGfYY" target="_blank" rel="noopener noreferrer">
-                            Billing
-                          </Link>
-                        </Button>
-                        {(!isHomePage || !hideSignOutOnHomepage) && (
-                          <Button 
-                            variant="ghost" 
-                            className="h-9 w-auto px-3"
-                            onClick={handleSignOut}
-                          >
-                            Sign Out
-                          </Button>
-                        )}
-                        <Button 
-                          variant="outline" 
-                          className="h-9 w-auto px-3 flex items-center gap-2"
-                          asChild
-                          title="Favorites"
-                        >
-                          <Link href="/favorites">
-                            <svg 
-                              xmlns="http://www.w3.org/2000/svg" 
-                              width="16" 
-                              height="16" 
-                              viewBox="0 0 24 24" 
-                              fill="currentColor" 
-                              stroke="none" 
-                              className="text-red-500"
+                              <Link href="/create">
+                                <Camera className="w-4 h-4 mr-2" />
+                                Create
+                              </Link>
+                            </Button>
+                            <Button 
+                              size="sm" 
+                              variant={pathname?.startsWith('/train') ? "default" : "outline"}
+                              asChild
                             >
-                              <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
-                            </svg>
-                            Favorites
-                          </Link>
-                        </Button>
-                        <ModeToggle />
-                      </div>
-                    ) : isPlansPage ? (
-                      <div className="flex items-center gap-2">
-                        <Button 
-                          variant="outline" 
-                          className="h-9 w-auto px-3"
-                          onClick={handleSignOut}
-                        >
-                          Sign out
-                        </Button>
-                        <ModeToggle />
-                      </div>
-                    ) : isFavoritesPage ? (
-                      <div className="flex gap-2 items-center">
-                        {/* Credit counter temporarily hidden
-                        <CreditCounter />
-                        */}
-                        <Button 
-                          variant="ghost" 
-                          className="h-9 w-auto px-3"
-                          asChild
-                        >
-                          <Link href="/create">Create</Link>
-                        </Button>
-                        <Button 
-                          variant="ghost" 
-                          className="h-9 w-auto px-3"
-                          asChild
-                        >
-                          <Link href="/train">Train</Link>
-                        </Button>
-                        <Button 
-                          variant="ghost" 
-                          className="h-9 w-auto px-3"
-                          asChild
-                        >
-                          <a href="mailto:arthurbnhm@gmail.com?subject=PhotomateAI">Contact</a>
-                        </Button>
-                        <Button 
-                          variant="ghost" 
-                          className="h-9 w-auto px-3"
-                          asChild
-                        >
-                          <Link href="https://billing.stripe.com/p/login/6oE14c04k7BpeFGfYY" target="_blank" rel="noopener noreferrer">
-                            Billing
-                          </Link>
-                        </Button>
-                        {(!isHomePage || !hideSignOutOnHomepage) && (
-                          <Button 
-                            variant="ghost" 
-                            className="h-9 w-auto px-3"
-                            onClick={handleSignOut}
-                          >
-                            Sign Out
-                          </Button>
+                              <Link href="/train">
+                                <Sparkles className="w-4 h-4 mr-2" />
+                                Train
+                              </Link>
+                            </Button>
+                            <Button 
+                              size="sm" 
+                              variant={pathname?.startsWith('/favorites') ? "default" : "outline"}
+                              asChild
+                            >
+                              <Link href="/favorites">
+                                <Heart 
+                                  className={`w-4 h-4 mr-2 text-red-500 ${
+                                    pathname?.startsWith('/favorites') ? 'fill-current' : ''
+                                  }`} 
+                                />
+                                Favorites
+                              </Link>
+                            </Button>
+                          </>
                         )}
-                        <ModeToggle />
                       </div>
-                    ) : (
-                      <div className="flex items-center gap-2">
-                        <Button 
-                          variant="outline" 
-                          className="h-9 w-auto px-3"
-                          onClick={handleSignOut}
+                    </>
+                  )}
+
+                  {/* User Menu Dropdown */}
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" className="relative h-9 w-9 rounded-full">
+                        <Avatar className="h-8 w-8">
+                          <AvatarImage src={getUserAvatarUrl()} alt="User avatar" />
+                          <AvatarFallback className="text-sm font-medium">
+                            {getUserInitials()}
+                          </AvatarFallback>
+                        </Avatar>
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent className="w-56" align="end" forceMount>
+                      {/* User info */}
+                      <div className="flex items-center justify-start gap-2 p-2">
+                        <div className="flex flex-col space-y-1 leading-none">
+                          <p className="font-medium text-sm">{getUserDisplayName()}</p>
+                          {getUserDisplayName() !== user?.email && user?.email && (
+                            <p className="text-xs text-muted-foreground">{user.email}</p>
+                          )}
+                        </div>
+                      </div>
+                      <DropdownMenuSeparator />
+                      
+                      {/* Only show app navigation in dropdown if not on plans page and not explicitly hidden */}
+                      {!isPlansPage && !hideAppNavigation && (
+                        <>
+                          {/* Navigation Links */}
+                          <DropdownMenuItem asChild>
+                            <Link href="/create" className="w-full">
+                              <Camera className="mr-2 h-4 w-4" />
+                              Create
+                            </Link>
+                          </DropdownMenuItem>
+                          <DropdownMenuItem asChild>
+                            <Link href="/train" className="w-full">
+                              <Sparkles className="mr-2 h-4 w-4" />
+                              Train
+                            </Link>
+                          </DropdownMenuItem>
+                          <DropdownMenuItem asChild>
+                            <Link href="/favorites" className="w-full">
+                              <Heart 
+                                className={`w-4 h-4 mr-2 text-red-500 ${
+                                  pathname?.startsWith('/favorites') ? 'fill-current' : ''
+                                }`} 
+                              />
+                              Favorites
+                            </Link>
+                          </DropdownMenuItem>
+                          
+                          <DropdownMenuSeparator />
+                          
+                          {/* Settings & Support */}
+                          <DropdownMenuItem asChild>
+                            <Link 
+                              href="https://billing.stripe.com/p/login/6oE14c04k7BpeFGfYY" 
+                              target="_blank" 
+                              rel="noopener noreferrer"
+                              className="w-full"
+                            >
+                              <CreditCard className="mr-2 h-4 w-4" />
+                              Billing
+                            </Link>
+                          </DropdownMenuItem>
+                        </>
+                      )}
+                      
+                      <DropdownMenuItem asChild>
+                        <a href="mailto:arthurbnhm@gmail.com?subject=PhotomateAI" className="w-full">
+                          <Mail className="mr-2 h-4 w-4" />
+                          Contact
+                        </a>
+                      </DropdownMenuItem>
+                      
+                      {/* Theme toggle */}
+                      {!hideThemeToggle && (
+                        <DropdownMenuItem 
+                          onClick={toggleTheme}
+                          onSelect={(e) => e.preventDefault()}
                         >
+                          <div className="mr-2 h-4 w-4 relative">
+                            <Sun className={`h-4 w-4 absolute transition-all duration-300 ${
+                              mounted && resolvedTheme === 'dark' 
+                                ? 'rotate-90 scale-0 opacity-0' 
+                                : 'rotate-0 scale-100 opacity-100'
+                            }`} />
+                            <Moon className={`h-4 w-4 absolute transition-all duration-300 ${
+                              mounted && resolvedTheme === 'dark' 
+                                ? 'rotate-0 scale-100 opacity-100' 
+                                : '-rotate-90 scale-0 opacity-0'
+                            }`} />
+                          </div>
+                          <span>Theme</span>
+                        </DropdownMenuItem>
+                      )}
+                      
+                      <DropdownMenuSeparator />
+                      
+                      {/* Sign out */}
+                      {(!isHomePage || !hideSignOutOnHomepage) && (
+                        <DropdownMenuItem onClick={handleSignOut} className="text-red-600 focus:text-red-600">
+                          <LogOut className="mr-2 h-4 w-4" />
                           Sign out
+                        </DropdownMenuItem>
+                      )}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  {/* Mobile menu for landing page */}
+                  {showLandingLinks && (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild className="md:hidden">
+                        <Button variant="ghost" size="sm">
+                          <Menu className="h-4 w-4" />
                         </Button>
-                        <ModeToggle />
-                      </div>
-                    )}
-                  </>
-                ) : (
-                  <div className="flex items-center gap-2">
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent className="w-48" align="end">
+                        <DropdownMenuItem asChild>
+                          <a href="#features" onClick={(e) => handleAnchorClick(e, '#features')}>
+                            Features
+                          </a>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem asChild>
+                          <a href="#pricing" onClick={(e) => handleAnchorClick(e, '#pricing')}>
+                            Pricing
+                          </a>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem asChild>
+                          <a href="mailto:arthurbnhm@gmail.com?subject=PhotomateAI">
+                            Contact
+                          </a>
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        {!hideThemeToggle && (
+                          <DropdownMenuItem className="p-0">
+                            <div className="flex items-center w-full px-2 py-1.5">
+                              <div className="mr-2 h-4 w-4 relative">
+                                <Sun className={`h-4 w-4 absolute transition-all duration-300 ${
+                                  mounted && resolvedTheme === 'dark' 
+                                    ? 'rotate-90 scale-0 opacity-0' 
+                                    : 'rotate-0 scale-100 opacity-100'
+                                }`} />
+                                <Moon className={`h-4 w-4 absolute transition-all duration-300 ${
+                                  mounted && resolvedTheme === 'dark' 
+                                    ? 'rotate-0 scale-100 opacity-100' 
+                                    : '-rotate-90 scale-0 opacity-0'
+                                }`} />
+                              </div>
+                              <span className="flex-1">Theme</span>
+                              <div className="ml-auto">
+                                <Button 
+                                  variant="outline" 
+                                  size="icon"
+                                  className="h-9 w-9"
+                                  onClick={toggleTheme}
+                                  aria-label={resolvedTheme === 'dark' ? "Switch to light mode" : "Switch to dark mode"}
+                                >
+                                  {resolvedTheme === 'dark' ? (
+                                    <Moon className="h-4 w-4" />
+                                  ) : (
+                                    <Sun className="h-4 w-4" />
+                                  )}
+                                </Button>
+                              </div>
+                            </div>
+                          </DropdownMenuItem>
+                        )}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  )}
+                  
+                  <Button size="sm" onClick={() => router.push('/auth/login')}>
+                    Sign in
+                  </Button>
+                  
+                  {!showLandingLinks && !hideThemeToggle && mounted && (
                     <Button 
                       variant="outline" 
-                      className="h-9 w-auto px-3"
-                      onClick={() => router.push('/auth/login')}
+                      size="icon"
+                      className="h-9 w-9"
+                      onClick={toggleTheme}
+                      aria-label={resolvedTheme === 'dark' ? "Switch to light mode" : "Switch to dark mode"}
                     >
-                      Sign in
+                      {resolvedTheme === 'dark' ? (
+                        <Moon className="h-4 w-4" />
+                      ) : (
+                        <Sun className="h-4 w-4" />
+                      )}
                     </Button>
-                    {!isHomePage && <ModeToggle />}
-                  </div>
-                )}
-              </>
-            )}
-          </nav>
-          
-          {/* Mobile Menu Button - Only visible on mobile */}
-          <div className="flex items-center gap-4 md:hidden">
-            {!isHomePage && <ModeToggle />}
-            <button 
-              className="menu-button p-2"
-              onClick={handleMenuToggle}
-              aria-label="Toggle menu"
-              style={{ zIndex: 60 }}
-              disabled={isMenuButtonDisabled}
-            >
-              <Menu className="h-6 w-6" />
-            </button>
-          </div>
-        </div>
-      </header>
-      
-      {/* Mobile Menu - Only visible on mobile */}
-      <div
-        className={`
-          mobile-menu block md:hidden fixed inset-0 bg-background z-50
-          flex items-center justify-center text-center
-          transition-opacity duration-300 ease-in-out
-          ${mobileMenuOpen ? 'opacity-100 open' : 'opacity-0 pointer-events-none closed'}
-        `}
-        // 'open' and 'closed' classes are kept for the .mobile-menu.open selectors
-        // used by child item animations in the <style jsx global> block.
-        // The main container's visibility/fade is now handled by opacity/visible classes.
-      >
-        <div className="mobile-menu-items flex flex-col justify-center items-center p-4">
-          <nav>
-            <ul className="space-y-8">
-              {/* Landing page links - same as desktop */}
-              {showLandingLinks && (
-                <>
-                  <li className="menu-item">
-                    <a 
-                      href="#features" 
-                      className="hover:text-blue-500 font-bold"
-                      onClick={(e) => handleAnchorClick(e, '#features')}
-                    >
-                      Features
-                    </a>
-                  </li>
-                  <li className="menu-item">
-                    <a 
-                      href="#pricing" 
-                      className="hover:text-blue-500 font-bold"
-                      onClick={(e) => handleAnchorClick(e, '#pricing')}
-                    >
-                      Pricing
-                    </a>
-                  </li>
-                  <li className="menu-item">
-                    <a 
-                      href="mailto:arthurbnhm@gmail.com?subject=PhotomateAI" 
-                      className="hover:text-blue-500 font-bold"
-                      onClick={() => setMobileMenuOpen(false)}
-                    >
-                      Contact
-                    </a>
-                  </li>
-                </>
-              )}
-              
-              {/* Auth/Navigation Buttons - exactly matching desktop */}
-              {!isLoading && user ? (
-                <>
-                  {/* Home page shows Go to App */}
-                  {isHomePage ? (
-                    <li className="menu-item">
-                      <Link 
-                        href="/create" 
-                        className="hover:text-blue-500 font-bold"
-                        onClick={() => setMobileMenuOpen(false)}
-                      >
-                        Go to App
-                      </Link>
-                    </li>
-                  ) : isCreatePage ? (
-                    <>
-                      <li className="menu-item">
-                        <div className="flex justify-center mb-2">
-                          {/* Credit counter temporarily hidden
-                          <CreditCounter />
-                          */}
-                        </div>
-                      </li>
-                      <li className="menu-item">
-                        <Link 
-                          href="/train" 
-                          className="hover:text-blue-500 font-bold"
-                          onClick={() => setMobileMenuOpen(false)}
-                        >
-                          Train
-                        </Link>
-                      </li>
-                      <li className="menu-item">
-                        <a 
-                          href="mailto:arthurbnhm@gmail.com?subject=PhotomateAI" 
-                          className="hover:text-blue-500 font-bold"
-                          onClick={() => setMobileMenuOpen(false)}
-                        >
-                          Contact
-                        </a>
-                      </li>
-                      <li className="menu-item">
-                        <Link 
-                          href="/favorites" 
-                          className="hover:text-blue-500 font-bold flex items-center justify-center gap-2 group"
-                          onClick={() => setMobileMenuOpen(false)}
-                        >
-                          <svg 
-                            xmlns="http://www.w3.org/2000/svg" 
-                            width="18" 
-                            height="18" 
-                            viewBox="0 0 24 24" 
-                            fill="currentColor" 
-                            stroke="none" 
-                            className="text-red-500 group-hover:scale-110 transition-transform duration-200 heart-beat"
-                          >
-                            <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
-                          </svg>
-                          Favorites
-                        </Link>
-                      </li>
-                    </>
-                  ) : isTrainPage ? (
-                    <>
-                      <li className="menu-item">
-                        <div className="flex justify-center mb-2">
-                          {/* Credit counter temporarily hidden
-                          <CreditCounter />
-                          */}
-                        </div>
-                      </li>
-                      <li className="menu-item">
-                        <Link 
-                          href="/create" 
-                          className="hover:text-blue-500 font-bold"
-                          onClick={() => setMobileMenuOpen(false)}
-                        >
-                          Create
-                        </Link>
-                      </li>
-                      <li className="menu-item">
-                        <a 
-                          href="mailto:arthurbnhm@gmail.com?subject=PhotomateAI" 
-                          className="hover:text-blue-500 font-bold"
-                          onClick={() => setMobileMenuOpen(false)}
-                        >
-                          Contact
-                        </a>
-                      </li>
-                      <li className="menu-item">
-                        <Link 
-                          href="/favorites" 
-                          className="hover:text-blue-500 font-bold flex items-center justify-center gap-2 group"
-                          onClick={() => setMobileMenuOpen(false)}
-                        >
-                          <svg 
-                            xmlns="http://www.w3.org/2000/svg" 
-                            width="18" 
-                            height="18" 
-                            viewBox="0 0 24 24" 
-                            fill="currentColor" 
-                            stroke="none" 
-                            className="text-red-500 group-hover:scale-110 transition-transform duration-200 heart-beat"
-                          >
-                            <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
-                          </svg>
-                          Favorites
-                        </Link>
-                      </li>
-                    </>
-                  ) : isFavoritesPage ? (
-                    <>
-                      <li className="menu-item">
-                        <div className="flex justify-center mb-2">
-                          {/* Credit counter temporarily hidden
-                          <CreditCounter />
-                          */}
-                        </div>
-                      </li>
-                      <li className="menu-item">
-                        <Link 
-                          href="/create" 
-                          className="hover:text-blue-500 font-bold"
-                          onClick={() => setMobileMenuOpen(false)}
-                        >
-                          Create
-                        </Link>
-                      </li>
-                      <li className="menu-item">
-                        <Link 
-                          href="/train" 
-                          className="hover:text-blue-500 font-bold"
-                          onClick={() => setMobileMenuOpen(false)}
-                        >
-                          Train
-                        </Link>
-                      </li>
-                      <li className="menu-item">
-                        <a 
-                          href="mailto:arthurbnhm@gmail.com?subject=PhotomateAI" 
-                          className="hover:text-blue-500 font-bold"
-                          onClick={() => setMobileMenuOpen(false)}
-                        >
-                          Contact
-                        </a>
-                      </li>
-                    </>
-                  ) : null}
-                  
-                  {/* Sign out button (conditional on home page) */}
-                  {(!isHomePage || !hideSignOutOnHomepage) && (
-                    <li className="menu-item">
-                      <button 
-                        onClick={() => {
-                          setMobileMenuOpen(false);
-                          handleSignOut();
-                        }}
-                        className="hover:text-blue-500 font-bold"
-                      >
-                        Sign out
-                      </button>
-                    </li>
                   )}
-                </>
-              ) : (
-                <li className="menu-item">
-                  <Link 
-                    href="/auth/login" 
-                    className="hover:text-blue-500 font-bold"
-                    onClick={() => setMobileMenuOpen(false)}
-                  >
-                    Sign in
-                  </Link>
-                </li>
+                </div>
               )}
-            </ul>
-          </nav>
+            </>
+          )}
           
-          {/* Start Now button - keep this special CTA for the homepage */}
-          {isHomePage && (
-            <div className="mt-16 menu-cta">
-              <Button 
-                size="lg" 
-                className="rounded-full px-8 py-6 text-lg"
-                onClick={() => {
-                  setMobileMenuOpen(false);
-                  if (user) {
-                    router.push('/create');
-                  } else {
-                    router.push('/auth/login');
-                  }
-                }}
-              >
-                Start Now
-              </Button>
+          {/* Show a placeholder during hydration to prevent layout shift */}
+          {(!mounted || isLoading) && (
+            <div className="flex items-center gap-2">
+              <div className="h-8 w-16 bg-muted animate-pulse rounded"></div>
             </div>
           )}
         </div>
       </div>
-    </>
+    </header>
   );
 } 

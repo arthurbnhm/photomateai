@@ -140,7 +140,7 @@ export default function Home() {
     <>
       <div className="flex flex-col min-h-screen overflow-x-hidden">
         {/* Navbar */}
-        <Navbar showLandingLinks={true} hideSignOutOnHomepage={true} />
+        <Navbar showLandingLinks={true} hideAppNavigation={true} hideThemeToggle={true} />
 
         {/* Hero Section */}
         <section id="hero" className="min-h-[calc(100vh-72px)] flex flex-col justify-center items-center py-12 md:py-20 px-4 text-center">
@@ -549,14 +549,6 @@ export default function Home() {
                 <ul className="space-y-2">
                   <li><Link href="#" className="text-muted-foreground hover:text-foreground">About</Link></li>
                   <li><Link href="mailto:arthurbnhm@gmail.com" className="text-muted-foreground hover:text-foreground">Contact</Link></li>
-                </ul>
-              </div>
-              
-              <div>
-                <h4 className="font-medium mb-4">Legal</h4>
-                <ul className="space-y-2">
-                  <li><Link href="#" className="text-muted-foreground hover:text-foreground">Privacy Policy</Link></li>
-                  <li><Link href="#" className="text-muted-foreground hover:text-foreground">Terms of Service</Link></li>
                 </ul>
               </div>
             </div>
