@@ -25,7 +25,6 @@ import {
   ArrowRight
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
-import { useCredits } from "@/hooks/useCredits";
 import { usePathname, useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
 import CryptoJS from 'crypto-js';
@@ -58,13 +57,25 @@ export function Navbar({
   hideAppNavigation = false,
   hideThemeToggle = false
 }: NavbarProps) {
-  const { user, isLoading, signOut, mounted } = useAuth();
-  const { credits_remaining, loading: creditsLoading, subscription_active } = useCredits();
+  // Use centralized auth state instead of separate useCredits hook
+  const { 
+    user, 
+    isLoading, 
+    signOut, 
+    mounted, 
+    credits, 
+    creditsLoading
+  } = useAuth();
+  
   const { setTheme, resolvedTheme } = useTheme();
   const router = useRouter();
   const pathname = usePathname();
   const isHomePage = pathname === '/';
   const isPlansPage = pathname === '/plans';
+  
+  // Derived state for cleaner code
+  const subscriptionActive = credits?.subscription_active || false;
+  const creditsRemaining = credits?.credits_remaining || 0;
   
   const handleSignOut = async () => {
     await signOut();
@@ -194,7 +205,7 @@ export function Navbar({
                 {user ? (
                 <div className="flex items-center gap-2">
                   {/* Show "Go To App" button on homepage when user has active subscription */}
-                  {isHomePage && subscription_active && !creditsLoading && (
+                  {isHomePage && subscriptionActive && !creditsLoading && (
                     <Button size="sm" asChild>
                       <Link href="/create">
                         <ArrowRight className="w-4 h-4 mr-2" />
@@ -210,7 +221,7 @@ export function Navbar({
                       <div className="hidden md:flex items-center gap-2">
                         {isHomePage ? (
                           // Only show "Get Started" if user doesn't have active subscription
-                          !subscription_active && !creditsLoading && (
+                          !subscriptionActive && !creditsLoading && (
                             <Button size="sm" asChild>
                               <Link href="/create">
                                 <Camera className="w-4 h-4 mr-2" />
@@ -295,14 +306,14 @@ export function Navbar({
                             <Coins className="mr-2 h-4 w-4 text-yellow-500" />
                             <span className="flex-1">Credits</span>
                             <span className="font-medium">
-                              {creditsLoading ? "..." : credits_remaining || 0}
+                              {creditsLoading ? "..." : creditsRemaining}
                             </span>
                           </DropdownMenuItem>
                           
                           <DropdownMenuSeparator />
                           
                           {/* Navigation Links - only show if not on homepage or user doesn't have active subscription */}
-                          {(!isHomePage || !subscription_active) && (
+                          {(!isHomePage || !subscriptionActive) && (
                             <>
                               <DropdownMenuItem asChild>
                                 <Link href="/create" className="w-full">

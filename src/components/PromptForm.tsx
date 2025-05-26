@@ -6,7 +6,6 @@ import { useForm } from "react-hook-form"
 import * as z from "zod"
 import { createSupabaseBrowserClient } from "@/lib/supabase/client"
 import { useAuth } from "@/contexts/AuthContext"
-import { useCredits } from "@/hooks/useCredits"
 import { cn } from "@/lib/utils"
 import TextareaAutosize from 'react-textarea-autosize'
 import Image from 'next/image'
@@ -228,11 +227,12 @@ export function PromptForm({
   const supabaseRef = useRef(createSupabaseBrowserClient());
   const getSupabase = useCallback(() => supabaseRef.current, []);
   
-  // Get user from AuthContext instead of making separate API call
-  const { user } = useAuth();
+  // Get user and credits from centralized AuthContext
+  const { user, credits, creditsLoading, refreshCredits } = useAuth();
   
-  // Use the credit hook for database-first credit management
-  const { has_credits, loading: creditsLoading, error: creditsError, refreshCredits } = useCredits();
+  // Derived state from credits
+  const has_credits = credits?.has_credits || false;
+  const creditsError = null; // No longer needed since AuthContext handles errors internally
   
   // Create ref for AdvancedSettings component
   const advancedSettingsRef = useRef<AdvancedSettingsRefType>(null);
@@ -629,9 +629,8 @@ export function PromptForm({
           )
         );
         
-        // Fetch updated credits after successful generation
+        // Refresh credits after successful generation using centralized method
         try {
-          // Refresh credits using our hook
           refreshCredits();
         } catch (error) {
           console.error('Error refreshing credits:', error);

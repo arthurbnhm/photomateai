@@ -14,11 +14,26 @@ type Subscription = {
 
 // Define protected routes and their requirements
 const PROTECTED_ROUTES = {
+  // App pages - require auth + subscription  
   '/create': { requiresAuth: true, requiresSubscription: true },
+  '/train': { requiresAuth: true, requiresSubscription: true },
+  '/favorites': { requiresAuth: true, requiresSubscription: true },
+  
+  // Plans page - require auth only (for upgrading)
   '/plans': { requiresAuth: true, requiresSubscription: false },
+  
+  // API routes - require auth + subscription
   '/api/generate': { requiresAuth: true, requiresSubscription: true },
-  '/api/train': { requiresAuth: true, requiresSubscription: true },
-  '/api/models': { requiresAuth: true, requiresSubscription: true },
+  '/api/model/train': { requiresAuth: true, requiresSubscription: true },
+  '/api/model/list': { requiresAuth: true, requiresSubscription: true },
+  '/api/model/upload': { requiresAuth: true, requiresSubscription: true },
+  '/api/training': { requiresAuth: true, requiresSubscription: true },
+  '/api/favorite': { requiresAuth: true, requiresSubscription: true },
+  '/api/delete': { requiresAuth: true, requiresSubscription: true },
+  '/api/cancel': { requiresAuth: true, requiresSubscription: true },
+  
+  // Credits API - require auth only (for checking)
+  '/api/credits': { requiresAuth: true, requiresSubscription: false },
 } as const
 
 export async function middleware(request: NextRequest) {
@@ -74,8 +89,8 @@ export async function middleware(request: NextRequest) {
     }
   )
   
-  // It's important to run `getUser` in the middleware to refresh the session cookie.
-  const { data: { user: middlewareUser } } = await supabase.auth.getUser() 
+  // Get user session (refreshes session cookie)
+  const { data: { user } } = await supabase.auth.getUser() 
 
   const pathname = request.nextUrl.pathname
   
@@ -90,9 +105,6 @@ export async function middleware(request: NextRequest) {
   }
 
   const [, requirements] = protectedRoute
-  
-  // Get the authenticated user - use middlewareUser obtained above
-  const user = middlewareUser
   
   // Check authentication requirement
   if (requirements.requiresAuth && !user) {
@@ -160,16 +172,11 @@ async function checkResourceLimits(
     return false
   }
   
-  // For train endpoint, check models
-  if (pathname.startsWith('/api/train')) {
-    const { count } = await supabase
-      .from('models')
-      .select('*', { count: 'exact' })
-      .eq('user_id', subscription.user_id)
-      .gte('created_at', subscription.subscription_start_date)
-      .lt('created_at', subscription.subscription_end_date)
-    
-    if (count && count >= subscription.models_remaining) {
+  // For train endpoint, check models_remaining (it's a decrementing counter)
+  if (pathname.startsWith('/api/model/train') || pathname.startsWith('/api/training')) {
+    // Simply check if there are models remaining - no need to count existing models
+    // since models_remaining is decremented by the webhook when training succeeds
+    if (subscription.models_remaining <= 0) {
       return false
     }
   }
@@ -179,13 +186,17 @@ async function checkResourceLimits(
 
 export const config = {
   matcher: [
-    /*
-     * Match all request paths except for the ones starting with:
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     * Feel free to modify this pattern to include more paths.
-     */
-    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    // Only run middleware on protected routes - much more efficient!
+    '/create/:path*',
+    '/train/:path*', 
+    '/favorites/:path*',
+    '/plans/:path*',
+    '/api/generate/:path*',
+    '/api/model/:path*',
+    '/api/training/:path*',
+    '/api/favorite/:path*',
+    '/api/delete/:path*',
+    '/api/cancel/:path*',
+    '/api/credits/:path*',
   ],
 } 
