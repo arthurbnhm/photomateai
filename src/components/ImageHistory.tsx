@@ -109,7 +109,7 @@ export function ImageHistory({
   setPromptValue, 
   handleUseAsReference, 
   handleReferenceImageUsed, // eslint-disable-line @typescript-eslint/no-unused-vars
-  cancelPendingGeneration // eslint-disable-line @typescript-eslint/no-unused-vars
+  cancelPendingGeneration
 }: ImageHistoryProps) {
   const [isDeleting, setIsDeleting] = useState<string | null>(null)
   const [isCancelling, setIsCancelling] = useState<string | null>(null)

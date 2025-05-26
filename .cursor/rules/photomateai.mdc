@@ -1,5 +1,10 @@
 ---
 description: 
 globs: 
-alwaysApply: true
+alwaysApply: false
 ---
+Never use npm run build or npm run dev unless i tell you so
+
+Never create useless files and complexity when you can keep things simple.
+
+Make sure to use our app Current Design. When you create action button, make sure to make them with an instant user feedback.

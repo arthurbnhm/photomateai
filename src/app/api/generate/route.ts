@@ -43,37 +43,28 @@ export async function POST(request: NextRequest) {
       );
     }
     
-    // Check if user has an active subscription
-    const { data: subscription, error: subscriptionError } = await supabase
-      .from('subscriptions')
-      .select('*')
-      .eq('user_id', user.id)
-      .eq('is_active', true)
-      .single();
+    // Check if user has an active subscription and atomically decrement credits
+    const { data: creditResult, error: creditError } = await supabase
+      .rpc('decrement_user_credits', { p_user_id: user.id });
     
-    if (subscriptionError || !subscription) {
+    if (creditError) {
+      console.error('Error checking/decrementing credits:', creditError);
       return NextResponse.json(
-        { error: 'Unauthorized: You need an active subscription to use this API' },
+        { error: 'Unable to process credit transaction. Please try again.' },
+        { status: 500 }
+      );
+    }
+    
+    // Check if the function returned any results (user has active subscription with credits)
+    if (!creditResult || creditResult.length === 0) {
+      return NextResponse.json(
+        { error: 'Insufficient credits or no active subscription. Please check your subscription status.' },
         { status: 403 }
       );
     }
     
-    // Check if user has enough credits
-    if (subscription.credits_remaining <= 0) {
-      return NextResponse.json(
-        { error: 'Insufficient credits: You have used all your available credits' },
-        { status: 403 }
-      );
-    }
-    
-    // Decrement credits
-    await supabase
-      .from('subscriptions')
-      .update({ 
-        credits_remaining: subscription.credits_remaining - 1,
-        updated_at: new Date().toISOString()
-      })
-      .eq('user_id', user.id);
+    const { credits_remaining, models_remaining, plan } = creditResult[0];
+    console.log(`✅ Credit decremented successfully. Remaining: ${credits_remaining} credits, ${models_remaining} models, Plan: ${plan}`);
     
     let modelName = null;
     let predictionId = null;

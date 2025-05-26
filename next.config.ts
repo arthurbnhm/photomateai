@@ -44,6 +44,30 @@ const nextConfig: NextConfig = {
   experimental: {
     optimizeCss: true,
     optimizeServerReact: true,
+    turbo: {
+      rules: {
+        '*.svg': {
+          loaders: ['@svgr/webpack'],
+          as: '*.js',
+        },
+      },
+    },
+  },
+  webpack: (config, { dev }) => {
+    if (dev) {
+      config.cache = {
+        type: 'filesystem',
+        buildDependencies: {
+          config: [__filename],
+        },
+      };
+    }
+    return config;
+  },
+  output: 'standalone',
+  onDemandEntries: {
+    maxInactiveAge: 25 * 1000,
+    pagesBufferLength: 2,
   },
 };
 

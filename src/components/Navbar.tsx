@@ -20,9 +20,12 @@ import {
   Camera,
   Menu,
   Moon,
-  Sun
+  Sun,
+  Coins,
+  ArrowRight
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { useCredits } from "@/hooks/useCredits";
 import { usePathname, useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
 import CryptoJS from 'crypto-js';
@@ -56,6 +59,7 @@ export function Navbar({
   hideThemeToggle = false
 }: NavbarProps) {
   const { user, isLoading, signOut, mounted } = useAuth();
+  const { credits_remaining, loading: creditsLoading, subscription_active } = useCredits();
   const { setTheme, resolvedTheme } = useTheme();
   const router = useRouter();
   const pathname = usePathname();
@@ -189,18 +193,31 @@ export function Navbar({
               <>
                 {user ? (
                 <div className="flex items-center gap-2">
+                  {/* Show "Go To App" button on homepage when user has active subscription */}
+                  {isHomePage && subscription_active && !creditsLoading && (
+                    <Button size="sm" asChild>
+                      <Link href="/create">
+                        <ArrowRight className="w-4 h-4 mr-2" />
+                        Go To App
+                      </Link>
+                    </Button>
+                  )}
+
                   {/* Only show app navigation if not on plans page and not explicitly hidden */}
                   {!isPlansPage && !hideAppNavigation && (
                     <>
                       {/* Primary action buttons for desktop */}
                       <div className="hidden md:flex items-center gap-2">
                         {isHomePage ? (
-                          <Button size="sm" asChild>
-                            <Link href="/create">
-                              <Camera className="w-4 h-4 mr-2" />
-                              Get Started
-                            </Link>
-                          </Button>
+                          // Only show "Get Started" if user doesn't have active subscription
+                          !subscription_active && !creditsLoading && (
+                            <Button size="sm" asChild>
+                              <Link href="/create">
+                                <Camera className="w-4 h-4 mr-2" />
+                                Get Started
+                              </Link>
+                            </Button>
+                          )
                         ) : (
                           <>
                             <Button 
@@ -270,31 +287,49 @@ export function Navbar({
                       {/* Only show app navigation in dropdown if not on plans page and not explicitly hidden */}
                       {!isPlansPage && !hideAppNavigation && (
                         <>
-                          {/* Navigation Links */}
-                          <DropdownMenuItem asChild>
-                            <Link href="/create" className="w-full">
-                              <Camera className="mr-2 h-4 w-4" />
-                              Create
-                            </Link>
-                          </DropdownMenuItem>
-                          <DropdownMenuItem asChild>
-                            <Link href="/train" className="w-full">
-                              <Sparkles className="mr-2 h-4 w-4" />
-                              Train
-                            </Link>
-                          </DropdownMenuItem>
-                          <DropdownMenuItem asChild>
-                            <Link href="/favorites" className="w-full">
-                              <Heart 
-                                className={`w-4 h-4 mr-2 text-red-500 ${
-                                  pathname?.startsWith('/favorites') ? 'fill-current' : ''
-                                }`} 
-                              />
-                              Favorites
-                            </Link>
+                          {/* Credits Display */}
+                          <DropdownMenuItem 
+                            className="cursor-default"
+                            onSelect={(e) => e.preventDefault()}
+                          >
+                            <Coins className="mr-2 h-4 w-4 text-yellow-500" />
+                            <span className="flex-1">Credits</span>
+                            <span className="font-medium">
+                              {creditsLoading ? "..." : credits_remaining || 0}
+                            </span>
                           </DropdownMenuItem>
                           
                           <DropdownMenuSeparator />
+                          
+                          {/* Navigation Links - only show if not on homepage or user doesn't have active subscription */}
+                          {(!isHomePage || !subscription_active) && (
+                            <>
+                              <DropdownMenuItem asChild>
+                                <Link href="/create" className="w-full">
+                                  <Camera className="mr-2 h-4 w-4" />
+                                  Create
+                                </Link>
+                              </DropdownMenuItem>
+                              <DropdownMenuItem asChild>
+                                <Link href="/train" className="w-full">
+                                  <Sparkles className="mr-2 h-4 w-4" />
+                                  Train
+                                </Link>
+                              </DropdownMenuItem>
+                              <DropdownMenuItem asChild>
+                                <Link href="/favorites" className="w-full">
+                                  <Heart 
+                                    className={`w-4 h-4 mr-2 text-red-500 ${
+                                      pathname?.startsWith('/favorites') ? 'fill-current' : ''
+                                    }`} 
+                                  />
+                                  Favorites
+                                </Link>
+                              </DropdownMenuItem>
+                              
+                              <DropdownMenuSeparator />
+                            </>
+                          )}
                           
                           {/* Settings & Support */}
                           <DropdownMenuItem asChild>
@@ -344,7 +379,7 @@ export function Navbar({
                       
                       {/* Sign out */}
                       {(!isHomePage || !hideSignOutOnHomepage) && (
-                        <DropdownMenuItem onClick={handleSignOut} className="text-red-600 focus:text-red-600">
+                        <DropdownMenuItem onClick={handleSignOut}>
                           <LogOut className="mr-2 h-4 w-4" />
                           Sign out
                         </DropdownMenuItem>

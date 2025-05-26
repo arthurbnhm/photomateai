@@ -6,7 +6,10 @@
     "dev": "next dev --turbo",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "clean": "rm -rf .next && rm -rf node_modules/.cache",
+    "dev:clean": "npm run clean && next dev --turbo",
+    "build:clean": "npm run clean && next build"
   },
   "dependencies": {
     "@hookform/resolvers": "^4.1.2",
