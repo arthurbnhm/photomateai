@@ -9,6 +9,7 @@ export async function GET(request: NextRequest) {
     const isDeleted = searchParams.get('is_deleted') === 'true';
     const isCancelled = searchParams.get('is_cancelled');
     const hasLikedImages = searchParams.get('has_liked_images') === 'true';
+    const replicateId = searchParams.get('replicate_id');
 
     // Calculate offset for pagination
     const offset = (page - 1) * limit;
@@ -33,7 +34,46 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // First, get the total count for pagination - only count displayable predictions (succeeded)
+    // If replicateId is provided, fetch only that specific prediction
+    if (replicateId) {
+      const { data: singlePrediction, error: singleError } = await supabase
+        .from('predictions')
+        .select(`
+          *,
+          models:model_id (
+            display_name
+          )
+        `)
+        .eq('replicate_id', replicateId)
+        .eq('is_deleted', false)
+        .eq('status', 'succeeded')
+        .not('storage_urls', 'is', null)
+        .maybeSingle();
+
+      if (singleError) {
+        console.error('Error fetching single prediction:', singleError);
+        return NextResponse.json(
+          { error: 'Failed to fetch prediction', success: false },
+          { status: 500 }
+        );
+      }
+
+      return NextResponse.json({
+        success: true,
+        predictions: singlePrediction ? [singlePrediction] : [],
+        pagination: {
+          page: 1,
+          limit: 1,
+          total: singlePrediction ? 1 : 0,
+          totalPages: singlePrediction ? 1 : 0,
+          hasNextPage: false,
+          hasPreviousPage: false
+        }
+      });
+    }
+
+    // Continue with normal pagination logic for non-single requests
+    // Get total count for pagination - only count completed predictions (succeeded)
     let countQuery = supabase
       .from('predictions')
       .select('*', { count: 'exact', head: true })
@@ -60,29 +100,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Get pending predictions (only for page 1 to show at the top)
-    const allPredictions = [];
-    
-    if (page === 1) {
-      const { data: pendingPredictions } = await supabase
-        .from('predictions')
-        .select(`
-          *,
-          models:model_id (
-            display_name
-          )
-        `)
-        .eq('is_deleted', isDeleted)
-        .in('status', ['starting', 'queued', 'processing'])
-        .eq('is_cancelled', false)
-        .order('created_at', { ascending: false });
-      
-      if (pendingPredictions) {
-        allPredictions.push(...pendingPredictions);
-      }
-    }
-
-    // Get completed predictions with pagination
+    // Get only completed predictions with pagination
     let completedQuery = supabase
       .from('predictions')
       .select(`
@@ -117,16 +135,11 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Combine pending and completed predictions
-    if (completedPredictions) {
-      allPredictions.push(...completedPredictions);
-    }
-
     const totalPages = Math.ceil((count || 0) / limit);
 
     return NextResponse.json({
       success: true,
-      predictions: allPredictions || [],
+      predictions: completedPredictions || [],
       pagination: {
         page,
         limit,

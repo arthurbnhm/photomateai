@@ -396,6 +396,7 @@ function CreatePageContent() {
   // Add refs to track ongoing fetches to prevent duplicates
   const isFetchingPredictions = useRef(false);
   const isFetchingModels = useRef(false);
+  const isFetchingPending = useRef(false);
 
   // Callback function to handle "Use as Reference" from ImageHistory
   const handleUseAsReference = useCallback((imageUrl: string, originalPrompt: string) => {
@@ -407,121 +408,119 @@ function CreatePageContent() {
     setReferenceImageData(null);
   }, []);
 
-  // Combined function to fetch all predictions and separate them with caching
-  const fetchAllPredictions = useCallback(async (silentUpdate: boolean = false, page: number = currentPage, append: boolean = false) => {
-    console.log(`🔍 fetchAllPredictions called: page=${page}, silentUpdate=${silentUpdate}, append=${append}`);
+  // NEW: Separate function to fetch only pending predictions
+  const fetchPendingPredictions = useCallback(async () => {
+    if (isFetchingPending.current) return;
+    
+    isFetchingPending.current = true;
+    const abortController = new AbortController();
+    const timeoutId = setTimeout(() => abortController.abort(), 5000);
+
+    try {
+      const response = await fetch('/api/predictions/pending', {
+        signal: abortController.signal
+      });
+      
+      clearTimeout(timeoutId);
+      
+      if (!response.ok) {
+        throw new Error(`Failed to fetch pending predictions: ${response.status} ${response.statusText}`);
+      }
+      
+      const { success, predictions, error } = await response.json();
+      
+      if (!success) {
+        throw new Error(error || 'Failed to fetch pending predictions');
+      }
+      
+      if (predictions) {
+        const pendingGens: PendingGeneration[] = predictions.map((item: PredictionData) => ({
+          id: item.id,
+          replicate_id: item.replicate_id,
+          prompt: item.prompt || '',
+          aspectRatio: item.aspect_ratio || '1:1',
+          startTime: item.created_at,
+          format: item.format || item.input?.output_format || 'webp',
+          modelDisplayName: item.models?.display_name || 'Unknown Model'
+        }));
+        setPendingGenerations(pendingGens);
+      } else {
+        setPendingGenerations([]);
+      }
+      
+    } catch (fetchError: unknown) {
+      clearTimeout(timeoutId);
+      if (!(fetchError instanceof Error && fetchError.name === 'AbortError')) {
+        console.error('Error fetching pending predictions:', fetchError);
+      }
+    } finally {
+      isFetchingPending.current = false;
+    }
+  }, []);
+
+  // NEW: Separate function to fetch only completed predictions (with caching)
+  const fetchCompletedPredictions = useCallback(async (page: number = currentPage, append: boolean = false) => {
+    console.log(`🔍 fetchCompletedPredictions called: page=${page}, append=${append}`);
     
     if (isFetchingPredictions.current) {
       console.log(`⏸️ Already fetching, skipping page ${page}`);
       return;
     }
     
-    // Set loading state BEFORE checking cache (this was the bug!)
-    if (!silentUpdate && !append) {
+    // Set loading state
+    if (!append) {
       setIsLoadingHistory(true);
       setErrorHistory(null);
-    } else if (append) {
+    } else {
       setIsLoadingMore(true);
     }
     
-    // Check cache first for completed predictions
-    // Skip cache for page 1 with silent updates (polling for pending generations)
-    const shouldCheckCache = !(page === 1 && silentUpdate);
-    console.log(`🔍 shouldCheckCache: ${shouldCheckCache} (page=${page}, silentUpdate=${silentUpdate})`);
-    
-    if (shouldCheckCache) {
-      const cachedData = getCachedData(page, false);
-      if (cachedData) {
-        console.log(`🎯 Using cached data for page ${page}, returning early`);
-        
-        // Filter only completed predictions from cache
-        const completedPredictions = cachedData.data.filter((item: PredictionData) => 
-          item.status === 'succeeded' && item.storage_urls && item.storage_urls.length > 0
-        );
+    // Always check cache for completed predictions (no bypassing!)
+    const cachedData = getCachedData(page, false);
+    if (cachedData) {
+      console.log(`🎯 Using cached data for page ${page}, returning early`);
+      
+      // Process cached data
+      const processedData: ImageGeneration[] = cachedData.data.map((item: PredictionData) => {
+        const modelDisplayName = item.models?.display_name || 'Default Model';
+        return {
+          id: item.id,
+          replicate_id: item.replicate_id,
+          prompt: item.prompt,
+          timestamp: item.created_at,
+          images: processOutput(item.storage_urls, item.liked_images),
+          aspectRatio: item.aspect_ratio,
+          format: item.format || item.input?.output_format || 'webp',
+          modelDisplayName: modelDisplayName
+        };
+      });
 
-        // Process cached data
-        const processedData: ImageGeneration[] = completedPredictions.map((item: PredictionData) => {
-          const modelDisplayName = item.models?.display_name || 'Default Model';
-          return {
-            id: item.id,
-            replicate_id: item.replicate_id,
-            prompt: item.prompt,
-            timestamp: item.created_at,
-            images: processOutput(item.storage_urls, item.liked_images),
-            aspectRatio: item.aspect_ratio,
-            format: item.format || item.input?.output_format || 'webp',
-            modelDisplayName: modelDisplayName
-          };
-        });
+      // Update pagination state
+      setHasNextPage(cachedData.pagination.hasNextPage);
+      setCurrentPage(cachedData.pagination.page);
 
-        // Update pagination state
-        setHasNextPage(cachedData.pagination.hasNextPage);
-        setCurrentPage(cachedData.pagination.page);
-
-        // Only update generations if we have valid data or if this is page 1 (initial load)
-        // This prevents clearing existing generations when cached filtered data is empty
-        if (processedData.length > 0 || page === 1) {
-          // For infinite scroll, append to existing generations; otherwise replace
-          if (append && page > 1) {
-            setGenerations(prev => [...prev, ...processedData]);
-          } else {
-            setGenerations(processedData);
-          }
-        } else {
-          console.log(`📭 Cached data for page ${page} was empty after filtering, keeping existing generations`);
-        }
-
-        // For page 1, still need to fetch fresh pending generations
-        if (page === 1) {
-          console.log(`🔄 Page 1 cached, but fetching fresh pending generations`);
-          try {
-            const response = await fetch(`/api/predictions?is_deleted=false&limit=${itemsPerPage}&page=1`);
-            if (response.ok) {
-              const { success, predictions } = await response.json();
-              if (success && predictions) {
-                const pendingPredictions = predictions.filter((item: PredictionData) => 
-                  ['starting', 'queued', 'processing'].includes(item.status) && !item.is_cancelled
-                );
-                
-                if (pendingPredictions.length > 0) {
-                  const pendingGens: PendingGeneration[] = pendingPredictions.map((item: PredictionData) => ({
-                    id: item.id,
-                    replicate_id: item.replicate_id,
-                    prompt: item.prompt || '',
-                    aspectRatio: item.aspect_ratio || '1:1',
-                    startTime: item.created_at,
-                    format: item.format || item.input?.output_format || 'webp',
-                    modelDisplayName: item.models?.display_name || 'Unknown Model'
-                  }));
-                  setPendingGenerations(pendingGens);
-                } else {
-                  setPendingGenerations([]);
-                }
-              }
-            }
-          } catch (error) {
-            console.warn('Failed to fetch fresh pending generations:', error);
-          }
-        }
-
-        // IMPORTANT: Clear loading state even when using cache
-        if (!silentUpdate && !append) {
-          setIsLoadingHistory(false);
-        } else if (append) {
-          setIsLoadingMore(false);
-        }
-
-        return; // Use cached data, no need to fetch
+      // For infinite scroll, append to existing generations; otherwise replace
+      if (append && page > 1) {
+        setGenerations(prev => [...prev, ...processedData]);
+      } else {
+        setGenerations(processedData);
       }
+
+      // Clear loading state
+      if (!append) {
+        setIsLoadingHistory(false);
+      } else {
+        setIsLoadingMore(false);
+      }
+      return; // Use cached data, no need to fetch
     }
     
-    console.log(`🌐 Making API call for page ${page}`);
+    console.log(`🌐 Making API call for completed predictions page ${page}`);
     isFetchingPredictions.current = true;
     const abortController = new AbortController();
     const timeoutId = setTimeout(() => abortController.abort(), 10000);
 
     try {
-      // Use the new predictions API endpoint with pagination
       const response = await fetch(`/api/predictions?is_deleted=false&limit=${itemsPerPage}&page=${page}`, {
         signal: abortController.signal
       });
@@ -539,49 +538,15 @@ function CreatePageContent() {
       }
       
       if (predictions && pagination) {
-        // Cache the data (excluding pending generations from cache)
-        const completedPredictionsForCache = predictions.filter((item: PredictionData) => 
-          item.status === 'succeeded' && item.storage_urls && item.storage_urls.length > 0
-        );
-        
-        if (completedPredictionsForCache.length > 0) {
-          setCachedData(page, completedPredictionsForCache, pagination, false);
-        }
+        // Cache the completed predictions
+        setCachedData(page, predictions, pagination, false);
 
         // Update pagination state
         setCurrentPage(pagination.page);
         setHasNextPage(pagination.hasNextPage);
         
-        // Separate pending and completed predictions
-        const pendingPredictions = predictions.filter((item: PredictionData) => 
-          ['starting', 'queued', 'processing'].includes(item.status) && !item.is_cancelled
-        );
-        
-        // Filter for only completed predictions with images
-        const completedPredictions = predictions.filter((item: PredictionData) => 
-          item.status === 'succeeded' && item.storage_urls && item.storage_urls.length > 0
-        );
-
-        // Only update pending generations if we're on the first page or this is a silent update
-        if (page === 1 || silentUpdate) {
-          if (pendingPredictions.length > 0) {
-            const pendingGens: PendingGeneration[] = pendingPredictions.map((item: PredictionData) => ({
-              id: item.id,
-              replicate_id: item.replicate_id,
-              prompt: item.prompt || '',
-              aspectRatio: item.aspect_ratio || '1:1',
-              startTime: item.created_at,
-              format: item.format || item.input?.output_format || 'webp',
-              modelDisplayName: item.models?.display_name || 'Unknown Model'
-            }));
-            setPendingGenerations(pendingGens);
-          } else {
-            setPendingGenerations([]);
-          }
-        }
-
-        // Process all returned predictions since API guarantees they're displayable
-        const processedData: ImageGeneration[] = completedPredictions.map((item: PredictionData) => {
+        // Process completed predictions
+        const processedData: ImageGeneration[] = predictions.map((item: PredictionData) => {
           const modelDisplayName = item.models?.display_name || 'Default Model';
           return {
             id: item.id,
@@ -605,32 +570,160 @@ function CreatePageContent() {
       
     } catch (fetchError: unknown) { 
       clearTimeout(timeoutId);
-      console.error("Full error object in fetchAllPredictions catch:", JSON.stringify(fetchError, null, 2));
+      console.error("Error fetching completed predictions:", fetchError);
 
       if (fetchError instanceof Error) {
         if (fetchError.name === 'AbortError') {
-          console.warn('Fetch predictions aborted due to timeout');
+          console.warn('Fetch completed predictions aborted due to timeout');
         } else {
-          console.error('Error fetching predictions (Error instance):', fetchError);
           setErrorHistory(`Failed to load predictions: ${fetchError.message}`);
         }
       } else {
-        let errorMessage = 'An unknown error occurred while loading predictions.';
-        if (typeof fetchError === 'object' && fetchError !== null && 'message' in fetchError) {
-          errorMessage = `Failed to load predictions: ${(fetchError as { message: string }).message}`;
-        }
-        console.error('Unknown error object fetching predictions:', fetchError);
-        setErrorHistory(errorMessage);
+        setErrorHistory('An unknown error occurred while loading predictions.');
       }
     } finally {
-      if (!silentUpdate && !append) {
+      if (!append) {
         setIsLoadingHistory(false);
-      } else if (append) {
+      } else {
         setIsLoadingMore(false);
       }
       isFetchingPredictions.current = false;
     }
-  }, [currentPage, itemsPerPage, getCachedData, setCachedData]); // Updated dependencies
+  }, [currentPage, itemsPerPage, getCachedData, setCachedData]);
+
+  // NEW: Function to invalidate cache and refetch page 1 when a prediction completes
+  const handleCompletedPrediction = useCallback(async (replicateId: string) => {
+    console.log(`🎯 Handling completed prediction: ${replicateId}`);
+    
+    try {
+      // Step 1: Invalidate the cache for page 1 to ensure consistency
+      console.log(`🗑️ Invalidating cache for page 1`);
+      setPredictionsCache(prev => {
+        const newCache = new Map(prev);
+        const key = getCacheKey(1, false);
+        newCache.delete(key);
+        
+        // Also clear from localStorage
+        if (typeof window !== 'undefined') {
+          try {
+            const cacheObject = Object.fromEntries(newCache);
+            localStorage.setItem('photomate_predictions_cache', JSON.stringify(cacheObject));
+          } catch (error) {
+            console.warn('Failed to update cache in localStorage:', error);
+          }
+        }
+        
+        return newCache;
+      });
+      
+      // Step 2: Add a small delay to ensure the API has the updated data
+      console.log(`⏱️ Waiting briefly for API consistency...`);
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // Step 3: Fetch page 1 data and update UI state directly
+      console.log(`🔄 Fetching page 1 data to update UI`);
+      let retryCount = 0;
+      const maxRetries = 3;
+      let predictionFound = false;
+      
+      while (retryCount <= maxRetries && !predictionFound) {
+        try {
+          // Make API call to get fresh page 1 data
+          const response = await fetch(`/api/predictions?is_deleted=false&limit=${itemsPerPage}&page=1`);
+          
+          if (!response.ok) {
+            throw new Error(`API call failed: ${response.status} ${response.statusText}`);
+          }
+          
+          const { success, predictions, pagination } = await response.json();
+          
+          if (success && predictions) {
+            // Check if our completed prediction is in the response
+            const foundPrediction = predictions.some((pred: PredictionData) => pred.replicate_id === replicateId);
+            
+            if (foundPrediction || retryCount === maxRetries) {
+              if (foundPrediction) {
+                console.log(`✅ Found completed prediction ${replicateId} in API response`);
+              } else {
+                console.log(`⚠️ Using API response anyway after ${maxRetries} retries`);
+              }
+              
+              predictionFound = true;
+              
+              // Update cache with fresh data
+              setCachedData(1, predictions, pagination, false);
+              
+              // Process and update UI state directly
+              const processedData: ImageGeneration[] = predictions.map((item: PredictionData) => {
+                const modelDisplayName = item.models?.display_name || 'Default Model';
+                return {
+                  id: item.id,
+                  replicate_id: item.replicate_id,
+                  prompt: item.prompt,
+                  timestamp: item.created_at,
+                  images: processOutput(item.storage_urls, item.liked_images),
+                  aspectRatio: item.aspect_ratio,
+                  format: item.format || item.input?.output_format || 'webp',
+                  modelDisplayName: modelDisplayName
+                };
+              });
+              
+              // Update pagination state
+              setHasNextPage(pagination.hasNextPage);
+              setCurrentPage(pagination.page);
+              
+              // Update generations state (replace, not append)
+              console.log(`🎨 Updating UI with ${processedData.length} generations`);
+              setGenerations(processedData);
+              
+            } else if (retryCount < maxRetries) {
+              console.log(`⚠️ Prediction ${replicateId} not found in API response, retrying... (${retryCount + 1}/${maxRetries})`);
+              retryCount++;
+              await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2s before retry
+            }
+          } else {
+            throw new Error('API response was not successful');
+          }
+        } catch (fetchError) {
+          console.error(`Error on retry ${retryCount + 1}:`, fetchError);
+          if (retryCount < maxRetries) {
+            retryCount++;
+            await new Promise(resolve => setTimeout(resolve, 2000));
+          } else {
+            // Final fallback: call the original fetchCompletedPredictions
+            console.log('🔄 Final fallback: calling fetchCompletedPredictions...');
+            isFetchingPredictions.current = false;
+            await fetchCompletedPredictions(1, false);
+            break;
+          }
+        }
+      }
+      
+      console.log(`✅ Successfully handled completed prediction ${replicateId}`);
+      
+    } catch (fetchError: unknown) {
+      console.error('Error handling completed prediction:', fetchError);
+      // Fallback: call the original fetchCompletedPredictions
+      console.log('🔄 Fallback: calling fetchCompletedPredictions...');
+      isFetchingPredictions.current = false;
+      await fetchCompletedPredictions(1, false);
+    }
+  }, [setPredictionsCache, getCacheKey, itemsPerPage, setCachedData, processOutput, setHasNextPage, setCurrentPage, setGenerations, isFetchingPredictions, fetchCompletedPredictions]);
+
+  // UPDATED: Combined function that calls both separate functions
+  const fetchAllPredictions = useCallback(async (silentUpdate: boolean = false, page: number = currentPage, append: boolean = false) => {
+    console.log(`🔍 fetchAllPredictions called: page=${page}, silentUpdate=${silentUpdate}, append=${append}`);
+    
+    // For initial loads and page changes, fetch completed predictions
+    if (!silentUpdate || page > 1) {
+      await fetchCompletedPredictions(page, append);
+    }
+    
+    // Always fetch pending predictions on page 1 (for both initial loads and silent updates)
+    if (page === 1) {
+      await fetchPendingPredictions();
+    }
+  }, [currentPage, fetchCompletedPredictions, fetchPendingPredictions]);
 
   // Fetch user models function
   const fetchUserModels = useCallback(async () => {
@@ -712,26 +805,35 @@ function CreatePageContent() {
         setIsLoadingHistory(true);
         setErrorHistory(null); // Clear previous errors
       }
-      await fetchAllPredictions(silentUpdate, 1); // Always reset to page 1 for regular loads
+      
+      // For regular loads, fetch both completed and pending
+      // For silent updates, only fetch pending to avoid cache bypass
+      if (!silentUpdate) {
+        await fetchCompletedPredictions(1); // Reset to page 1 for regular loads
+        await fetchPendingPredictions();
+      } else {
+        await fetchPendingPredictions(); // Only fetch pending on silent updates
+      }
     } catch {
-      // Error handling is now within fetchAllPredictions
+      // Error handling is now within the individual fetch functions
     }
-  }, [fetchAllPredictions]);
+  }, [fetchCompletedPredictions, fetchPendingPredictions]);
 
   // Infinite scroll load more handler
   const handleLoadMore = useCallback(async () => {
     if (!hasNextPage || isLoadingMore) return;
     
     const nextPage = currentPage + 1;
-    await fetchAllPredictions(false, nextPage, true); // append = true for infinite scroll
-  }, [hasNextPage, isLoadingMore, currentPage, fetchAllPredictions]);
+    await fetchCompletedPredictions(nextPage, true); // append = true for infinite scroll
+  }, [hasNextPage, isLoadingMore, currentPage, fetchCompletedPredictions]);
 
   // Visibility change effect for image history
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible' && isMounted && user) {
-        // Only refresh predictions when tab becomes visible, not models
-        fetchAllPredictions(true, currentPage); // Silent update
+        // Only fetch pending predictions when tab becomes visible
+        // This prevents unnecessary cache bypassing for completed predictions
+        fetchPendingPredictions();
       }
     };
     
@@ -739,7 +841,7 @@ function CreatePageContent() {
     return () => {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [fetchAllPredictions, currentPage, isMounted, user]);
+  }, [fetchPendingPredictions, isMounted, user]);
 
   const selectedHeaderImages = useMemo(() => {
     // Show default images if either history or user models are still in their initial loading phase controlled by allowModelLoadingScreen
@@ -1015,6 +1117,7 @@ function CreatePageContent() {
           onLoadMore={handleLoadMore}
           onRemovePredictionFromCache={removePredictionFromCache}
           onUpdateFavoriteInCache={updateFavoriteInCache}
+          onFetchCompletedPredictions={handleCompletedPrediction}
         />
       </div>
     </div>

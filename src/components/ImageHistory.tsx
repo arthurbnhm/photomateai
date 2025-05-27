@@ -103,6 +103,8 @@ interface ImageHistoryProps {
   // Cache management
   onRemovePredictionFromCache?: (predictionId: string) => void;
   onUpdateFavoriteInCache?: (predictionId: string, imageUrl: string, isLiked: boolean) => void;
+  // Add callback to fetch single completed prediction when pending ones complete
+  onFetchCompletedPredictions?: (replicateId: string) => Promise<void>;
 }
 
 export function ImageHistory({ 
@@ -121,7 +123,8 @@ export function ImageHistory({
   isLoadingMore,
   onLoadMore,
   onRemovePredictionFromCache,
-  onUpdateFavoriteInCache
+  onUpdateFavoriteInCache,
+  onFetchCompletedPredictions
 }: ImageHistoryProps) {
   const [isDeleting, setIsDeleting] = useState<string | null>(null)
   const [isCancelling, setIsCancelling] = useState<string | null>(null)
@@ -275,6 +278,13 @@ export function ImageHistory({
                   setPendingGenerations(prev => 
                     prev.filter(g => g.id !== matchingPending.id)
                   );
+                  
+                  // Fetch completed predictions to show the newly completed generation
+                  if (onFetchCompletedPredictions) {
+                    onFetchCompletedPredictions(prediction.replicate_id).catch(error => {
+                      console.error('Error fetching completed predictions after completion:', error);
+                    });
+                  }
                 } else if (prediction.status === 'failed' || prediction.is_cancelled) {
                   if (prediction.error) {
                     toast.error(`Generation failed: ${prediction.error}`);
@@ -323,7 +333,7 @@ export function ImageHistory({
       if (intervalRef.current) clearInterval(intervalRef.current);
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
     };
-  }, [isMounted, pendingGenerations, setPendingGenerations, supabaseClient, playSuccessSound]);
+  }, [isMounted, pendingGenerations, setPendingGenerations, supabaseClient, playSuccessSound, onFetchCompletedPredictions]);
 
   // Update UI when generations prop changes (from parent)
   useEffect(() => {
