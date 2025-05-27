@@ -141,7 +141,6 @@ interface PromptFormProps {
   userModels?: Model[]; // Make optional for backward compatibility
   isLoadingUserModels?: boolean; // Make optional for backward compatibility
   onGenerationStart?: () => void; // Optional prop
-  onGenerationComplete?: () => void; // Optional prop
   referenceImageData?: {
     imageUrl: string;
     originalPrompt: string;
@@ -219,7 +218,6 @@ export function PromptForm({
   userModels,
   isLoadingUserModels,
   onGenerationStart, // Destructure new props
-  onGenerationComplete, // Destructure new props
   referenceImageData, // Destructure new prop
   handleReferenceImageUsed, // Destructure new callback
   onCancelPendingGeneration // Destructure new callback
@@ -421,7 +419,6 @@ export function PromptForm({
 
       if (!modelId) {
         setError("Please select a model.");
-        onGenerationComplete?.();
         return;
       }
 
@@ -471,7 +468,6 @@ export function PromptForm({
       if (!modelApiId) {
         setError("Please select a valid model.");
         removePendingGeneration(tempId);
-        onGenerationComplete?.();
         return;
       }
 
@@ -561,7 +557,6 @@ export function PromptForm({
           setError('Failed to send request. Please try again.');
         }
         removePendingGeneration(tempId);
-        onGenerationComplete?.();
         return;
       }
       clearTimeout(timeoutId);
@@ -573,7 +568,6 @@ export function PromptForm({
         if (response.status === 504) {
           setError('The request timed out on the server. This usually happens with large images. Please try with a smaller image or try again.');
           removePendingGeneration(tempId);
-          onGenerationComplete?.();
           return;
         }
         
@@ -589,13 +583,11 @@ export function PromptForm({
             // If JSON parsing fails, the response is probably HTML (like 504 pages)
             setError(`Server error (${response.status}): The request could not be processed. Please try again.`);
             removePendingGeneration(tempId);
-            onGenerationComplete?.();
             return;
           }
         } catch {
           setError(`Server error (${response.status}): Unable to read error details.`);
           removePendingGeneration(tempId);
-          onGenerationComplete?.();
           return;
         }
         
@@ -611,7 +603,6 @@ export function PromptForm({
         }
         
         removePendingGeneration(tempId);
-        onGenerationComplete?.();
         return;
       }
 
@@ -638,7 +629,7 @@ export function PromptForm({
           // Continue without blocking, credits will be refreshed on next page load
         }
       }
-      onGenerationComplete?.();
+      onGenerationStart?.(); // Call onGenerationStart when generation successfully starts
     } catch (fetchError) {
       if (fetchError instanceof Error && fetchError.name === 'AbortError') {
         setError('Request timed out. Please try again.');
@@ -651,7 +642,6 @@ export function PromptForm({
       if (tempId) {
         removePendingGeneration(tempId);
       }
-      onGenerationComplete?.();
     }
   };
 

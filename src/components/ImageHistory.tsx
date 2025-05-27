@@ -261,8 +261,6 @@ export function ImageHistory({
           }
           
           if (data && data.length > 0) {
-            let shouldRefreshParentGenerations = false;
-            
             data.forEach((prediction: PredictionData) => {
               const matchingPending = pendingGenerations.find(p => 
                 p.replicate_id === prediction.replicate_id
@@ -270,10 +268,6 @@ export function ImageHistory({
               
               if (matchingPending) {
                 if (prediction.status === 'succeeded' && prediction.storage_urls) {
-                  // The parent component (CreatePageContent) is responsible for updating `generations`.
-                  // We can call loadGenerations(true) to ask the parent to refresh.
-                  shouldRefreshParentGenerations = true;
-                  
                   // Play success sound when generation completes
                   playSuccessSound();
                   
@@ -294,14 +288,8 @@ export function ImageHistory({
                     [matchingPending.id]: Math.floor((Date.now() - new Date(matchingPending.startTime || '').getTime()) / 1000)
                   }));
                 }
-              } else {
-                shouldRefreshParentGenerations = true;
               }
             });
-            
-            if (shouldRefreshParentGenerations) {
-              loadGenerations(true); // Call prop to refresh parent's generation list
-            }
           }
         } catch (fetchError: unknown) {
           if (fetchError instanceof Error && fetchError.name === 'AbortError') {
@@ -335,7 +323,7 @@ export function ImageHistory({
       if (intervalRef.current) clearInterval(intervalRef.current);
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
     };
-  }, [isMounted, pendingGenerations, loadGenerations, setPendingGenerations, supabaseClient, playSuccessSound]);
+  }, [isMounted, pendingGenerations, setPendingGenerations, supabaseClient, playSuccessSound]);
 
   // Update UI when generations prop changes (from parent)
   useEffect(() => {
@@ -436,9 +424,6 @@ export function ImageHistory({
 
       // Remove from pendingGenerations state (local to ImageHistory)
       setPendingGenerations(prev => prev.filter(gen => gen.id !== id));
-      
-      // Ask parent to refresh its list, as a cancelled item might need to be removed from display
-      loadGenerations(true);
       
       return true;
     } catch (error) {

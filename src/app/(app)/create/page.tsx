@@ -285,15 +285,6 @@ function CreatePageContent() {
     }));
   }, []);
   
-  // Clear cache when user actions occur (like/unlike, delete)
-  const clearCache = useCallback(() => {
-    console.log('🗑️ Clearing all cache due to user action');
-    setPredictionsCache(new Map());
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem('photomate_predictions_cache');
-    }
-  }, []);
-
   // Remove a specific prediction from all cached pages
   const removePredictionFromCache = useCallback((predictionId: string) => {
     console.log(`🗑️ Removing prediction ${predictionId} from cache`);
@@ -989,13 +980,6 @@ function CreatePageContent() {
         userModels={userModels}
         isLoadingUserModels={isLoadingUserModels}
         onGenerationStart={() => { /* Potentially do nothing here if polling handles it */ }}
-        onGenerationComplete={async () => {
-          // Reset to page 1 and refresh generations for infinite scroll
-          setCurrentPage(1);
-          setGenerations([]); // Clear existing generations
-          clearCache(); // Clear cache when new generations are added
-          await fetchAllPredictions(false, 1);
-        }}
         referenceImageData={referenceImageData}
         handleReferenceImageUsed={handleReferenceImageUsed}
         onCancelPendingGeneration={setCancelPendingGeneration}
