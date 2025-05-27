@@ -9,7 +9,7 @@ import { useAuth } from "@/contexts/AuthContext"
 import { cn } from "@/lib/utils"
 import TextareaAutosize from 'react-textarea-autosize'
 import Image from 'next/image'
-import { Plus, UserSquare2, ImageIcon, Type, Coins } from 'lucide-react'
+import { Plus, UserSquare2, ImageIcon, Type } from 'lucide-react'
 
 import { Button } from "@/components/ui/button"
 import {
@@ -51,6 +51,7 @@ interface Model {
   gender?: string;         // Gender of the model (male/female)
   attributes?: string[];   // Model attributes like "has tattoo", "brown eyes", etc.
   // Other fields like created_at, is_deleted, user_id exist in DB but not needed in UI
+  // Note: The models list from the API is sorted by created_at DESC (most recent first)
 }
 
 // Define the type for pending generations
@@ -232,7 +233,6 @@ export function PromptForm({
   
   // Derived state from credits
   const has_credits = credits?.has_credits || false;
-  const creditsError = null; // No longer needed since AuthContext handles errors internally
   
   // Create ref for AdvancedSettings component
   const advancedSettingsRef = useRef<AdvancedSettingsRefType>(null);
@@ -360,7 +360,8 @@ export function PromptForm({
       // Check if the last used model still exists in the current models list
       const lastUsedModel = lastUsedModelId ? effectiveModels.find(m => m.id === lastUsedModelId) : null;
       
-      // Use the last used model if it exists, otherwise use the first model alphabetically
+      // Use the last used model if it exists, otherwise use the most recently trained model
+      // (effectiveModels are already sorted by created_at desc, so the first one is the most recent)
       const defaultModelId = lastUsedModel ? lastUsedModel.id : effectiveModels[0].id;
       
       form.setValue('modelId', defaultModelId);
@@ -809,109 +810,20 @@ export function PromptForm({
     };
   }, []);
 
-  // Show loading state while checking credits
-  if (creditsLoading) {
-    return (
-      <div className="w-full">
-        <div className="w-full bg-gradient-to-br from-card/95 via-card to-card/90 border border-border/60 rounded-2xl overflow-hidden shadow-xl backdrop-blur-sm">
-          <div className="p-6">
-            <div className="flex items-center justify-center py-12">
-              <div className="text-center space-y-3">
-                <div className="h-8 w-8 bg-muted animate-pulse rounded-full mx-auto"></div>
-                <p className="text-sm text-muted-foreground">Checking credits...</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-  
-  // Show friendly overlay when user has no credits
-  if (!has_credits && !creditsError) {
-    return (
-      <div className="w-full">
-        <div className="w-full bg-gradient-to-br from-card/95 via-card to-card/90 border border-border/60 rounded-2xl overflow-hidden shadow-xl backdrop-blur-sm">
-          <div className="p-6">
-            <div className="text-center space-y-5">
-              <div className="space-y-3">
-                <div className="mx-auto w-14 h-14 bg-gradient-to-br from-orange-100 to-orange-200 dark:from-orange-900/50 dark:to-orange-800/50 rounded-full flex items-center justify-center">
-                  <Coins className="w-7 h-7 text-orange-600 dark:text-orange-400" />
-                </div>
-                
-                <div className="space-y-2">
-                  <h2 className="text-xl font-bold text-foreground">Need Credits to Generate?</h2>
-                  <p className="text-sm text-muted-foreground leading-relaxed max-w-md mx-auto">
-                    You&apos;ve used all your credits this month! To continue creating amazing AI images, you can buy more credits or upgrade your plan.
-                  </p>
-                </div>
-              </div>
-              
-              <div className="flex justify-center">
-                <div className="w-full max-w-sm space-y-2">
-                  <Button
-                    onClick={() => {/* TODO: Implement buy credits functionality */}}
-                    size="sm"
-                    className="w-full bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary/80 text-primary-foreground shadow-md hover:shadow-lg font-medium"
-                  >
-                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
-                    </svg>
-                    Buy More Credits
-                  </Button>
-                  
-                  <Button
-                    onClick={() => {/* TODO: Implement upgrade plan functionality */}}
-                    variant="outline"
-                    size="sm"
-                    className="w-full bg-background/50 backdrop-blur-sm border-border/60 hover:border-border hover:bg-background/80 transition-all duration-200"
-                  >
-                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-                    </svg>
-                    Upgrade Plan
-                  </Button>
-                </div>
-              </div>
-              
-              <div className="text-xs text-muted-foreground leading-relaxed">
-                <p className="mt-1">You can still train models and manage your existing content ✨</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-  
-  // Show error state if credit check failed
-  if (creditsError) {
-    return (
-      <div className="w-full">
-        <div className="w-full bg-gradient-to-br from-card/95 via-card to-card/90 border border-border/60 rounded-2xl overflow-hidden shadow-xl backdrop-blur-sm">
-          <div className="p-6">
-            <div className="text-center space-y-4">
-              <div className="p-4 rounded-lg bg-destructive/10 text-destructive">
-                <h3 className="font-semibold mb-2">Credit Check Error</h3>
-                <p className="text-sm">{creditsError}</p>
-              </div>
-              <Button
-                onClick={() => refreshCredits()}
-                className="bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary/80"
-              >
-                Try Again
-              </Button>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="w-full">
       <div className="w-full bg-gradient-to-br from-card/95 via-card to-card/90 border border-border/60 rounded-2xl overflow-hidden shadow-xl backdrop-blur-sm">
         <div className="p-6">
+          {/* Show subtle credit checking indicator at the top if still loading */}
+          {creditsLoading && (
+            <div className="mb-4 p-3 bg-muted/50 border border-border/40 rounded-lg">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <div className="w-4 h-4 bg-muted-foreground/30 animate-pulse rounded-full"></div>
+                <span>Checking your credits...</span>
+              </div>
+            </div>
+          )}
+          
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
               <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
@@ -1094,9 +1006,9 @@ export function PromptForm({
                           className="w-full bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary/80 text-primary-foreground shadow-lg hover:shadow-xl font-medium disabled:opacity-50"
                           disabled={effectiveLoadingModels || creditsLoading || !has_credits}
                           aria-label="Generate image from prompt"
-                          title={!has_credits ? "Insufficient credits" : "Generate image from prompt"}
+                          title={!has_credits && !creditsLoading ? "Insufficient credits" : creditsLoading ? "Checking credits..." : "Generate image from prompt"}
                         >
-                          {creditsLoading ? "Checking..." : !has_credits ? "No Credits" : "Generate"}
+                          {creditsLoading ? "Generate" : !has_credits ? "No Credits" : "Generate"}
                         </Button>
                       </div>
                     </div>
@@ -1275,9 +1187,9 @@ export function PromptForm({
                         className="w-full bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary/80 text-primary-foreground shadow-lg hover:shadow-xl font-medium disabled:opacity-50"
                         disabled={effectiveLoadingModels || !uploadedImageDataUrl || creditsLoading || !has_credits}
                         aria-label="Generate image from image reference"
-                        title={!has_credits ? "Insufficient credits" : !uploadedImageDataUrl ? "Upload an image first" : "Generate image from image reference"}
+                        title={!has_credits && !creditsLoading ? "Insufficient credits" : creditsLoading ? "Checking credits..." : !uploadedImageDataUrl ? "Upload an image first" : "Generate image from image reference"}
                       >
-                        {creditsLoading ? "Checking..." : !has_credits ? "No Credits" : "Generate"}
+                        {creditsLoading ? "Generate" : !has_credits ? "No Credits" : "Generate"}
                       </Button>
                     </div>
                   </div>

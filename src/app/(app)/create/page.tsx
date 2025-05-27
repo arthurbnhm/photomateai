@@ -2,11 +2,12 @@
 
 import { useState, Suspense, useEffect, useCallback, useRef, useMemo } from "react";
 import Image from "next/image";
-import Link from "next/link";
 import { PromptForm } from "@/components/PromptForm";
 import { ImageHistory } from "@/components/ImageHistory";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
+import Link from "next/link";
+import { Coins } from "lucide-react";
 
 // Define the PendingGeneration type
 type PendingGeneration = {
@@ -178,6 +179,7 @@ function CreatePageContent() {
   // State for user models
   const [userModels, setUserModels] = useState<Model[]>([]);
   const [isLoadingUserModels, setIsLoadingUserModels] = useState(true); // Initialize to true
+  const [userModelsError, setUserModelsError] = useState<string | null>(null);
 
   // State to control the initial model loading screen
   // Initialize to true to match SSR, then update in useEffect
@@ -193,7 +195,10 @@ function CreatePageContent() {
   const [cancelPendingGeneration, setCancelPendingGeneration] = useState<((id: string) => boolean) | null>(null);
 
   const [isMounted, setIsMounted] = useState(false);
-  const { user } = useAuth();
+  const { user, credits, creditsLoading } = useAuth();
+  
+  // Derived state from credits
+  const has_credits = credits?.has_credits || false;
 
   // Add refs to track ongoing fetches to prevent duplicates
   const isFetchingPredictions = useRef(false);
@@ -315,6 +320,7 @@ function CreatePageContent() {
     if (isFetchingModels.current) return;
     
     isFetchingModels.current = true;
+    setUserModelsError(null); // Clear previous errors
     try {
       const response = await fetch('/api/model/list?is_cancelled=false&is_deleted=false&status=succeeded');
       if (!response.ok) {
@@ -328,6 +334,7 @@ function CreatePageContent() {
         }
         setAllowModelLoadingScreen(false);
       } else {
+        // User genuinely has no models
         setUserModels([]);
         if (typeof window !== 'undefined') {
           localStorage.setItem('photomate_hasShownModelsOnce', 'true');
@@ -336,7 +343,8 @@ function CreatePageContent() {
       }
     } catch (err) {
       console.error('Error fetching user models:', err);
-      setUserModels([]);
+      setUserModelsError(err instanceof Error ? err.message : 'Failed to fetch models');
+      // Don't clear userModels on error - keep previous state if any
     } finally {
       setIsLoadingUserModels(false);
       isFetchingModels.current = false;
@@ -366,6 +374,7 @@ function CreatePageContent() {
       setPendingGenerations([]);
       setGenerations([]);
       setUserModels([]);
+      setUserModelsError(null);
       setIsLoadingHistory(false);
       setIsLoadingUserModels(false);
       if (typeof window !== 'undefined') {
@@ -446,9 +455,14 @@ function CreatePageContent() {
     return null;
   }
 
+  // Early return if user is not authenticated (prevents flash on logout)
+  if (!user) {
+    return null;
+  }
+
   // Conditional rendering for "no models" screen
-  // This shows if loading is complete AND there are no models.
-  if (!isLoadingUserModels && (!userModels || userModels.length === 0)) {
+  // This shows if loading is complete AND there are no models AND no error (genuine no models case).
+  if (!isLoadingUserModels && !userModelsError && (!userModels || userModels.length === 0)) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[calc(100vh-200px)] sm:min-h-[60vh] p-4 text-center">
         <div className="max-w-xl">
@@ -515,8 +529,29 @@ function CreatePageContent() {
   // This is reached if:
   // 1. !isLoadingUserModels && userModels.length > 0 (models loaded and exist)
   // 2. isLoadingUserModels && !allowModelLoadingScreen (models loading in background after initial check)
+  // 3. !isLoadingUserModels && userModelsError (error loading models, but show interface anyway)
   return (
     <div className="max-w-4xl mx-auto p-4 sm:p-8 md:p-12">
+      {/* Error message for model fetching */}
+      {userModelsError && (
+        <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-red-800 font-medium">Unable to load your AI models</p>
+              <p className="text-red-600 text-sm mt-1">{userModelsError}</p>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => fetchUserModels()}
+              disabled={isLoadingUserModels}
+            >
+              {isLoadingUserModels ? 'Retrying...' : 'Retry'}
+            </Button>
+          </div>
+        </div>
+      )}
+      
       <div className="mb-8 hidden sm:flex items-center justify-center space-x-4">
         <div className="flex items-center cursor-default relative">
           {/* Subtle background glow effect */}
@@ -579,6 +614,48 @@ function CreatePageContent() {
           Create images of yourself
         </h1>
       </div>
+      
+      {/* No credits banner - shown prominently but allows access to other features */}
+      {!creditsLoading && !has_credits && userModels && userModels.length > 0 && (
+        <div className="mb-6 p-6 bg-gradient-to-br from-orange-50/80 via-orange-50/60 to-background/80 dark:from-orange-900/20 dark:via-orange-900/10 dark:to-background/80 border border-orange-200/60 dark:border-orange-800/40 rounded-xl backdrop-blur-sm">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+            <div className="flex items-start gap-3 flex-1">
+              <div className="flex-shrink-0 w-10 h-10 bg-gradient-to-br from-orange-100 to-orange-200 dark:from-orange-900/50 dark:to-orange-800/50 rounded-full flex items-center justify-center">
+                <Coins className="w-5 h-5 text-orange-600 dark:text-orange-400" />
+              </div>
+              <div className="space-y-1">
+                <h3 className="font-semibold text-orange-900 dark:text-orange-100">Out of Generation Credits</h3>
+                <p className="text-sm text-orange-800 dark:text-orange-200 leading-relaxed">
+                  You&apos;ve used all your generation credits this month! Your trained models are ready and waiting — get more credits to continue creating amazing AI images.
+                </p>
+              </div>
+            </div>
+            <div className="flex flex-col sm:flex-row gap-2 sm:flex-shrink-0">
+              <Button
+                onClick={() => {/* TODO: Implement buy credits functionality */}}
+                size="sm"
+                className="bg-gradient-to-r from-orange-600 to-orange-500 hover:from-orange-700 hover:to-orange-600 text-white shadow-md hover:shadow-lg font-medium"
+              >
+                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
+                </svg>
+                Buy Credits
+              </Button>
+              <Button
+                onClick={() => {/* TODO: Implement upgrade plan functionality */}}
+                variant="outline"
+                size="sm"
+                className="border-orange-300 dark:border-orange-700 text-orange-700 dark:text-orange-300 hover:bg-orange-50 dark:hover:bg-orange-900/30"
+              >
+                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                </svg>
+                Upgrade Plan
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
       
       <PromptForm 
         pendingGenerations={pendingGenerations}
