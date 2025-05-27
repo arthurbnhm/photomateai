@@ -16,15 +16,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import {
-  Pagination,
-  PaginationContent,
-  PaginationItem,
-  PaginationLink,
-  PaginationNext,
-  PaginationPrevious,
-  PaginationEllipsis,
-} from "@/components/ui/pagination"
 
 // Define the type for image generation (now passed as prop)
 export type ImageGeneration = {
@@ -105,12 +96,13 @@ interface ImageHistoryProps {
   handleUseAsReference: (imageUrl: string, originalPrompt: string) => void;
   handleReferenceImageUsed?: () => void;
   cancelPendingGeneration?: ((id: string) => boolean) | null;
-  // Pagination props
-  currentPage?: number;
-  totalPages?: number;
-  onPageChange?: (page: number) => void;
-  onPreviousPage?: () => void;
-  onNextPage?: () => void;
+  // Infinite scroll props
+  hasNextPage?: boolean;
+  isLoadingMore?: boolean;
+  onLoadMore?: () => void;
+  // Cache management
+  onRemovePredictionFromCache?: (predictionId: string) => void;
+  onUpdateFavoriteInCache?: (predictionId: string, imageUrl: string, isLiked: boolean) => void;
 }
 
 export function ImageHistory({ 
@@ -125,11 +117,11 @@ export function ImageHistory({
   handleUseAsReference, 
   handleReferenceImageUsed, // eslint-disable-line @typescript-eslint/no-unused-vars
   cancelPendingGeneration,
-  currentPage,
-  totalPages,
-  onPageChange,
-  onPreviousPage,
-  onNextPage
+  hasNextPage,
+  isLoadingMore,
+  onLoadMore,
+  onRemovePredictionFromCache,
+  onUpdateFavoriteInCache
 }: ImageHistoryProps) {
   const [isDeleting, setIsDeleting] = useState<string | null>(null)
   const [isCancelling, setIsCancelling] = useState<string | null>(null)
@@ -143,6 +135,9 @@ export function ImageHistory({
   
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Infinite scroll sentinel ref
+  const sentinelRef = useRef<HTMLDivElement>(null);
   
   const [imageViewer, setImageViewer] = useState<ImageViewerState>({
     isOpen: false,
@@ -169,6 +164,30 @@ export function ImageHistory({
       setIsMounted(false)
     }
   }, [])
+
+  // Infinite scroll effect
+  useEffect(() => {
+    if (!sentinelRef.current || !hasNextPage || isLoadingMore) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const [entry] = entries;
+        if (entry.isIntersecting && hasNextPage && !isLoadingMore && onLoadMore) {
+          onLoadMore();
+        }
+      },
+      {
+        rootMargin: '200px', // Start loading 200px before the sentinel comes into view
+        threshold: 0.1,
+      }
+    );
+
+    observer.observe(sentinelRef.current);
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [hasNextPage, isLoadingMore, onLoadMore]);
 
   useEffect(() => {
     if (imageViewer.isOpen) {
@@ -524,6 +543,10 @@ export function ImageHistory({
       }
 
       // API call completed successfully
+      // Update cache with new favorite status instead of clearing
+      if (onUpdateFavoriteInCache) {
+        onUpdateFavoriteInCache(generationId, imageUrl, newLikedStatus);
+      }
 
     } catch (error) {
       console.error('Error toggling favorite:', error)
@@ -611,7 +634,11 @@ export function ImageHistory({
               return newState;
             });
           }, 1500);
-          loadGenerations(true); // Ensure parent re-fetches to confirm deletion
+          // Remove prediction from cache instead of clearing everything
+          if (onRemovePredictionFromCache) {
+            onRemovePredictionFromCache(id);
+          }
+          // Cache is already updated surgically - no need to refetch
         } else {
           // Show error state and rollback
           setDeletingStates(prev => ({ ...prev, [id]: 'error' }));
@@ -1069,143 +1096,17 @@ export function ImageHistory({
         </div>
       )}
       
-      {/* Pagination */}
-      {totalPages && totalPages > 1 && (
-        <div className="mt-8 flex justify-center">
-          <Pagination>
-            <PaginationContent>
-              {currentPage && currentPage > 1 && (
-                <PaginationItem>
-                  <PaginationPrevious 
-                    href="#" 
-                    onClick={(e) => {
-                      e.preventDefault();
-                      onPreviousPage?.();
-                    }}
-                  />
-                </PaginationItem>
-              )}
-              
-              {/* Page numbers */}
-              {(() => {
-                const pages = [];
-                const maxVisiblePages = 5;
-                const halfVisible = Math.floor(maxVisiblePages / 2);
-                
-                let startPage = Math.max(1, (currentPage || 1) - halfVisible);
-                const endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
-                
-                // Adjust startPage if we're near the end
-                if (endPage - startPage < maxVisiblePages - 1) {
-                  startPage = Math.max(1, endPage - maxVisiblePages + 1);
-                }
-                
-                // Add first page and ellipsis if needed
-                if (startPage > 1) {
-                  pages.push(
-                    <PaginationItem key={1}>
-                      <PaginationLink 
-                        href="#" 
-                        onClick={(e) => {
-                          e.preventDefault();
-                          // Preserve scroll position for smoother UX
-                          const currentScrollY = window.scrollY;
-                          onPageChange?.(1);
-                          // Restore scroll position after a short delay
-                          setTimeout(() => {
-                            window.scrollTo(0, currentScrollY);
-                          }, 50);
-                        }}
-                        isActive={currentPage === 1}
-                      >
-                        1
-                      </PaginationLink>
-                    </PaginationItem>
-                  );
-                  
-                  if (startPage > 2) {
-                    pages.push(
-                      <PaginationItem key="start-ellipsis">
-                        <PaginationEllipsis />
-                      </PaginationItem>
-                    );
-                  }
-                }
-                
-                // Add visible page numbers
-                for (let i = startPage; i <= endPage; i++) {
-                  pages.push(
-                    <PaginationItem key={i}>
-                      <PaginationLink 
-                        href="#" 
-                        onClick={(e) => {
-                          e.preventDefault();
-                          // Preserve scroll position for smoother UX
-                          const currentScrollY = window.scrollY;
-                          onPageChange?.(i);
-                          // Restore scroll position after a short delay
-                          setTimeout(() => {
-                            window.scrollTo(0, currentScrollY);
-                          }, 50);
-                        }}
-                        isActive={currentPage === i}
-                      >
-                        {i}
-                      </PaginationLink>
-                    </PaginationItem>
-                  );
-                }
-                
-                // Add ellipsis and last page if needed
-                if (endPage < totalPages) {
-                  if (endPage < totalPages - 1) {
-                    pages.push(
-                      <PaginationItem key="end-ellipsis">
-                        <PaginationEllipsis />
-                      </PaginationItem>
-                    );
-                  }
-                  
-                  pages.push(
-                    <PaginationItem key={totalPages}>
-                      <PaginationLink 
-                        href="#" 
-                        onClick={(e) => {
-                          e.preventDefault();
-                          // Preserve scroll position for smoother UX
-                          const currentScrollY = window.scrollY;
-                          onPageChange?.(totalPages);
-                          // Restore scroll position after a short delay
-                          setTimeout(() => {
-                            window.scrollTo(0, currentScrollY);
-                          }, 50);
-                        }}
-                        isActive={currentPage === totalPages}
-                      >
-                        {totalPages}
-                      </PaginationLink>
-                    </PaginationItem>
-                  );
-                }
-                
-                return pages;
-              })()}
-              
-              {currentPage && totalPages && currentPage < totalPages && (
-                <PaginationItem>
-                  <PaginationNext 
-                    href="#" 
-                    onClick={(e) => {
-                      e.preventDefault();
-                      onNextPage?.();
-                    }}
-                  />
-                </PaginationItem>
-              )}
-            </PaginationContent>
-          </Pagination>
+      {/* Infinite scroll sentinel and end message */}
+      {hasNextPage ? (
+        <div ref={sentinelRef} className="h-20"></div> // Invisible trigger area for infinite scroll
+      ) : generations.length > 0 ? (
+        <div className="mt-12 mb-8 flex flex-col items-center justify-center text-center">
+          <h3 className="text-lg font-medium text-muted-foreground/80 mb-2">You&apos;ve reached the end!</h3>
+          <p className="text-sm text-muted-foreground/60 max-w-sm">
+            You&apos;ve seen all your generated images. Create more amazing artwork with the form above.
+          </p>
         </div>
-      )}
+      ) : null}
     </div>
   )
 } 

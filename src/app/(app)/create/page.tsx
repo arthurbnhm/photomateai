@@ -176,11 +176,208 @@ function CreatePageContent() {
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
   const [errorHistory, setErrorHistory] = useState<string | null>(null);
   
-  // Pagination state
+  // Infinite scroll state (replaces pagination)
   const [currentPage, setCurrentPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
+  const [hasNextPage, setHasNextPage] = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const itemsPerPage = 20;
   
+  // Cache for completed predictions - using persistent localStorage
+  const [predictionsCache, setPredictionsCache] = useState<Map<string, {
+    data: PredictionData[];
+    timestamp: number;
+    pagination: {
+      page: number;
+      limit: number;
+      total: number;
+      totalPages: number;
+      hasNextPage: boolean;
+      hasPreviousPage: boolean;
+    };
+  }>>(new Map());
+  
+  // Cache TTL (10 minutes for completed predictions)
+  const CACHE_TTL = 10 * 60 * 1000;
+
+  // Initialize cache from localStorage on mount
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem('photomate_predictions_cache');
+        if (stored) {
+          const parsedCache = JSON.parse(stored) as Record<string, {
+            data: PredictionData[];
+            timestamp: number;
+            pagination: {
+              page: number;
+              limit: number;
+              total: number;
+              totalPages: number;
+              hasNextPage: boolean;
+              hasPreviousPage: boolean;
+            };
+          }>;
+          const cacheMap = new Map();
+          
+          // Convert stored object back to Map and check TTL
+          Object.entries(parsedCache).forEach(([key, value]) => {
+            if (Date.now() - value.timestamp < CACHE_TTL) {
+              cacheMap.set(key, value);
+            }
+          });
+          
+          if (cacheMap.size > 0) {
+            setPredictionsCache(cacheMap);
+            console.log(`💾 Restored ${cacheMap.size} cached pages from localStorage`);
+          }
+        }
+      } catch (error) {
+        console.warn('Failed to restore cache from localStorage:', error);
+      }
+    }
+  }, [CACHE_TTL]);
+
+  // Save cache to localStorage whenever it changes
+  useEffect(() => {
+    if (typeof window !== 'undefined' && predictionsCache.size > 0) {
+      try {
+        const cacheObject = Object.fromEntries(predictionsCache);
+        localStorage.setItem('photomate_predictions_cache', JSON.stringify(cacheObject));
+        console.log(`💾 Saved ${predictionsCache.size} pages to localStorage cache`);
+      } catch (error) {
+        console.warn('Failed to save cache to localStorage:', error);
+      }
+    }
+  }, [predictionsCache]);
+
+  // Cache utility functions
+  const getCacheKey = (page: number, isDeleted = false) => `predictions_${isDeleted}_${page}`;
+  
+  const getCachedData = useCallback((page: number, isDeleted = false) => {
+    const key = getCacheKey(page, isDeleted);
+    const cached = predictionsCache.get(key);
+    if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+      console.log(`🎯 Cache HIT for page ${page} (${Math.round((Date.now() - cached.timestamp) / 1000)}s old)`);
+      return cached;
+    }
+    if (cached) {
+      console.log(`⏰ Cache EXPIRED for page ${page} (${Math.round((Date.now() - cached.timestamp) / 1000)}s old)`);
+    } else {
+      console.log(`❌ Cache MISS for page ${page}`);
+    }
+    return null;
+  }, [predictionsCache, CACHE_TTL]);
+  
+  const setCachedData = useCallback((page: number, data: PredictionData[], pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+    hasNextPage: boolean;
+    hasPreviousPage: boolean;
+  }, isDeleted = false) => {
+    const key = getCacheKey(page, isDeleted);
+    console.log(`💾 Caching page ${page} with ${data.length} predictions`);
+    setPredictionsCache(prev => new Map(prev).set(key, {
+      data,
+      timestamp: Date.now(),
+      pagination
+    }));
+  }, []);
+  
+  // Clear cache when user actions occur (like/unlike, delete)
+  const clearCache = useCallback(() => {
+    console.log('🗑️ Clearing all cache due to user action');
+    setPredictionsCache(new Map());
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('photomate_predictions_cache');
+    }
+  }, []);
+
+  // Remove a specific prediction from all cached pages
+  const removePredictionFromCache = useCallback((predictionId: string) => {
+    console.log(`🗑️ Removing prediction ${predictionId} from cache`);
+    setPredictionsCache(prev => {
+      const newCache = new Map(prev);
+      let cacheUpdated = false;
+      
+      newCache.forEach((cacheEntry, key) => {
+        const filteredData = cacheEntry.data.filter(item => item.id !== predictionId);
+        if (filteredData.length !== cacheEntry.data.length) {
+          newCache.set(key, {
+            ...cacheEntry,
+            data: filteredData
+          });
+          cacheUpdated = true;
+        }
+      });
+      
+      if (cacheUpdated && typeof window !== 'undefined') {
+        try {
+          const cacheObject = Object.fromEntries(newCache);
+          localStorage.setItem('photomate_predictions_cache', JSON.stringify(cacheObject));
+        } catch (error) {
+          console.warn('Failed to update cache in localStorage:', error);
+        }
+      }
+      
+      return newCache;
+    });
+  }, []);
+
+  // Update favorite status in cache without clearing
+  const updateFavoriteInCache = useCallback((predictionId: string, imageUrl: string, isLiked: boolean) => {
+    console.log(`💖 Updating favorite status in cache: ${predictionId}, ${imageUrl}, ${isLiked}`);
+    setPredictionsCache(prev => {
+      const newCache = new Map(prev);
+      let cacheUpdated = false;
+      
+      newCache.forEach((cacheEntry, key) => {
+        const updatedData = cacheEntry.data.map(item => {
+          if (item.id === predictionId) {
+            const currentLikedImages = item.liked_images || [];
+            let newLikedImages: string[];
+            
+            if (isLiked) {
+              // Add to liked images if not already there
+              newLikedImages = currentLikedImages.includes(imageUrl) 
+                ? currentLikedImages 
+                : [...currentLikedImages, imageUrl];
+            } else {
+              // Remove from liked images
+              newLikedImages = currentLikedImages.filter(url => url !== imageUrl);
+            }
+            
+            cacheUpdated = true;
+            return {
+              ...item,
+              liked_images: newLikedImages
+            };
+          }
+          return item;
+        });
+        
+        if (cacheUpdated) {
+          newCache.set(key, {
+            ...cacheEntry,
+            data: updatedData
+          });
+        }
+      });
+      
+      if (cacheUpdated && typeof window !== 'undefined') {
+        try {
+          const cacheObject = Object.fromEntries(newCache);
+          localStorage.setItem('photomate_predictions_cache', JSON.stringify(cacheObject));
+        } catch (error) {
+          console.warn('Failed to update cache in localStorage:', error);
+        }
+      }
+      
+      return newCache;
+    });
+  }, []);
+
   // State for user models
   const [userModels, setUserModels] = useState<Model[]>([]);
   const [isLoadingUserModels, setIsLoadingUserModels] = useState(true); // Initialize to true
@@ -219,17 +416,103 @@ function CreatePageContent() {
     setReferenceImageData(null);
   }, []);
 
-  // Combined function to fetch all predictions and separate them
-  const fetchAllPredictions = useCallback(async (silentUpdate: boolean = false, page: number = currentPage) => {
-    if (isFetchingPredictions.current) return;
+  // Combined function to fetch all predictions and separate them with caching
+  const fetchAllPredictions = useCallback(async (silentUpdate: boolean = false, page: number = currentPage, append: boolean = false) => {
+    console.log(`🔍 fetchAllPredictions called: page=${page}, silentUpdate=${silentUpdate}, append=${append}`);
     
+    if (isFetchingPredictions.current) {
+      console.log(`⏸️ Already fetching, skipping page ${page}`);
+      return;
+    }
+    
+    // Check cache first for completed predictions
+    // Skip cache for page 1 with silent updates (polling for pending generations)
+    const shouldCheckCache = !(page === 1 && silentUpdate);
+    console.log(`🔍 shouldCheckCache: ${shouldCheckCache} (page=${page}, silentUpdate=${silentUpdate})`);
+    
+    if (shouldCheckCache) {
+      const cachedData = getCachedData(page, false);
+      if (cachedData) {
+        console.log(`🎯 Using cached data for page ${page}, returning early`);
+        
+        // Filter only completed predictions from cache
+        const completedPredictions = cachedData.data.filter((item: PredictionData) => 
+          item.status === 'succeeded' && item.storage_urls && item.storage_urls.length > 0
+        );
+
+        // Process cached data
+        const processedData: ImageGeneration[] = completedPredictions.map((item: PredictionData) => {
+          const modelDisplayName = item.models?.display_name || 'Default Model';
+          return {
+            id: item.id,
+            replicate_id: item.replicate_id,
+            prompt: item.prompt,
+            timestamp: item.created_at,
+            images: processOutput(item.storage_urls, item.liked_images),
+            aspectRatio: item.aspect_ratio,
+            format: item.format || item.input?.output_format || 'webp',
+            modelDisplayName: modelDisplayName
+          };
+        });
+
+        // Update pagination state
+        setHasNextPage(cachedData.pagination.hasNextPage);
+        setCurrentPage(cachedData.pagination.page);
+
+        // For infinite scroll, append to existing generations; otherwise replace
+        if (append && page > 1) {
+          setGenerations(prev => [...prev, ...processedData]);
+        } else {
+          setGenerations(processedData);
+        }
+
+        // For page 1, still need to fetch fresh pending generations
+        if (page === 1) {
+          console.log(`🔄 Page 1 cached, but fetching fresh pending generations`);
+          try {
+            const response = await fetch(`/api/predictions?is_deleted=false&limit=${itemsPerPage}&page=1`);
+            if (response.ok) {
+              const { success, predictions } = await response.json();
+              if (success && predictions) {
+                const pendingPredictions = predictions.filter((item: PredictionData) => 
+                  ['starting', 'queued', 'processing'].includes(item.status) && !item.is_cancelled
+                );
+                
+                if (pendingPredictions.length > 0) {
+                  const pendingGens: PendingGeneration[] = pendingPredictions.map((item: PredictionData) => ({
+                    id: item.id,
+                    replicate_id: item.replicate_id,
+                    prompt: item.prompt || '',
+                    aspectRatio: item.aspect_ratio || '1:1',
+                    startTime: item.created_at,
+                    format: item.format || item.input?.output_format || 'webp',
+                    modelDisplayName: item.models?.display_name || 'Unknown Model'
+                  }));
+                  setPendingGenerations(pendingGens);
+                } else {
+                  setPendingGenerations([]);
+                }
+              }
+            }
+          } catch (error) {
+            console.warn('Failed to fetch fresh pending generations:', error);
+          }
+        }
+
+        return; // Use cached data, no need to fetch
+      }
+    }
+    
+    console.log(`🌐 Making API call for page ${page}`);
     isFetchingPredictions.current = true;
     const abortController = new AbortController();
     const timeoutId = setTimeout(() => abortController.abort(), 10000);
 
-    if (!silentUpdate) {
+    if (!silentUpdate && !append) {
       setIsLoadingHistory(true);
       setErrorHistory(null);
+    } else if (append) {
+      setIsLoadingMore(true);
     }
 
     try {
@@ -251,9 +534,18 @@ function CreatePageContent() {
       }
       
       if (predictions && pagination) {
+        // Cache the data (excluding pending generations from cache)
+        const completedPredictionsForCache = predictions.filter((item: PredictionData) => 
+          item.status === 'succeeded' && item.storage_urls && item.storage_urls.length > 0
+        );
+        
+        if (completedPredictionsForCache.length > 0) {
+          setCachedData(page, completedPredictionsForCache, pagination, false);
+        }
+
         // Update pagination state
         setCurrentPage(pagination.page);
-        setTotalPages(pagination.totalPages);
+        setHasNextPage(pagination.hasNextPage);
         
         // Separate pending and completed predictions
         const pendingPredictions = predictions.filter((item: PredictionData) => 
@@ -297,7 +589,13 @@ function CreatePageContent() {
             modelDisplayName: modelDisplayName
           };
         });
-        setGenerations(processedData);
+        
+        // For infinite scroll, append to existing generations; otherwise replace
+        if (append && page > 1) {
+          setGenerations(prev => [...prev, ...processedData]);
+        } else {
+          setGenerations(processedData);
+        }
       }
       
     } catch (fetchError: unknown) { 
@@ -320,12 +618,14 @@ function CreatePageContent() {
         setErrorHistory(errorMessage);
       }
     } finally {
-      if (!silentUpdate) {
+      if (!silentUpdate && !append) {
         setIsLoadingHistory(false);
+      } else if (append) {
+        setIsLoadingMore(false);
       }
       isFetchingPredictions.current = false;
     }
-  }, [currentPage, itemsPerPage]); // Updated dependencies
+  }, [currentPage, itemsPerPage, getCachedData, setCachedData]); // Updated dependencies
 
   // Fetch user models function
   const fetchUserModels = useCallback(async () => {
@@ -391,7 +691,8 @@ function CreatePageContent() {
       setIsLoadingUserModels(false);
       // Reset pagination state
       setCurrentPage(1);
-      setTotalPages(1);
+      setHasNextPage(false);
+      setIsLoadingMore(false);
       if (typeof window !== 'undefined') {
         localStorage.removeItem('photomate_hasShownModelsOnce');
       }
@@ -406,31 +707,19 @@ function CreatePageContent() {
         setIsLoadingHistory(true);
         setErrorHistory(null); // Clear previous errors
       }
-      await fetchAllPredictions(silentUpdate, currentPage);
+      await fetchAllPredictions(silentUpdate, 1); // Always reset to page 1 for regular loads
     } catch {
       // Error handling is now within fetchAllPredictions
     }
-  }, [fetchAllPredictions, currentPage]);
+  }, [fetchAllPredictions]);
 
-  // Pagination handlers
-  const handlePageChange = useCallback(async (newPage: number) => {
-    if (newPage >= 1 && newPage <= totalPages && newPage !== currentPage) {
-      setCurrentPage(newPage);
-      await fetchAllPredictions(false, newPage);
-    }
-  }, [totalPages, currentPage, fetchAllPredictions]);
-
-  const handlePreviousPage = useCallback(() => {
-    if (currentPage > 1) {
-      handlePageChange(currentPage - 1);
-    }
-  }, [currentPage, handlePageChange]);
-
-  const handleNextPage = useCallback(() => {
-    if (currentPage < totalPages) {
-      handlePageChange(currentPage + 1);
-    }
-  }, [currentPage, totalPages, handlePageChange]);
+  // Infinite scroll load more handler
+  const handleLoadMore = useCallback(async () => {
+    if (!hasNextPage || isLoadingMore) return;
+    
+    const nextPage = currentPage + 1;
+    await fetchAllPredictions(false, nextPage, true); // append = true for infinite scroll
+  }, [hasNextPage, isLoadingMore, currentPage, fetchAllPredictions]);
 
   // Visibility change effect for image history
   useEffect(() => {
@@ -701,13 +990,11 @@ function CreatePageContent() {
         isLoadingUserModels={isLoadingUserModels}
         onGenerationStart={() => { /* Potentially do nothing here if polling handles it */ }}
         onGenerationComplete={async () => {
-          // Navigate to page 1 to show the latest generation
-          if (currentPage !== 1) {
-            setCurrentPage(1);
-            await fetchAllPredictions(false, 1);
-          } else {
-            await fetchAllPredictions(true, 1); // Silent refresh if already on page 1
-          }
+          // Reset to page 1 and refresh generations for infinite scroll
+          setCurrentPage(1);
+          setGenerations([]); // Clear existing generations
+          clearCache(); // Clear cache when new generations are added
+          await fetchAllPredictions(false, 1);
         }}
         referenceImageData={referenceImageData}
         handleReferenceImageUsed={handleReferenceImageUsed}
@@ -725,11 +1012,11 @@ function CreatePageContent() {
           setPromptValue={setPromptValue}
           handleUseAsReference={handleUseAsReference}
           cancelPendingGeneration={cancelPendingGeneration}
-          currentPage={currentPage}
-          totalPages={totalPages}
-          onPageChange={handlePageChange}
-          onPreviousPage={handlePreviousPage}
-          onNextPage={handleNextPage}
+          hasNextPage={hasNextPage}
+          isLoadingMore={isLoadingMore}
+          onLoadMore={handleLoadMore}
+          onRemovePredictionFromCache={removePredictionFromCache}
+          onUpdateFavoriteInCache={updateFavoriteInCache}
         />
       </div>
     </div>
