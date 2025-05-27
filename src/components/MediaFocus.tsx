@@ -288,10 +288,14 @@ export function MediaFocus({
   // Download functionality
   const downloadImage = async (e?: React.MouseEvent) => {
     if (e) e.stopPropagation()
-    if (!currentGeneration || !currentGeneration.images[currentImageIndex]) return
+    if (!currentGeneration) return
+    
+    // Use the same logic as the rest of the component to get current image
+    const currentImage = allImages ? allImages[currentImageIndex] : currentGeneration.images[currentImageIndex]
+    if (!currentImage) return
     
     try {
-      const imageUrl = currentGeneration.images[currentImageIndex].url
+      const imageUrl = currentImage.url
       const url = new URL(imageUrl)
       const pathSegments = url.pathname.split('/')
       const bucketIndex = pathSegments.findIndex(segment => segment === 'sign') + 2
