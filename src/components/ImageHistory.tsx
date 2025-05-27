@@ -713,12 +713,20 @@ export function ImageHistory({
   }, []);
 
   const getAllGenerations = useCallback(() => {
-    const allDisplayableGenerations: (ImageGeneration & { isPending?: boolean })[] = [...generations];
+    // Use a Map to ensure unique IDs and prioritize completed generations
+    const generationsMap = new Map<string, ImageGeneration & { isPending?: boolean }>();
     
+    // First, add all completed generations (these take priority)
+    generations.forEach(generation => {
+      generationsMap.set(generation.id, { ...generation, isPending: false });
+    });
+    
+    // Then, add pending generations only if they don't exist as completed ones
     pendingGenerations.forEach(pending => {
-      const existingIndex = allDisplayableGenerations.findIndex(gen => gen.id === pending.id);
-      if (existingIndex === -1 || 
-          (existingIndex >= 0 && allDisplayableGenerations[existingIndex].images.length < 4)) {
+      const existingGeneration = generationsMap.get(pending.id);
+      
+      if (!existingGeneration) {
+        // This is a truly new pending generation
         const virtualGeneration: ImageGeneration & { isPending?: boolean } = {
           id: pending.id,
           replicate_id: pending.replicate_id || '',
@@ -730,24 +738,20 @@ export function ImageHistory({
           modelDisplayName: pending.modelDisplayName,
           isPending: true
         };
-        // If it's truly new, add it. If it exists but incomplete, replace (or update)
-        if (existingIndex === -1) {
-            allDisplayableGenerations.push(virtualGeneration);
-        } else {
-            // This case suggests a mismatch or partial update from parent, 
-            // best to rely on parent's `generations` for completed data.
-            // For display, we can ensure a pending marker if necessary.
-            if (!allDisplayableGenerations[existingIndex].isPending) {
-                 allDisplayableGenerations[existingIndex] = {
-                    ...allDisplayableGenerations[existingIndex],
-                    // Ensure it has the isPending flag if it's in pendingGenerations
-                    // and not fully loaded in `generations` prop
-                    isPending: true 
-                 };
-            }
-        }
+        generationsMap.set(pending.id, virtualGeneration);
+      } else if (existingGeneration.images.length === 0) {
+        // If we have a completed generation but it has no images (shouldn't happen normally),
+        // we can mark it as pending if it's also in pendingGenerations
+        generationsMap.set(pending.id, {
+          ...existingGeneration,
+          isPending: true
+        });
       }
+      // If a completed generation with images exists, we ignore the pending version
     });
+    
+    // Convert Map values to array and sort by timestamp
+    const allDisplayableGenerations = Array.from(generationsMap.values());
     
     return allDisplayableGenerations.sort((a, b) => 
       new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
