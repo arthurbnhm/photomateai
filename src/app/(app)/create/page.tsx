@@ -416,6 +416,14 @@ function CreatePageContent() {
       return;
     }
     
+    // Set loading state BEFORE checking cache (this was the bug!)
+    if (!silentUpdate && !append) {
+      setIsLoadingHistory(true);
+      setErrorHistory(null);
+    } else if (append) {
+      setIsLoadingMore(true);
+    }
+    
     // Check cache first for completed predictions
     // Skip cache for page 1 with silent updates (polling for pending generations)
     const shouldCheckCache = !(page === 1 && silentUpdate);
@@ -450,11 +458,17 @@ function CreatePageContent() {
         setHasNextPage(cachedData.pagination.hasNextPage);
         setCurrentPage(cachedData.pagination.page);
 
-        // For infinite scroll, append to existing generations; otherwise replace
-        if (append && page > 1) {
-          setGenerations(prev => [...prev, ...processedData]);
+        // Only update generations if we have valid data or if this is page 1 (initial load)
+        // This prevents clearing existing generations when cached filtered data is empty
+        if (processedData.length > 0 || page === 1) {
+          // For infinite scroll, append to existing generations; otherwise replace
+          if (append && page > 1) {
+            setGenerations(prev => [...prev, ...processedData]);
+          } else {
+            setGenerations(processedData);
+          }
         } else {
-          setGenerations(processedData);
+          console.log(`📭 Cached data for page ${page} was empty after filtering, keeping existing generations`);
         }
 
         // For page 1, still need to fetch fresh pending generations
@@ -490,6 +504,13 @@ function CreatePageContent() {
           }
         }
 
+        // IMPORTANT: Clear loading state even when using cache
+        if (!silentUpdate && !append) {
+          setIsLoadingHistory(false);
+        } else if (append) {
+          setIsLoadingMore(false);
+        }
+
         return; // Use cached data, no need to fetch
       }
     }
@@ -498,13 +519,6 @@ function CreatePageContent() {
     isFetchingPredictions.current = true;
     const abortController = new AbortController();
     const timeoutId = setTimeout(() => abortController.abort(), 10000);
-
-    if (!silentUpdate && !append) {
-      setIsLoadingHistory(true);
-      setErrorHistory(null);
-    } else if (append) {
-      setIsLoadingMore(true);
-    }
 
     try {
       // Use the new predictions API endpoint with pagination
