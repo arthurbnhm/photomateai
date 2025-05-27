@@ -229,7 +229,7 @@ export function PromptForm({
   const getSupabase = useCallback(() => supabaseRef.current, []);
   
   // Get user and credits from centralized AuthContext
-  const { user, credits, creditsLoading, refreshCredits } = useAuth();
+  const { user, credits, refreshCredits } = useAuth();
   
   // Derived state from credits
   const has_credits = credits?.has_credits || false;
@@ -814,16 +814,6 @@ export function PromptForm({
     <div className="w-full">
       <div className="w-full bg-gradient-to-br from-card/95 via-card to-card/90 border border-border/60 rounded-2xl overflow-hidden shadow-xl backdrop-blur-sm">
         <div className="p-6">
-          {/* Show subtle credit checking indicator at the top if still loading */}
-          {creditsLoading && (
-            <div className="mb-4 p-3 bg-muted/50 border border-border/40 rounded-lg">
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <div className="w-4 h-4 bg-muted-foreground/30 animate-pulse rounded-full"></div>
-                <span>Checking your credits...</span>
-              </div>
-            </div>
-          )}
-          
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
               <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
@@ -1004,11 +994,10 @@ export function PromptForm({
                         <Button 
                           type="submit" 
                           className="w-full bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary/80 text-primary-foreground shadow-lg hover:shadow-xl font-medium disabled:opacity-50"
-                          disabled={effectiveLoadingModels || creditsLoading || !has_credits}
+                          disabled={effectiveLoadingModels || !has_credits}
                           aria-label="Generate image from prompt"
-                          title={!has_credits && !creditsLoading ? "Insufficient credits" : creditsLoading ? "Checking credits..." : "Generate image from prompt"}
                         >
-                          {creditsLoading ? "Generate" : !has_credits ? "No Credits" : "Generate"}
+                          {effectiveLoadingModels ? "Generate" : !has_credits ? "No Credits" : "Generate"}
                         </Button>
                       </div>
                     </div>
@@ -1185,11 +1174,10 @@ export function PromptForm({
                         type="button"
                         onClick={handleImageReferenceGeneration}
                         className="w-full bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary/80 text-primary-foreground shadow-lg hover:shadow-xl font-medium disabled:opacity-50"
-                        disabled={effectiveLoadingModels || !uploadedImageDataUrl || creditsLoading || !has_credits}
+                        disabled={effectiveLoadingModels || !uploadedImageDataUrl || !has_credits}
                         aria-label="Generate image from image reference"
-                        title={!has_credits && !creditsLoading ? "Insufficient credits" : creditsLoading ? "Checking credits..." : !uploadedImageDataUrl ? "Upload an image first" : "Generate image from image reference"}
                       >
-                        {creditsLoading ? "Generate" : !has_credits ? "No Credits" : "Generate"}
+                        {effectiveLoadingModels ? "Generate" : !has_credits ? "No Credits" : "Generate"}
                       </Button>
                     </div>
                   </div>

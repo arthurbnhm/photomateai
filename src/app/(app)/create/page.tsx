@@ -176,6 +176,11 @@ function CreatePageContent() {
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
   const [errorHistory, setErrorHistory] = useState<string | null>(null);
   
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const itemsPerPage = 20;
+  
   // State for user models
   const [userModels, setUserModels] = useState<Model[]>([]);
   const [isLoadingUserModels, setIsLoadingUserModels] = useState(true); // Initialize to true
@@ -195,7 +200,7 @@ function CreatePageContent() {
   const [cancelPendingGeneration, setCancelPendingGeneration] = useState<((id: string) => boolean) | null>(null);
 
   const [isMounted, setIsMounted] = useState(false);
-  const { user, credits, creditsLoading } = useAuth();
+  const { user, credits } = useAuth();
   
   // Derived state from credits
   const has_credits = credits?.has_credits || false;
@@ -215,7 +220,7 @@ function CreatePageContent() {
   }, []);
 
   // Combined function to fetch all predictions and separate them
-  const fetchAllPredictions = useCallback(async (silentUpdate: boolean = false) => {
+  const fetchAllPredictions = useCallback(async (silentUpdate: boolean = false, page: number = currentPage) => {
     if (isFetchingPredictions.current) return;
     
     isFetchingPredictions.current = true;
@@ -228,8 +233,8 @@ function CreatePageContent() {
     }
 
     try {
-      // Use the new predictions API endpoint instead of direct Supabase call
-      const response = await fetch('/api/predictions?is_deleted=false&limit=50', {
+      // Use the new predictions API endpoint with pagination
+      const response = await fetch(`/api/predictions?is_deleted=false&limit=${itemsPerPage}&page=${page}`, {
         signal: abortController.signal
       });
       
@@ -239,39 +244,44 @@ function CreatePageContent() {
         throw new Error(`Failed to fetch predictions: ${response.status} ${response.statusText}`);
       }
       
-      const { success, predictions, error } = await response.json();
+      const { success, predictions, pagination, error } = await response.json();
       
       if (!success) {
         throw new Error(error || 'Failed to fetch predictions');
       }
       
-      if (predictions) {
+      if (predictions && pagination) {
+        // Update pagination state
+        setCurrentPage(pagination.page);
+        setTotalPages(pagination.totalPages);
+        
         // Separate pending and completed predictions
         const pendingPredictions = predictions.filter((item: PredictionData) => 
           ['starting', 'queued', 'processing'].includes(item.status) && !item.is_cancelled
         );
         
-        const completedPredictions = predictions.filter((item: PredictionData) => 
-          item.status === 'succeeded' && item.storage_urls
-        );
+        // API now only returns displayable predictions, so use all returned predictions
+        const completedPredictions = predictions;
 
-        // Process pending generations
-        if (pendingPredictions.length > 0) {
-          const pendingGens: PendingGeneration[] = pendingPredictions.map((item: PredictionData) => ({
-            id: item.id,
-            replicate_id: item.replicate_id,
-            prompt: item.prompt || '',
-            aspectRatio: item.aspect_ratio || '1:1',
-            startTime: item.created_at,
-            format: item.format || item.input?.output_format || 'webp',
-            modelDisplayName: item.models?.display_name || 'Unknown Model'
-          }));
-          setPendingGenerations(pendingGens);
-        } else {
-          setPendingGenerations([]);
+        // Only update pending generations if we're on the first page or this is a silent update
+        if (page === 1 || silentUpdate) {
+          if (pendingPredictions.length > 0) {
+            const pendingGens: PendingGeneration[] = pendingPredictions.map((item: PredictionData) => ({
+              id: item.id,
+              replicate_id: item.replicate_id,
+              prompt: item.prompt || '',
+              aspectRatio: item.aspect_ratio || '1:1',
+              startTime: item.created_at,
+              format: item.format || item.input?.output_format || 'webp',
+              modelDisplayName: item.models?.display_name || 'Unknown Model'
+            }));
+            setPendingGenerations(pendingGens);
+          } else {
+            setPendingGenerations([]);
+          }
         }
 
-        // Process completed generations
+        // Process all returned predictions since API guarantees they're displayable
         const processedData: ImageGeneration[] = completedPredictions.map((item: PredictionData) => {
           const modelDisplayName = item.models?.display_name || 'Default Model';
           return {
@@ -313,7 +323,7 @@ function CreatePageContent() {
       }
       isFetchingPredictions.current = false;
     }
-  }, []); // Stable dependency array since we use refs
+  }, [currentPage, itemsPerPage]); // Updated dependencies
 
   // Fetch user models function
   const fetchUserModels = useCallback(async () => {
@@ -359,12 +369,12 @@ function CreatePageContent() {
     }
   }, []);
 
-  // Consolidated data fetching effect - only runs once when user and mounted state are ready
+  // Initial data fetching effect - only runs once when user and mounted state are ready
   useEffect(() => {
     if (isMounted && user) {
-      // Fetch both predictions and models in parallel
+      // Fetch both predictions and models in parallel on initial load
       Promise.all([
-        fetchAllPredictions(),
+        fetchAllPredictions(false, 1), // Always start with page 1
         fetchUserModels()
       ]).catch(error => {
         console.error('Error during initial data fetch:', error);
@@ -377,12 +387,15 @@ function CreatePageContent() {
       setUserModelsError(null);
       setIsLoadingHistory(false);
       setIsLoadingUserModels(false);
+      // Reset pagination state
+      setCurrentPage(1);
+      setTotalPages(1);
       if (typeof window !== 'undefined') {
         localStorage.removeItem('photomate_hasShownModelsOnce');
       }
       setAllowModelLoadingScreen(true);
     }
-  }, [isMounted, user, fetchAllPredictions, fetchUserModels]); // Added missing dependencies
+  }, [isMounted, user]); // Only depend on mount state and user, not the fetch functions
 
   // Load generations from Supabase (wrapper for compatibility with ImageHistory)
   const loadGenerations = useCallback(async (silentUpdate: boolean = false) => {
@@ -391,17 +404,38 @@ function CreatePageContent() {
         setIsLoadingHistory(true);
         setErrorHistory(null); // Clear previous errors
       }
-      await fetchAllPredictions(silentUpdate);
+      await fetchAllPredictions(silentUpdate, currentPage);
     } catch {
       // Error handling is now within fetchAllPredictions
     }
-  }, [fetchAllPredictions]);
+  }, [fetchAllPredictions, currentPage]);
+
+  // Pagination handlers
+  const handlePageChange = useCallback(async (newPage: number) => {
+    if (newPage >= 1 && newPage <= totalPages && newPage !== currentPage) {
+      setCurrentPage(newPage);
+      await fetchAllPredictions(false, newPage);
+    }
+  }, [totalPages, currentPage, fetchAllPredictions]);
+
+  const handlePreviousPage = useCallback(() => {
+    if (currentPage > 1) {
+      handlePageChange(currentPage - 1);
+    }
+  }, [currentPage, handlePageChange]);
+
+  const handleNextPage = useCallback(() => {
+    if (currentPage < totalPages) {
+      handlePageChange(currentPage + 1);
+    }
+  }, [currentPage, totalPages, handlePageChange]);
 
   // Visibility change effect for image history
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible' && isMounted && user) {
-        loadGenerations(true); // Silent update
+        // Only refresh predictions when tab becomes visible, not models
+        fetchAllPredictions(true, currentPage); // Silent update
       }
     };
     
@@ -409,7 +443,7 @@ function CreatePageContent() {
     return () => {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [loadGenerations, isMounted, user]);
+  }, [fetchAllPredictions, currentPage, isMounted, user]);
 
   const selectedHeaderImages = useMemo(() => {
     // Show default images if either history or user models are still in their initial loading phase controlled by allowModelLoadingScreen
@@ -616,7 +650,7 @@ function CreatePageContent() {
       </div>
       
       {/* No credits banner - shown prominently but allows access to other features */}
-      {!creditsLoading && !has_credits && userModels && userModels.length > 0 && (
+      {!has_credits && userModels && userModels.length > 0 && (
         <div className="mb-6 p-6 bg-gradient-to-br from-orange-50/80 via-orange-50/60 to-background/80 dark:from-orange-900/20 dark:via-orange-900/10 dark:to-background/80 border border-orange-200/60 dark:border-orange-800/40 rounded-xl backdrop-blur-sm">
           <div className="flex flex-col sm:flex-row sm:items-center gap-4">
             <div className="flex items-start gap-3 flex-1">
@@ -664,7 +698,15 @@ function CreatePageContent() {
         userModels={userModels}
         isLoadingUserModels={isLoadingUserModels}
         onGenerationStart={() => { /* Potentially do nothing here if polling handles it */ }}
-        onGenerationComplete={() => loadGenerations(true)} // Silent refresh
+        onGenerationComplete={async () => {
+          // Navigate to page 1 to show the latest generation
+          if (currentPage !== 1) {
+            setCurrentPage(1);
+            await fetchAllPredictions(false, 1);
+          } else {
+            await fetchAllPredictions(true, 1); // Silent refresh if already on page 1
+          }
+        }}
         referenceImageData={referenceImageData}
         handleReferenceImageUsed={handleReferenceImageUsed}
         onCancelPendingGeneration={setCancelPendingGeneration}
@@ -681,6 +723,11 @@ function CreatePageContent() {
           setPromptValue={setPromptValue}
           handleUseAsReference={handleUseAsReference}
           cancelPendingGeneration={cancelPendingGeneration}
+          currentPage={currentPage}
+          totalPages={totalPages}
+          onPageChange={handlePageChange}
+          onPreviousPage={handlePreviousPage}
+          onNextPage={handleNextPage}
         />
       </div>
     </div>

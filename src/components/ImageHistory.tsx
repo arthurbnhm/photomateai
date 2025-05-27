@@ -16,6 +16,15 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+  PaginationEllipsis,
+} from "@/components/ui/pagination"
 
 // Define the type for image generation (now passed as prop)
 export type ImageGeneration = {
@@ -96,6 +105,12 @@ interface ImageHistoryProps {
   handleUseAsReference: (imageUrl: string, originalPrompt: string) => void;
   handleReferenceImageUsed?: () => void;
   cancelPendingGeneration?: ((id: string) => boolean) | null;
+  // Pagination props
+  currentPage?: number;
+  totalPages?: number;
+  onPageChange?: (page: number) => void;
+  onPreviousPage?: () => void;
+  onNextPage?: () => void;
 }
 
 export function ImageHistory({ 
@@ -109,7 +124,12 @@ export function ImageHistory({
   setPromptValue, 
   handleUseAsReference, 
   handleReferenceImageUsed, // eslint-disable-line @typescript-eslint/no-unused-vars
-  cancelPendingGeneration
+  cancelPendingGeneration,
+  currentPage,
+  totalPages,
+  onPageChange,
+  onPreviousPage,
+  onNextPage
 }: ImageHistoryProps) {
   const [isDeleting, setIsDeleting] = useState<string | null>(null)
   const [isCancelling, setIsCancelling] = useState<string | null>(null)
@@ -1046,6 +1066,144 @@ export function ImageHistory({
                 </div>
               );
             })}
+        </div>
+      )}
+      
+      {/* Pagination */}
+      {totalPages && totalPages > 1 && (
+        <div className="mt-8 flex justify-center">
+          <Pagination>
+            <PaginationContent>
+              {currentPage && currentPage > 1 && (
+                <PaginationItem>
+                  <PaginationPrevious 
+                    href="#" 
+                    onClick={(e) => {
+                      e.preventDefault();
+                      onPreviousPage?.();
+                    }}
+                  />
+                </PaginationItem>
+              )}
+              
+              {/* Page numbers */}
+              {(() => {
+                const pages = [];
+                const maxVisiblePages = 5;
+                const halfVisible = Math.floor(maxVisiblePages / 2);
+                
+                let startPage = Math.max(1, (currentPage || 1) - halfVisible);
+                const endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+                
+                // Adjust startPage if we're near the end
+                if (endPage - startPage < maxVisiblePages - 1) {
+                  startPage = Math.max(1, endPage - maxVisiblePages + 1);
+                }
+                
+                // Add first page and ellipsis if needed
+                if (startPage > 1) {
+                  pages.push(
+                    <PaginationItem key={1}>
+                      <PaginationLink 
+                        href="#" 
+                        onClick={(e) => {
+                          e.preventDefault();
+                          // Preserve scroll position for smoother UX
+                          const currentScrollY = window.scrollY;
+                          onPageChange?.(1);
+                          // Restore scroll position after a short delay
+                          setTimeout(() => {
+                            window.scrollTo(0, currentScrollY);
+                          }, 50);
+                        }}
+                        isActive={currentPage === 1}
+                      >
+                        1
+                      </PaginationLink>
+                    </PaginationItem>
+                  );
+                  
+                  if (startPage > 2) {
+                    pages.push(
+                      <PaginationItem key="start-ellipsis">
+                        <PaginationEllipsis />
+                      </PaginationItem>
+                    );
+                  }
+                }
+                
+                // Add visible page numbers
+                for (let i = startPage; i <= endPage; i++) {
+                  pages.push(
+                    <PaginationItem key={i}>
+                      <PaginationLink 
+                        href="#" 
+                        onClick={(e) => {
+                          e.preventDefault();
+                          // Preserve scroll position for smoother UX
+                          const currentScrollY = window.scrollY;
+                          onPageChange?.(i);
+                          // Restore scroll position after a short delay
+                          setTimeout(() => {
+                            window.scrollTo(0, currentScrollY);
+                          }, 50);
+                        }}
+                        isActive={currentPage === i}
+                      >
+                        {i}
+                      </PaginationLink>
+                    </PaginationItem>
+                  );
+                }
+                
+                // Add ellipsis and last page if needed
+                if (endPage < totalPages) {
+                  if (endPage < totalPages - 1) {
+                    pages.push(
+                      <PaginationItem key="end-ellipsis">
+                        <PaginationEllipsis />
+                      </PaginationItem>
+                    );
+                  }
+                  
+                  pages.push(
+                    <PaginationItem key={totalPages}>
+                      <PaginationLink 
+                        href="#" 
+                        onClick={(e) => {
+                          e.preventDefault();
+                          // Preserve scroll position for smoother UX
+                          const currentScrollY = window.scrollY;
+                          onPageChange?.(totalPages);
+                          // Restore scroll position after a short delay
+                          setTimeout(() => {
+                            window.scrollTo(0, currentScrollY);
+                          }, 50);
+                        }}
+                        isActive={currentPage === totalPages}
+                      >
+                        {totalPages}
+                      </PaginationLink>
+                    </PaginationItem>
+                  );
+                }
+                
+                return pages;
+              })()}
+              
+              {currentPage && totalPages && currentPage < totalPages && (
+                <PaginationItem>
+                  <PaginationNext 
+                    href="#" 
+                    onClick={(e) => {
+                      e.preventDefault();
+                      onNextPage?.();
+                    }}
+                  />
+                </PaginationItem>
+              )}
+            </PaginationContent>
+          </Pagination>
         </div>
       )}
     </div>

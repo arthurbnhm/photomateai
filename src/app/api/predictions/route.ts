@@ -4,11 +4,14 @@ import { createSupabaseServerClient } from '@/lib/supabase/server';
 export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
-    const limit = parseInt(searchParams.get('limit') || '50');
-    const status = searchParams.get('status');
+    const limit = parseInt(searchParams.get('limit') || '20');
+    const page = parseInt(searchParams.get('page') || '1');
     const isDeleted = searchParams.get('is_deleted') === 'true';
     const isCancelled = searchParams.get('is_cancelled');
     const hasLikedImages = searchParams.get('has_liked_images') === 'true';
+
+    // Calculate offset for pagination
+    const offset = (page - 1) * limit;
 
     const supabase = await createSupabaseServerClient();
     
@@ -30,7 +33,34 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Build the query - RLS policies will automatically filter by user_id
+    // First, get the total count for pagination - only count displayable predictions
+    let countQuery = supabase
+      .from('predictions')
+      .select('*', { count: 'exact', head: true })
+      .eq('is_deleted', isDeleted)
+      .eq('status', 'succeeded')
+      .not('storage_urls', 'is', null);
+
+    // Add the same filters to count query (excluding status since we hardcoded 'succeeded')
+    if (isCancelled !== null) {
+      countQuery = countQuery.eq('is_cancelled', isCancelled === 'true');
+    }
+
+    if (hasLikedImages) {
+      countQuery = countQuery.not('liked_images', 'is', null);
+    }
+
+    const { count, error: countError } = await countQuery;
+
+    if (countError) {
+      console.error('Error getting predictions count:', countError);
+      return NextResponse.json(
+        { error: 'Failed to get predictions count', success: false },
+        { status: 500 }
+      );
+    }
+
+    // Build the main query - only get displayable predictions
     let query = supabase
       .from('predictions')
       .select(`
@@ -40,14 +70,12 @@ export async function GET(request: NextRequest) {
         )
       `)
       .eq('is_deleted', isDeleted)
+      .eq('status', 'succeeded')
+      .not('storage_urls', 'is', null)
       .order('created_at', { ascending: false })
-      .limit(limit);
+      .range(offset, offset + limit - 1);
 
-    // Add optional filters
-    if (status) {
-      query = query.eq('status', status);
-    }
-    
+    // Add optional filters (excluding status since we hardcoded 'succeeded')
     if (isCancelled !== null) {
       query = query.eq('is_cancelled', isCancelled === 'true');
     }
@@ -67,12 +95,18 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    const totalPages = Math.ceil((count || 0) / limit);
+
     return NextResponse.json({
       success: true,
       predictions: predictions || [],
       pagination: {
+        page,
         limit,
-        total: predictions?.length || 0
+        total: count || 0,
+        totalPages,
+        hasNextPage: page < totalPages,
+        hasPreviousPage: page > 1
       }
     });
   } catch (error) {
