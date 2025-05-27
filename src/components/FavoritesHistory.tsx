@@ -1,11 +1,10 @@
 "use client"
 
-import { useState, useEffect, useCallback, useRef } from "react"
+import { useState, useEffect, useCallback } from "react"
 import Image from "next/image"
 import { Button } from "@/components/ui/button"
 import { Toaster } from "@/components/ui/sonner"
 import { Skeleton } from "@/components/ui/skeleton"
-import { createSupabaseBrowserClient } from "@/lib/supabase/client"
 import { MediaFocus } from "@/components/MediaFocus"
 import { AlertTriangle, Heart } from 'lucide-react'
 import { useAuth } from "@/contexts/AuthContext"
@@ -71,7 +70,6 @@ export function FavoritesHistory() {
   const [error, setError] = useState<string | null>(null)
   const [isMounted, setIsMounted] = useState(false)
   
-  const supabaseClient = useRef(createSupabaseBrowserClient())
   const { user } = useAuth()
   
   const [imageViewer, setImageViewer] = useState<ImageViewerState>({
@@ -131,30 +129,24 @@ export function FavoritesHistory() {
     }
 
     try {
-      const { data, error: fetchError } = await supabaseClient.current
-        .from('predictions')
-        .select(`
-          *,
-          models:model_id (
-            display_name
-          )
-        `)
-        .eq('user_id', user.id)
-        .eq('is_deleted', false)
-        .eq('status', 'succeeded')
-        .not('liked_images', 'is', null) // Only get predictions that have liked images
-        .order('created_at', { ascending: false })
-        .limit(50)
-        .abortSignal(abortController.signal)
+      const response = await fetch('/api/predictions?is_deleted=false&status=succeeded&has_liked_images=true&limit=50', {
+        signal: abortController.signal
+      });
       
-      clearTimeout(timeoutId)
+      clearTimeout(timeoutId);
       
-      if (fetchError) {
-        throw fetchError
+      if (!response.ok) {
+        throw new Error(`Failed to fetch predictions: ${response.status} ${response.statusText}`);
       }
       
-      if (data) {
-        const processedData: FavoriteImageGeneration[] = data
+      const { success, predictions, error: apiError } = await response.json();
+      
+      if (!success) {
+        throw new Error(apiError || 'Failed to fetch predictions');
+      }
+      
+      if (predictions) {
+        const processedData: FavoriteImageGeneration[] = predictions
           .filter((item: PredictionData) => {
             const likedImages = processFavoriteImages(item.storage_urls, item.liked_images || null)
             return likedImages.length > 0 // Only include generations that actually have liked images
@@ -196,7 +188,7 @@ export function FavoritesHistory() {
         setIsLoading(false)
       }
     }
-  }, [user, supabaseClient])
+  }, [user])
 
   // Initial data load
   useEffect(() => {

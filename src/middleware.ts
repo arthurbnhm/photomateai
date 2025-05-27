@@ -31,6 +31,7 @@ const PROTECTED_ROUTES = {
   '/api/favorite': { requiresAuth: true, requiresSubscription: true },
   '/api/delete': { requiresAuth: true, requiresSubscription: true },
   '/api/cancel': { requiresAuth: true, requiresSubscription: true },
+  '/api/predictions': { requiresAuth: true, requiresSubscription: true },
   
   // Credits API - require auth only (for checking)
   '/api/credits': { requiresAuth: true, requiresSubscription: false },
@@ -197,6 +198,7 @@ export const config = {
     '/api/favorite/:path*',
     '/api/delete/:path*',
     '/api/cancel/:path*',
+    '/api/predictions/:path*',
     '/api/credits/:path*',
   ],
 } 

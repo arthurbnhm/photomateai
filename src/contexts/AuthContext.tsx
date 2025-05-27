@@ -152,11 +152,7 @@ function useAuthImplementation() {
           setCredits(null);
         } else if (newUser && event === 'SIGNED_IN') {
           // Fetch credits data for newly signed in user
-          // Don't fetch on landing page - it's not needed there
-          const isLandingPage = typeof window !== 'undefined' && window.location.pathname === '/';
-          if (!isLandingPage) {
-            setTimeout(() => fetchCreditsData(false), 100); // Slight delay to ensure state is set
-          }
+          setTimeout(() => fetchCreditsData(false), 100); // Slight delay to ensure state is set
         }
       }
     )
@@ -169,11 +165,9 @@ function useAuthImplementation() {
   // Fetch credits data when user is available and mounted
   useEffect(() => {
     if (mounted && user && !isLoading) {
-      // Don't fetch credits data on the landing page - it's not needed
-      const isLandingPage = typeof window !== 'undefined' && window.location.pathname === '/';
-      if (!isLandingPage) {
-        fetchCreditsData();
-      }
+      // Fetch credits data for authenticated users, including on homepage
+      // (needed for "Go to App" button)
+      fetchCreditsData();
     }
   }, [mounted, user, isLoading, fetchCreditsData]);
 

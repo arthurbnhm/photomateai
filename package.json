@@ -3,12 +3,12 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev --turbo",
+    "dev": "NODE_OPTIONS='--disable-warning=DEP0040' next dev --turbo",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
     "clean": "rm -rf .next && rm -rf node_modules/.cache",
-    "dev:clean": "npm run clean && next dev --turbo",
+    "dev:clean": "npm run clean && NODE_OPTIONS='--disable-warning=DEP0040' next dev --turbo",
     "build:clean": "npm run clean && next build"
   },
   "dependencies": {
@@ -52,6 +52,7 @@
     "next-auth": "^4.24.11",
     "next-themes": "^0.4.4",
     "openai": "^4.100.0",
+    "punycode": "^2.3.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-dropzone": "^14.3.8",

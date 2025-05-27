@@ -5,7 +5,6 @@ import Image from "next/image";
 import Link from "next/link";
 import { PromptForm } from "@/components/PromptForm";
 import { ImageHistory } from "@/components/ImageHistory";
-import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 
@@ -195,7 +194,10 @@ function CreatePageContent() {
 
   const [isMounted, setIsMounted] = useState(false);
   const { user } = useAuth();
-  const supabaseClient = useRef(createSupabaseBrowserClient());
+
+  // Add refs to track ongoing fetches to prevent duplicates
+  const isFetchingPredictions = useRef(false);
+  const isFetchingModels = useRef(false);
 
   // Callback function to handle "Use as Reference" from ImageHistory
   const handleUseAsReference = useCallback((imageUrl: string, originalPrompt: string) => {
@@ -209,8 +211,9 @@ function CreatePageContent() {
 
   // Combined function to fetch all predictions and separate them
   const fetchAllPredictions = useCallback(async (silentUpdate: boolean = false) => {
-    if (!user?.id) return;
+    if (isFetchingPredictions.current) return;
     
+    isFetchingPredictions.current = true;
     const abortController = new AbortController();
     const timeoutId = setTimeout(() => abortController.abort(), 10000);
 
@@ -220,32 +223,30 @@ function CreatePageContent() {
     }
 
     try {
-      const { data, error } = await supabaseClient.current
-        .from('predictions')
-        .select(`
-          *,
-          models:model_id (
-            display_name
-          )
-        `)
-        .eq('user_id', user.id)
-        .eq('is_deleted', false)
-        .order('created_at', { ascending: false })
-        .limit(50);
+      // Use the new predictions API endpoint instead of direct Supabase call
+      const response = await fetch('/api/predictions?is_deleted=false&limit=50', {
+        signal: abortController.signal
+      });
       
       clearTimeout(timeoutId);
       
-      if (error) {
-        throw error; 
+      if (!response.ok) {
+        throw new Error(`Failed to fetch predictions: ${response.status} ${response.statusText}`);
       }
       
-      if (data) {
+      const { success, predictions, error } = await response.json();
+      
+      if (!success) {
+        throw new Error(error || 'Failed to fetch predictions');
+      }
+      
+      if (predictions) {
         // Separate pending and completed predictions
-        const pendingPredictions = data.filter((item: PredictionData) => 
+        const pendingPredictions = predictions.filter((item: PredictionData) => 
           ['starting', 'queued', 'processing'].includes(item.status) && !item.is_cancelled
         );
         
-        const completedPredictions = data.filter((item: PredictionData) => 
+        const completedPredictions = predictions.filter((item: PredictionData) => 
           item.status === 'succeeded' && item.storage_urls
         );
 
@@ -305,8 +306,42 @@ function CreatePageContent() {
       if (!silentUpdate) {
         setIsLoadingHistory(false);
       }
+      isFetchingPredictions.current = false;
     }
-  }, [user?.id, supabaseClient]);
+  }, []); // Stable dependency array since we use refs
+
+  // Fetch user models function
+  const fetchUserModels = useCallback(async () => {
+    if (isFetchingModels.current) return;
+    
+    isFetchingModels.current = true;
+    try {
+      const response = await fetch('/api/model/list?is_cancelled=false&is_deleted=false&status=succeeded');
+      if (!response.ok) {
+        throw new Error('Failed to fetch models');
+      }
+      const data = await response.json();
+      if (data.success && data.models) {
+        setUserModels(data.models);
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('photomate_hasShownModelsOnce', 'true');
+        }
+        setAllowModelLoadingScreen(false);
+      } else {
+        setUserModels([]);
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('photomate_hasShownModelsOnce', 'true');
+        }
+        setAllowModelLoadingScreen(false);
+      }
+    } catch (err) {
+      console.error('Error fetching user models:', err);
+      setUserModels([]);
+    } finally {
+      setIsLoadingUserModels(false);
+      isFetchingModels.current = false;
+    }
+  }, []); // Stable dependency array since we use refs
 
   useEffect(() => {
     setIsMounted(true);
@@ -316,59 +351,29 @@ function CreatePageContent() {
     }
   }, []);
 
-  // Use combined fetch on mount instead of separate calls
+  // Consolidated data fetching effect - only runs once when user and mounted state are ready
   useEffect(() => {
     if (isMounted && user) {
-      fetchAllPredictions();
+      // Fetch both predictions and models in parallel
+      Promise.all([
+        fetchAllPredictions(),
+        fetchUserModels()
+      ]).catch(error => {
+        console.error('Error during initial data fetch:', error);
+      });
     } else if (!user && isMounted) {
       // Clear data when user signs out
       setPendingGenerations([]);
       setGenerations([]);
-      setIsLoadingHistory(false);
-    }
-  }, [isMounted, user, fetchAllPredictions]);
-
-  // Fetch user models
-  useEffect(() => {
-    if (isMounted && user) {
-      const fetchModels = async () => {
-        // setIsLoadingUserModels(true); // No longer needed here, initialized to true
-        try {
-          const response = await fetch(`/api/model/list?is_cancelled=false&is_deleted=false&status=succeeded`);
-          if (!response.ok) {
-            throw new Error('Failed to fetch models');
-          }
-          const data = await response.json();
-          if (data.success && data.models) {
-            setUserModels(data.models);
-            if (typeof window !== 'undefined') {
-              localStorage.setItem('photomate_hasShownModelsOnce', 'true');
-            }
-            setAllowModelLoadingScreen(false);
-          } else {
-            setUserModels([]);
-            if (typeof window !== 'undefined') {
-              localStorage.setItem('photomate_hasShownModelsOnce', 'true');
-            }
-            setAllowModelLoadingScreen(false);
-          }
-        } catch (err) {
-          console.error('Error fetching user models:', err);
-          setUserModels([]);
-        } finally {
-          setIsLoadingUserModels(false);
-        }
-      };
-      fetchModels();
-    } else if (!user && isMounted) {
       setUserModels([]);
-      setIsLoadingUserModels(false); // Set to false if no user
+      setIsLoadingHistory(false);
+      setIsLoadingUserModels(false);
       if (typeof window !== 'undefined') {
         localStorage.removeItem('photomate_hasShownModelsOnce');
       }
       setAllowModelLoadingScreen(true);
     }
-  }, [isMounted, user]);
+  }, [isMounted, user, fetchAllPredictions, fetchUserModels]); // Added missing dependencies
 
   // Load generations from Supabase (wrapper for compatibility with ImageHistory)
   const loadGenerations = useCallback(async (silentUpdate: boolean = false) => {

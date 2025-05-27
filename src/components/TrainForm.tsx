@@ -25,6 +25,7 @@ import {
   DrawerTrigger,
 } from "@/components/ui/drawer";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/contexts/AuthContext";
 
 // Reusable upload icon component
 const UploadIcon = ({ 
@@ -288,32 +289,48 @@ const AnimatedTrainingImages = () => {
 };
 
 export function TrainForm({ onTrainingStatusChange, trainingStatus, onModelsRemainingChange, onSubscriptionLoadingChange, user, isAuthLoading }: TrainFormProps) {
-  // Initialize Supabase client
+  // Remove direct Supabase subscription fetching - use AuthContext credits instead
+  const { credits, creditsLoading } = useAuth();
+  
+  // Model training state
+  const [displayModelName, setDisplayModelName] = useState("");
+  const [actualModelName, setActualModelName] = useState("");
+  const [nameError, setNameError] = useState<string | null>(null);
+  const [uploadedImages, setUploadedImages] = useState<File[]>([]);
+  const [thumbnails, setThumbnails] = useState<string[]>([]);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [isGeneratingPreviews, setIsGeneratingPreviews] = useState(false);
+  const [dragActive, setDragActive] = useState(false);
+  const [selectedGender, setSelectedGender] = useState<string | null>(null);
+  
+  // Remove subscription state since we're using AuthContext
   const supabaseRef = useRef(createSupabaseBrowserClient());
-  const getSupabase = useCallback(() => supabaseRef.current, []);
   
   // State variables
   const [currentStep, setCurrentStep] = useState(1);
-  const [displayModelName, setDisplayModelName] = useState("");
-  const [actualModelName, setActualModelName] = useState("");
-  const [selectedGender, setSelectedGender] = useState<string | null>(null);
-  const [uploadedImages, setUploadedImages] = useState<File[]>([]);
-  const [dragActive, setDragActive] = useState(false);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [isGeneratingPreviews, setIsGeneratingPreviews] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
-  const [nameError, setNameError] = useState<string | null>(null);
   const [genderError, setGenderError] = useState<string | null>(null);
-  const [thumbnails, setThumbnails] = useState<string[]>([]);
   const { resolvedTheme } = useTheme();
+  
   // State for the models drawer
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
-  
-  // Subscription state
-  const [subscription, setSubscription] = useState<{models_remaining: number} | null>(null);
-  const [isLoadingSubscription, setIsLoadingSubscription] = useState(true);
-  const [subscriptionError, setSubscriptionError] = useState<string | null>(null);
-  
+
+  // Notify parent component about models remaining status using AuthContext data
+  useEffect(() => {
+    if (onModelsRemainingChange && !creditsLoading && credits) {
+      const hasModelsRemaining = credits.models_remaining > 0;
+      onModelsRemainingChange(hasModelsRemaining);
+    }
+  }, [credits, creditsLoading, onModelsRemainingChange]);
+
+  // Notify parent component about subscription loading status
+  useEffect(() => {
+    if (onSubscriptionLoadingChange) {
+      // Consider subscription as loading if either auth is loading or credits are loading
+      onSubscriptionLoadingChange(isAuthLoading || creditsLoading);
+    }
+  }, [creditsLoading, onSubscriptionLoadingChange, isAuthLoading]);
+
   // Format model name to meet Replicate's requirements
   const formatModelName = (name: string): string => {
     // Convert to lowercase
@@ -361,7 +378,7 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus, onModelsRema
   // Handle file drop for the dropzone component
   const onDrop = useCallback((acceptedFiles: File[]) => {
     // If already processing, don't accept more files
-    if (isGeneratingPreviews || isProcessing) {
+    if (isGeneratingPreviews || isUploading) {
       toast.error("Please wait for current processing to complete");
       return;
     }
@@ -440,7 +457,7 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus, onModelsRema
     }
     // If within the allowed range
     setUploadedImages([...newImages, ...validFiles]);
-  }, [uploadedImages, isGeneratingPreviews, isProcessing, MIN_IMAGES, MAX_IMAGES]);
+  }, [uploadedImages, isGeneratingPreviews, isUploading, MIN_IMAGES, MAX_IMAGES]);
 
   // Setup dropzone
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
@@ -516,65 +533,6 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus, onModelsRema
       }
     }
   });
-
-  // Fetch user's subscription to check models_remaining
-  useEffect(() => {
-    const fetchSubscription = async () => {
-      // Don't fetch subscription while auth is still loading
-      if (isAuthLoading) {
-        return;
-      }
-      
-      try {
-        setIsLoadingSubscription(true);
-        setSubscriptionError(null);
-        
-        if (!user) {
-          setSubscriptionError("You must be logged in to train models");
-          setIsLoadingSubscription(false);
-          return;
-        }
-        
-        const { data: subscriptionData, error: subscriptionError } = await getSupabase()
-          .from('subscriptions')
-          .select('models_remaining')
-          .eq('user_id', user.id)
-          .eq('is_active', true)
-          .single();
-        
-        if (subscriptionError || !subscriptionData) {
-          setSubscriptionError("No active subscription found");
-          setIsLoadingSubscription(false);
-          return;
-        }
-        
-        setSubscription(subscriptionData);
-        setIsLoadingSubscription(false);
-      } catch (error) {
-        console.error('Error fetching subscription:', error);
-        setSubscriptionError("Failed to load subscription information");
-        setIsLoadingSubscription(false);
-      }
-    };
-    
-    fetchSubscription();
-  }, [getSupabase, user, isAuthLoading]);
-
-  // Notify parent component about models remaining status
-  useEffect(() => {
-    if (onModelsRemainingChange && !isLoadingSubscription && !subscriptionError) {
-      const hasModelsRemaining = subscription ? subscription.models_remaining > 0 : false;
-      onModelsRemainingChange(hasModelsRemaining);
-    }
-  }, [subscription, isLoadingSubscription, subscriptionError, onModelsRemainingChange]);
-
-  // Notify parent component about subscription loading status
-  useEffect(() => {
-    if (onSubscriptionLoadingChange) {
-      // Consider subscription as loading if either auth is loading or subscription is loading
-      onSubscriptionLoadingChange(isAuthLoading || isLoadingSubscription);
-    }
-  }, [isLoadingSubscription, onSubscriptionLoadingChange, isAuthLoading]);
 
   // Update actual model name whenever display name changes
   useEffect(() => {
@@ -831,15 +789,15 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus, onModelsRema
       return;
     }
     
-    setIsProcessing(true);
+    setIsUploading(true);
     setUploadProgress(0);
     
     try {
       // Get the session for the access token
-      const { data: { session } } = await getSupabase().auth.getSession();
+      const { data: { session } } = await supabaseRef.current.auth.getSession();
       if (!session) {
         toast.error("Unable to get authentication token");
-        setIsProcessing(false);
+        setIsUploading(false);
         return;
       }
 
@@ -953,7 +911,7 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus, onModelsRema
         setUploadProgress(70);
 
         // Upload with progress tracking
-        const { error: uploadError } = await getSupabase().storage
+        const { error: uploadError } = await supabaseRef.current.storage
           .from('training-files')
           .upload(zipPath, zipData, {
             contentType: 'application/zip',
@@ -965,7 +923,7 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus, onModelsRema
         }
 
         // Get the URL for the uploaded file
-        const { data: urlData } = await getSupabase().storage
+        const { data: urlData } = await supabaseRef.current.storage
           .from('training-files')
           .createSignedUrl(zipPath, 60 * 60);
 
@@ -1022,46 +980,46 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus, onModelsRema
         setSelectedGender(null);
         setGenderError(null);
         setUploadedImages([]);
-        setIsProcessing(false);
+        setIsUploading(false);
         
       } catch (error) {
         console.error("Error processing model:", error);
         toast.error(`Error: ${error instanceof Error ? error.message : 'Something went wrong'}`);
         setUploadProgress(0);
-        setIsProcessing(false);
+        setIsUploading(false);
         return;
       }
     } catch (error) {
       console.error("Error processing model:", error);
       toast.error(`Error: ${error instanceof Error ? error.message : 'Something went wrong'}`);
       setUploadProgress(0);
-      setIsProcessing(false);
+      setIsUploading(false);
     }
   };
 
   // Show loading state while checking subscription
-  if (isLoadingSubscription || isAuthLoading) {
+  if (creditsLoading || isAuthLoading) {
     return null;
   }
   
-  // Show error state if subscription check failed
-  if (subscriptionError) {
+  // Show error state if no credits data or no active subscription
+  if (!credits || !credits.subscription_active) {
     return (
       <ErrorBoundary>
-        <div className="w-full bg-gradient-to-br from-card/95 via-card to-card/90 border border-border/60 rounded-2xl overflow-hidden shadow-xl backdrop-blur-sm">
-          <div className="p-6">
-            <div className="text-center space-y-4">
-              <div className="p-4 rounded-lg bg-destructive/10 text-destructive">
-                <h3 className="font-semibold mb-2">Subscription Error</h3>
-                <p className="text-sm">{subscriptionError}</p>
-              </div>
-              <Button
-                onClick={() => window.location.href = '/plans'}
-                className="bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary/80"
-              >
-                View Plans
-              </Button>
+        <div className="max-w-2xl mx-auto">
+          <div className="text-center space-y-6">
+            <div className="p-4 rounded-lg bg-destructive/10 text-destructive">
+              <h3 className="font-semibold mb-2">Subscription Error</h3>
+              <p className="text-sm">
+                {!credits ? "Failed to load subscription information" : "No active subscription found"}
+              </p>
             </div>
+            <Button
+              onClick={() => window.location.reload()}
+              variant="outline"
+            >
+              Try Again
+            </Button>
           </div>
         </div>
       </ErrorBoundary>
@@ -1069,7 +1027,7 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus, onModelsRema
   }
   
   // Show upgrade message if no models remaining
-  if (subscription && subscription.models_remaining <= 0) {
+  if (credits && credits.models_remaining <= 0) {
     return (
       <ErrorBoundary>
         <div className="min-h-[60vh] flex items-center justify-center p-4">
@@ -1494,7 +1452,7 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus, onModelsRema
                   </div>
                 )}
                 
-                {isProcessing && uploadProgress > 0 && (
+                {isUploading && uploadProgress > 0 && (
                   <div className="p-4 bg-gradient-to-r from-primary/10 via-primary/5 to-primary/10 border border-primary/20 rounded-xl backdrop-blur-sm space-y-3">
                     <div className="flex justify-between items-center">
                       <span className="text-sm font-semibold text-primary">Processing your model...</span>
@@ -1516,10 +1474,10 @@ export function TrainForm({ onTrainingStatusChange, trainingStatus, onModelsRema
               <Button
                 type="submit"
                 className="w-full py-4 bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary/80 text-primary-foreground shadow-lg hover:shadow-xl font-semibold text-base"
-                disabled={!displayModelName || !selectedGender || nameError !== null || uploadedImages.length < MIN_IMAGES || uploadedImages.length > MAX_IMAGES || isProcessing}
+                disabled={!displayModelName || !selectedGender || nameError !== null || uploadedImages.length < MIN_IMAGES || uploadedImages.length > MAX_IMAGES || isUploading}
                 onClick={handleSubmit}
               >
-                {isProcessing ? (
+                {isUploading ? (
                   <span className="flex items-center justify-center gap-2">
                     <Loader2 className="h-5 w-5 animate-spin" />
                     Processing...

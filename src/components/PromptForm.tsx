@@ -263,13 +263,13 @@ export function PromptForm({
   };
   
   // Function to remove and abort a controller for a pending generation
-  const removePendingController = (id: string, shouldAbort: boolean = false) => {
+  const removePendingController = useCallback((id: string, shouldAbort: boolean = false) => {
     const controller = pendingControllers.current.get(id);
     if (controller && shouldAbort && !controller.signal.aborted) {
       controller.abort();
     }
     pendingControllers.current.delete(id);
-  };
+  }, []);
   
   // Add a pending generation
   const addPendingGeneration = (generation: PendingGeneration, controller?: AbortController) => {
@@ -289,11 +289,11 @@ export function PromptForm({
   }
 
   // Remove a pending generation
-  const removePendingGeneration = (id: string) => {
+  const removePendingGeneration = useCallback((id: string) => {
     // Clean up the controller when removing
     removePendingController(id, false);
     setPendingGenerations(prev => prev.filter(gen => gen.id !== id))
-  }
+  }, [removePendingController, setPendingGenerations]);
   
   // Function to cancel a pending generation (called from ImageHistory)
   const cancelPendingGeneration = useCallback((id: string): boolean => {

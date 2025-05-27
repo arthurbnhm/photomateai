@@ -38,7 +38,6 @@ import {
 import { Input } from "@/components/ui/input";
 import { Trash2, XCircle, User, Sparkles, Clock, Edit3, Plus, X, Tag, ChevronDown } from "lucide-react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
-import { useAuth } from "@/contexts/AuthContext";
 import { cn } from "@/lib/utils";
 import {
   Collapsible,
@@ -108,7 +107,7 @@ interface ConfirmationState {
 }
 
 export function ModelListTable({ newTraining, onClearNewTraining }: ModelListTableProps = {}) {
-  const { user } = useAuth();
+  // Removed unused user destructuring since we're relying on RLS policies
   
   // Model data state
   const [models, setModels] = useState<Model[]>([]);
@@ -152,16 +151,7 @@ export function ModelListTable({ newTraining, onClearNewTraining }: ModelListTab
     setLoading(true);
     setError(null);
     try {
-      const userId = user?.id;
-      
-      const params = new URLSearchParams();
-      if (userId) {
-        params.append('user_id', userId);
-      }
-      
-      const url = `/api/model/list?${params.toString()}`;
-      
-      const response = await fetch(url);
+      const response = await fetch('/api/model/list');
       
       if (!response.ok) {
         throw new Error(`Failed to fetch models: ${response.status} ${response.statusText}`);
@@ -181,7 +171,7 @@ export function ModelListTable({ newTraining, onClearNewTraining }: ModelListTab
     } finally {
       setLoading(false);
     }
-  }, [user?.id]);
+  }, []);
 
   const isNewTrainingInModels = useCallback(() => {
     if (!newTraining || !models.length) return false;
