@@ -371,7 +371,7 @@ export default function Home() {
                   <ul className="space-y-3">
                     <li className="flex items-center gap-2">
                       <Check className="h-4 w-4 text-green-500 flex-shrink-0" />
-                      <span>Generate 1,000 AI portraits</span>
+                      <span>Generate 200 AI portraits</span>
                     </li>
                     <li className="flex items-center gap-2">
                       <Check className="h-4 w-4 text-green-500 flex-shrink-0" />

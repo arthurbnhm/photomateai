@@ -397,6 +397,9 @@ function CreatePageContent() {
   const isFetchingPredictions = useRef(false);
   const isFetchingModels = useRef(false);
   const isFetchingPending = useRef(false);
+  
+  // Add ref to track ongoing handleCompletedPrediction calls
+  const processingCompletedPredictions = useRef<Set<string>>(new Set());
 
   // Callback function to handle "Use as Reference" from ImageHistory
   const handleUseAsReference = useCallback((imageUrl: string, originalPrompt: string) => {
@@ -595,6 +598,15 @@ function CreatePageContent() {
   const handleCompletedPrediction = useCallback(async (replicateId: string) => {
     console.log(`🎯 Handling completed prediction: ${replicateId}`);
     
+    // Check if already processing this replicate_id
+    if (processingCompletedPredictions.current.has(replicateId)) {
+      console.log(`⏸️ Already processing completed prediction ${replicateId}, skipping`);
+      return;
+    }
+    
+    // Add to processing set
+    processingCompletedPredictions.current.add(replicateId);
+    
     try {
       // Step 1: Invalidate the cache for page 1 to ensure consistency
       console.log(`🗑️ Invalidating cache for page 1`);
@@ -639,13 +651,13 @@ function CreatePageContent() {
           
           if (success && predictions) {
             // Check if our completed prediction is in the response
-            const foundPrediction = predictions.some((pred: PredictionData) => pred.replicate_id === replicateId);
+            const foundInResponse = predictions.some((pred: PredictionData) => pred.replicate_id === replicateId);
             
-            if (foundPrediction || retryCount === maxRetries) {
-              if (foundPrediction) {
+            if (foundInResponse || retryCount === maxRetries) {
+              if (foundInResponse) {
                 console.log(`✅ Found completed prediction ${replicateId} in API response`);
               } else {
-                console.log(`⚠️ Using API response anyway after ${maxRetries} retries`);
+                console.warn(`⚠️ Prediction ${replicateId} not found, but using API response anyway after ${maxRetries} retries`);
               }
               
               predictionFound = true;
@@ -673,7 +685,7 @@ function CreatePageContent() {
               setCurrentPage(pagination.page);
               
               // Update generations state (replace, not append)
-              console.log(`🎨 Updating UI with ${processedData.length} generations`);
+              console.log(`🎨 Updating UI with ${processedData.length} generations from handleCompletedPrediction`);
               setGenerations(processedData);
               
             } else if (retryCount < maxRetries) {
@@ -691,26 +703,34 @@ function CreatePageContent() {
             await new Promise(resolve => setTimeout(resolve, 2000));
           } else {
             // Final fallback: call the original fetchCompletedPredictions
-            console.log('🔄 Final fallback: calling fetchCompletedPredictions...');
+            console.log('🔄 Final fallback in handleCompletedPrediction: calling fetchCompletedPredictions...');
             isFetchingPredictions.current = false;
-            await fetchCompletedPredictions(1, false);
+            await fetchCompletedPredictions(1, false); // Call fetchCompletedPredictions here
             break;
           }
         }
       }
       
-      console.log(`✅ Successfully handled completed prediction ${replicateId}`);
+      if (!predictionFound) {
+        console.warn(`Could not confirm prediction ${replicateId} in API after retries. UI might not be perfectly up-to-date immediately.`);
+      }
+      console.log(`✅ Successfully finished handleCompletedPrediction for ${replicateId}`);
       
     } catch (fetchError: unknown) {
-      console.error('Error handling completed prediction:', fetchError);
+      console.error('Error in handleCompletedPrediction:', fetchError);
       // Fallback: call the original fetchCompletedPredictions
-      console.log('🔄 Fallback: calling fetchCompletedPredictions...');
+      console.log('🔄 Top-level fallback in handleCompletedPrediction: calling fetchCompletedPredictions...');
       isFetchingPredictions.current = false;
-      await fetchCompletedPredictions(1, false);
+      await fetchCompletedPredictions(1, false); // Call fetchCompletedPredictions here
+    } finally {
+      // Remove from processing set
+      processingCompletedPredictions.current.delete(replicateId);
     }
-  }, [setPredictionsCache, getCacheKey, itemsPerPage, setCachedData, processOutput, setHasNextPage, setCurrentPage, setGenerations, isFetchingPredictions, fetchCompletedPredictions]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [setPredictionsCache, getCacheKey, itemsPerPage, setCachedData, processOutput, setHasNextPage, setCurrentPage, setGenerations, isFetchingPredictions]); // Removed fetchCompletedPredictions
 
   // UPDATED: Combined function that calls both separate functions
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const fetchAllPredictions = useCallback(async (silentUpdate: boolean = false, page: number = currentPage, append: boolean = false) => {
     console.log(`🔍 fetchAllPredictions called: page=${page}, silentUpdate=${silentUpdate}, append=${append}`);
     
@@ -768,6 +788,22 @@ function CreatePageContent() {
       setAllowModelLoadingScreen(localStorage.getItem('photomate_hasShownModelsOnce') !== 'true');
     }
   }, []);
+
+  // Cleanup effect for processing state
+  useEffect(() => {
+    return () => {
+      // Clear processing state on unmount
+      processingCompletedPredictions.current.clear();
+      console.log('🧹 Cleared processing state on component unmount');
+    };
+  }, []);
+
+  // Debug logging for processing state
+  useEffect(() => {
+    if (processingCompletedPredictions.current.size > 0) {
+      console.log(`🔄 Currently processing completed predictions: [${Array.from(processingCompletedPredictions.current).join(', ')}]`);
+    }
+  }, [handleCompletedPrediction]); // Trigger when handleCompletedPrediction changes
 
   // Initial data fetching effect - only runs once when user and mounted state are ready
   useEffect(() => {

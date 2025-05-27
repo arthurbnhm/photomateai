@@ -63,8 +63,7 @@ export async function POST(request: NextRequest) {
       );
     }
     
-    const { credits_remaining, models_remaining, plan } = creditResult[0];
-    console.log(`✅ Credit decremented successfully. Remaining: ${credits_remaining} credits, ${models_remaining} models, Plan: ${plan}`);
+    // Credit decremented successfully - removed sensitive logging
     
     let modelName = null;
     let predictionId = null;

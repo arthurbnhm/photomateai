@@ -88,13 +88,7 @@ function useAuthImplementation() {
       });
       
       if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Credits API error:', {
-          status: response.status,
-          statusText: response.statusText,
-          body: errorText,
-          url: response.url
-        });
+        console.error('Credits API error:', response.status, response.statusText);
         throw new Error(`Failed to fetch credits data: ${response.status} ${response.statusText}`);
       }
 

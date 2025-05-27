@@ -521,21 +521,6 @@ export function PromptForm({
 
       let response;
       try {
-        console.log('🚀 Sending request to /api/generate...');
-        console.log('📋 Request body preview:', {
-          prompt: prompt.substring(0, 100) + (prompt.length > 100 ? '...' : ''),
-          aspectRatio,
-          outputFormat,
-          modelId,
-          modelVersion,
-          modelName: modelApiId,
-          userId: user ? user.id : null,
-          modelGender,
-          hasImageData: !!imageDataUrl,
-          imageDataLength: imageDataUrl?.length || 0,
-          imageDataPrefix: imageDataUrl?.substring(0, 50) || 'none'
-        });
-        
         response = await fetch('/api/generate', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', ...authHeader },
@@ -544,14 +529,11 @@ export function PromptForm({
         });
         
       } catch (err) {
-        console.error('❌ Network error sending request:', err);
-        console.error('📍 Error type:', typeof err);
-        console.error('📋 Error details:', err instanceof Error ? err.message : 'Unknown');
+        console.error('Network error sending request');
         
         if (err instanceof Error && err.name === 'AbortError') {
           setError('Request timed out. The image processing is taking longer than expected. Please try again.');
         } else if (err instanceof Error && err.message.includes('string did not match')) {
-          console.error('🎯 FOUND "string did not match" error in network request!');
           setError('Failed to process image. The image format may be unsupported. Please try a different image.');
         } else {
           setError('Failed to send request. Please try again.');
@@ -562,7 +544,7 @@ export function PromptForm({
       clearTimeout(timeoutId);
 
       if (!response.ok) {
-        console.error('❌ API response not OK:', response.status, response.statusText);
+        console.error('API response not OK:', response.status);
         
         // Handle different types of error responses
         if (response.status === 504) {
@@ -592,10 +574,8 @@ export function PromptForm({
         }
         
         if (errorData) {
-          console.error('📋 Error response data:', errorData);
-          
           if (errorData.error && errorData.error.includes('string did not match')) {
-            console.error('🎯 FOUND "string did not match" error in API response!');
+            console.error('Found "string did not match" error in API response');
           }
           
           setError(errorData.error || 'Failed to generate image');
@@ -607,7 +587,6 @@ export function PromptForm({
       }
 
       const result = await response.json();
-      console.log('✅ API request successful:', result);
       
       if (result && result.replicate_id) {
         // Remove the controller since the request completed successfully

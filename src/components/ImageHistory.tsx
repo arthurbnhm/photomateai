@@ -16,6 +16,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { PostgrestError } from '@supabase/supabase-js';
 
 // Define the type for image generation (now passed as prop)
 export type ImageGeneration = {
@@ -134,6 +135,9 @@ export function ImageHistory({
   const [elapsedTimes, setElapsedTimes] = useState<Record<string, number>>({}) 
   const [isMounted, setIsMounted] = useState(false)
   
+  // Add processing state to prevent duplicate processing of the same prediction
+  const [processingIds, setProcessingIds] = useState<Set<string>>(new Set())
+  
   const supabaseClient = useRef(createSupabaseBrowserClient()); // Still needed for polling and delete/cancel
   
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -246,7 +250,8 @@ export function ImageHistory({
         const fetchTimeoutId = setTimeout(() => abortController.abort(), 5000);
         
         try {
-          const { data, error: fetchDbError } = await supabaseClient.current!
+          // Explicitly type `data` and `error`
+          const { data, error: fetchDbError }: { data: PredictionData[] | null, error: PostgrestError | null } = await supabaseClient.current!
             .from('predictions')
             .select(`
               *,
@@ -264,25 +269,61 @@ export function ImageHistory({
           }
           
           if (data && data.length > 0) {
-            data.forEach((prediction: PredictionData) => {
+            // Use for...of loop to allow await inside
+            for (const prediction of data) { // prediction is now correctly typed as PredictionData
               const matchingPending = pendingGenerations.find(p => 
                 p.replicate_id === prediction.replicate_id
               );
               
               if (matchingPending) {
                 if (prediction.status === 'succeeded' && prediction.storage_urls) {
-                  // Play success sound when generation completes
+                  // Check if this prediction is already being processed
+                  if (processingIds.has(prediction.replicate_id)) {
+                    console.log(`⏸️ Prediction ${prediction.replicate_id} is already being processed, skipping...`);
+                    continue;
+                  }
+                  
+                  // Mark as processing
+                  setProcessingIds(prev => new Set(prev).add(prediction.replicate_id));
+                  console.log(`🔄 Starting to process completed prediction: ${prediction.replicate_id}`);
+                  
                   playSuccessSound();
                   
-                  // Remove from local pendingGenerations state in ImageHistory
-                  setPendingGenerations(prev => 
-                    prev.filter(g => g.id !== matchingPending.id)
-                  );
-                  
-                  // Fetch completed predictions to show the newly completed generation
                   if (onFetchCompletedPredictions) {
-                    onFetchCompletedPredictions(prediction.replicate_id).catch(error => {
-                      console.error('Error fetching completed predictions after completion:', error);
+                    try {
+                      // Await the parent component's logic to fetch and update
+                      await onFetchCompletedPredictions(prediction.replicate_id);
+                      // Now that the parent has updated, remove from local pending state
+                      setPendingGenerations(prev => 
+                        prev.filter(g => g.id !== matchingPending.id)
+                      );
+                      console.log(`✅ Successfully processed and removed pending ${matchingPending.id} after parent update.`);
+                    } catch (error) {
+                      console.error(`❌ Error during onFetchCompletedPredictions for ${matchingPending.id} or subsequent pending removal:`, error);
+                      // Fallback: Still remove the pending item to avoid it getting stuck,
+                      // even if the parent update failed.
+                      setPendingGenerations(prev => 
+                        prev.filter(g => g.id !== matchingPending.id)
+                      );
+                    } finally {
+                      // Always remove from processing state when done
+                      setProcessingIds(prev => {
+                        const newSet = new Set(prev);
+                        newSet.delete(prediction.replicate_id);
+                        return newSet;
+                      });
+                      console.log(`🏁 Finished processing prediction: ${prediction.replicate_id}`);
+                    }
+                  } else {
+                    // If no callback, remove immediately (should not happen in normal flow with create page)
+                    setPendingGenerations(prev => 
+                      prev.filter(g => g.id !== matchingPending.id)
+                    );
+                    // Remove from processing state
+                    setProcessingIds(prev => {
+                      const newSet = new Set(prev);
+                      newSet.delete(prediction.replicate_id);
+                      return newSet;
                     });
                   }
                 } else if (prediction.status === 'failed' || prediction.is_cancelled) {
@@ -293,21 +334,23 @@ export function ImageHistory({
                     prev.filter(g => g.id !== matchingPending.id)
                   );
                 } else {
+                  // Still pending, update elapsed time
                   setElapsedTimes(prev => ({
                     ...prev,
                     [matchingPending.id]: Math.floor((Date.now() - new Date(matchingPending.startTime || '').getTime()) / 1000)
                   }));
                 }
               }
-            });
+            }
           }
         } catch (fetchError: unknown) {
           if (fetchError instanceof Error && fetchError.name === 'AbortError') {
             console.warn('Polling fetch aborted due to timeout');
           } else {
-            throw fetchError;
+            throw fetchError; // Rethrow to be caught by outer try-catch
           }
         } finally {
+          // Ensure fetchTimeoutId is cleared if an error occurred before its own clearTimeout
           clearTimeout(fetchTimeoutId);
         }
       } catch (err) {
@@ -333,7 +376,7 @@ export function ImageHistory({
       if (intervalRef.current) clearInterval(intervalRef.current);
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
     };
-  }, [isMounted, pendingGenerations, setPendingGenerations, supabaseClient, playSuccessSound, onFetchCompletedPredictions]);
+  }, [isMounted, pendingGenerations, setPendingGenerations, supabaseClient, playSuccessSound, onFetchCompletedPredictions, processingIds]);
 
   // Update UI when generations prop changes (from parent)
   useEffect(() => {
@@ -357,6 +400,40 @@ export function ImageHistory({
     }
   }, [generations, pendingGenerations, setPendingGenerations, playSuccessSound]);
 
+  // Cleanup processing state when pending generations change
+  useEffect(() => {
+    const currentReplicateIds = new Set(
+      pendingGenerations
+        .filter(gen => gen.replicate_id)
+        .map(gen => gen.replicate_id as string)
+    );
+    
+    // Remove any processing IDs that are no longer in pending generations
+    setProcessingIds(prev => {
+      const newSet = new Set<string>();
+      prev.forEach(id => {
+        if (currentReplicateIds.has(id)) {
+          newSet.add(id);
+        } else {
+          console.log(`🧹 Cleaning up stale processing ID: ${id}`);
+        }
+      });
+      return newSet;
+    });
+  }, [pendingGenerations]);
+
+  // Safety cleanup: Clear processing IDs that have been processing for too long (5 minutes)
+  useEffect(() => {
+    if (processingIds.size === 0) return;
+    
+    const cleanupTimeout = setTimeout(() => {
+      console.log(`🧹 Safety cleanup: Clearing all processing IDs after timeout`);
+      setProcessingIds(new Set());
+    }, 5 * 60 * 1000); // 5 minutes
+    
+    return () => clearTimeout(cleanupTimeout);
+  }, [processingIds]);
+
   // Update elapsed times (remains the same)
   useEffect(() => {
     if (pendingGenerations.length === 0) return;
@@ -378,6 +455,13 @@ export function ImageHistory({
     const interval = setInterval(updateElapsedTimes, 1000);
     return () => clearInterval(interval);
   }, [pendingGenerations]);
+
+  // Debug logging for processing state changes
+  useEffect(() => {
+    if (processingIds.size > 0) {
+      console.log(`🔄 Currently processing predictions: [${Array.from(processingIds).join(', ')}]`);
+    }
+  }, [processingIds]);
 
   const sendDeleteRequest = async (replicateId: string, storageUrls?: string[]): Promise<boolean> => {
     try {
