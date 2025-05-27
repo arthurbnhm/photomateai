@@ -260,8 +260,10 @@ function CreatePageContent() {
           ['starting', 'queued', 'processing'].includes(item.status) && !item.is_cancelled
         );
         
-        // API now only returns displayable predictions, so use all returned predictions
-        const completedPredictions = predictions;
+        // Filter for only completed predictions with images
+        const completedPredictions = predictions.filter((item: PredictionData) => 
+          item.status === 'succeeded' && item.storage_urls && item.storage_urls.length > 0
+        );
 
         // Only update pending generations if we're on the first page or this is a silent update
         if (page === 1 || silentUpdate) {

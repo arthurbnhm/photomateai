@@ -33,7 +33,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // First, get the total count for pagination - only count displayable predictions
+    // First, get the total count for pagination - only count displayable predictions (succeeded)
     let countQuery = supabase
       .from('predictions')
       .select('*', { count: 'exact', head: true })
@@ -41,7 +41,7 @@ export async function GET(request: NextRequest) {
       .eq('status', 'succeeded')
       .not('storage_urls', 'is', null);
 
-    // Add the same filters to count query (excluding status since we hardcoded 'succeeded')
+    // Add the same filters to count query 
     if (isCancelled !== null) {
       countQuery = countQuery.eq('is_cancelled', isCancelled === 'true');
     }
@@ -60,8 +60,30 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Build the main query - only get displayable predictions
-    let query = supabase
+    // Get pending predictions (only for page 1 to show at the top)
+    const allPredictions = [];
+    
+    if (page === 1) {
+      const { data: pendingPredictions } = await supabase
+        .from('predictions')
+        .select(`
+          *,
+          models:model_id (
+            display_name
+          )
+        `)
+        .eq('is_deleted', isDeleted)
+        .in('status', ['starting', 'queued', 'processing'])
+        .eq('is_cancelled', false)
+        .order('created_at', { ascending: false });
+      
+      if (pendingPredictions) {
+        allPredictions.push(...pendingPredictions);
+      }
+    }
+
+    // Get completed predictions with pagination
+    let completedQuery = supabase
       .from('predictions')
       .select(`
         *,
@@ -75,17 +97,17 @@ export async function GET(request: NextRequest) {
       .order('created_at', { ascending: false })
       .range(offset, offset + limit - 1);
 
-    // Add optional filters (excluding status since we hardcoded 'succeeded')
+    // Add optional filters
     if (isCancelled !== null) {
-      query = query.eq('is_cancelled', isCancelled === 'true');
+      completedQuery = completedQuery.eq('is_cancelled', isCancelled === 'true');
     }
 
     // Filter for predictions with liked images (for favorites)
     if (hasLikedImages) {
-      query = query.not('liked_images', 'is', null);
+      completedQuery = completedQuery.not('liked_images', 'is', null);
     }
 
-    const { data: predictions, error: predictionsError } = await query;
+    const { data: completedPredictions, error: predictionsError } = await completedQuery;
 
     if (predictionsError) {
       console.error('Error fetching predictions:', predictionsError);
@@ -95,11 +117,16 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    // Combine pending and completed predictions
+    if (completedPredictions) {
+      allPredictions.push(...completedPredictions);
+    }
+
     const totalPages = Math.ceil((count || 0) / limit);
 
     return NextResponse.json({
       success: true,
-      predictions: predictions || [],
+      predictions: allPredictions || [],
       pagination: {
         page,
         limit,
