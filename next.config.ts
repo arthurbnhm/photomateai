@@ -5,31 +5,11 @@ const nextConfig: NextConfig = {
     remotePatterns: [
       {
         protocol: 'https',
-        hostname: '**.replicate.delivery',
-      },
-      {
-        protocol: 'https',
-        hostname: 'replicate.delivery',
-      },
-      {
-        protocol: 'https',
-        hostname: 'replicate.com',
-      },
-      {
-        protocol: 'https',
-        hostname: '**.replicate.com',
+        hostname: '**.supabase.co',
       },
       {
         protocol: 'https',
         hostname: '**.amazonaws.com',
-      },
-      {
-        protocol: 'https',
-        hostname: 'xezq',
-      },
-      {
-        protocol: 'https',
-        hostname: '**.supabase.co',
       },
     ],
     deviceSizes: [640, 750, 828, 1080, 1200, 1920, 2048, 3840],

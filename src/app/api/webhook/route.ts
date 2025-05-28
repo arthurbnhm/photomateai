@@ -56,71 +56,108 @@ function verifyWebhookSignature(
   }
 }
 
-// Function to download and store an image
-async function downloadAndStoreImage(url: string, userId: string, format: string = 'png'): Promise<string | null> {
-  try {
-    // Validate userId to prevent 'undefined' in storage paths
-    if (!userId || userId === 'undefined') {
-      console.error('Invalid or missing userId for image storage:', userId);
-      return url; // Return the original URL if userId is invalid
-    }
-
-    const response = await fetch(url);
-    if (!response.ok) {
-      console.error('Failed to download image:', response.statusText);
-      return url; // Return the original URL on download failure
-    }
-
-    const blob = await response.blob();
-    
-    const contentType = `image/${format}`;
-    const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${format}`;
-    
-    // Ensure userId is valid before constructing the path
-    const filePath = `${userId}/${fileName}`;
-
-    // For storage operations, we need to use the service role key
-    // This is one of the few legitimate cases where we need admin access
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    
-    if (!supabaseUrl || !supabaseServiceKey) {
-      console.error('Missing Supabase environment variables');
-      return url;
-    }
-    
-    // Use the createClient directly for this specific operation
-    const { createClient } = await import('@supabase/supabase-js');
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
-    
-    const { error: uploadError } = await supabase.storage
-      .from('images')
-      .upload(filePath, blob, {
-        contentType: contentType,
-        cacheControl: '3600',
-        upsert: false
-      });
-
-    if (uploadError) {
-      console.error('Failed to upload image:', uploadError);
-      return url; // Return the original URL on upload failure
-    }
-
-    // Generate a signed URL that expires in 10 years instead of 1 hour
-    const { data: signedUrlData, error: signedUrlError } = await supabase.storage
-      .from('images')
-      .createSignedUrl(filePath, 10 * 365 * 24 * 60 * 60); // 10 years in seconds
-    
-    if (signedUrlError || !signedUrlData) {
-      console.error('Failed to generate signed URL:', signedUrlError);
-      return url; // Return the original URL if we can't generate a signed URL
-    }
-
-    return signedUrlData.signedUrl;
-  } catch (error) {
-    console.error('Error in downloadAndStoreImage:', error);
-    return url; // Return the original URL on any error
+// Function to download and store an image with retry logic
+async function downloadAndStoreImage(url: string, userId: string, format: string = 'png', maxRetries: number = 3): Promise<string | null> {
+  // Validate userId to prevent 'undefined' in storage paths
+  if (!userId || userId === 'undefined') {
+    console.error('Invalid or missing userId for image storage:', userId);
+    return null; // Return null instead of original URL
   }
+
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  
+  if (!supabaseUrl || !supabaseServiceKey) {
+    console.error('Missing Supabase environment variables');
+    return null; // Return null instead of original URL
+  }
+
+  // Use the createClient directly for this specific operation
+  const { createClient } = await import('@supabase/supabase-js');
+  const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      console.log(`🔄 Attempt ${attempt}/${maxRetries} to download and store image: ${url.substring(0, 50)}...`);
+      
+      // Download image from Replicate with timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+      
+      const response = await fetch(url, {
+        signal: controller.signal,
+        headers: {
+          'User-Agent': 'PhotomateAI/1.0'
+        }
+      });
+      
+      clearTimeout(timeoutId);
+      
+      if (!response.ok) {
+        throw new Error(`Failed to download image: ${response.status} ${response.statusText}`);
+      }
+
+      const blob = await response.blob();
+      
+      // Validate image size
+      if (blob.size === 0) {
+        throw new Error('Downloaded image is empty');
+      }
+      
+      if (blob.size > 50 * 1024 * 1024) { // 50MB limit
+        throw new Error('Downloaded image is too large');
+      }
+      
+      const contentType = `image/${format}`;
+      const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${format}`;
+      const filePath = `${userId}/${fileName}`;
+
+      console.log(`📤 Uploading to Supabase: ${filePath} (${(blob.size / 1024 / 1024).toFixed(2)}MB)`);
+      
+      // Upload to Supabase Storage with retry-friendly options
+      const { error: uploadError } = await supabase.storage
+        .from('images')
+        .upload(filePath, blob, {
+          contentType: contentType,
+          cacheControl: '3600',
+          upsert: false
+        });
+
+      if (uploadError) {
+        throw new Error(`Failed to upload to Supabase: ${uploadError.message}`);
+      }
+
+      // Generate a long-lived signed URL (10 years)
+      const { data: signedUrlData, error: signedUrlError } = await supabase.storage
+        .from('images')
+        .createSignedUrl(filePath, 10 * 365 * 24 * 60 * 60); // 10 years in seconds
+      
+      if (signedUrlError || !signedUrlData) {
+        throw new Error(`Failed to generate signed URL: ${signedUrlError?.message || 'Unknown error'}`);
+      }
+
+      console.log(`✅ Successfully stored image attempt ${attempt}/${maxRetries}: ${filePath}`);
+      return signedUrlData.signedUrl;
+
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      console.error(`❌ Attempt ${attempt}/${maxRetries} failed for image storage:`, errorMessage);
+      
+      // If this was the last attempt, log the final failure
+      if (attempt === maxRetries) {
+        console.error(`🚨 FINAL FAILURE: Could not store image after ${maxRetries} attempts: ${url}`);
+        console.error(`🚨 Error details:`, errorMessage);
+        return null; // Return null - never fallback to Replicate URL
+      }
+      
+      // Wait before retrying (exponential backoff)
+      const waitTime = Math.min(1000 * Math.pow(2, attempt - 1), 10000); // Max 10 seconds
+      console.log(`⏱️ Waiting ${waitTime}ms before retry ${attempt + 1}...`);
+      await new Promise(resolve => setTimeout(resolve, waitTime));
+    }
+  }
+  
+  return null; // This should never be reached, but ensures we never return Replicate URLs
 }
 
 export async function POST(request: Request) {
@@ -518,23 +555,48 @@ export async function POST(request: Request) {
           console.warn('Missing or invalid user_id for prediction:', prediction.id);
         }
 
-        // Download and store images
+        // Download and store images with improved error handling
         try {
+          console.log(`🔄 Processing ${urls.length} images for prediction ${replicate_id}`);
           const format = prediction.input?.output_format || 'png';
-          const storageUrls = await Promise.all(
-            urls.map(url => downloadAndStoreImage(url, userId, format))
+          
+          // Process images with retry logic
+          const storageResults = await Promise.allSettled(
+            urls.map((url, index) => {
+              console.log(`📥 Processing image ${index + 1}/${urls.length}: ${url.substring(0, 50)}...`);
+              return downloadAndStoreImage(url, userId, format);
+            })
           );
 
-          // Filter out any null values from failed uploads
-          const validStorageUrls = storageUrls.filter(url => url !== null) as string[];
+          // Extract successful storage URLs and log failures
+          const validStorageUrls: string[] = [];
+          const failedImages: number[] = [];
+          
+          storageResults.forEach((result, index) => {
+            if (result.status === 'fulfilled' && result.value !== null) {
+              validStorageUrls.push(result.value);
+              console.log(`✅ Image ${index + 1} stored successfully`);
+            } else {
+              failedImages.push(index + 1);
+              const errorReason = result.status === 'rejected' 
+                ? result.reason 
+                : 'Failed to store image';
+              console.error(`❌ Image ${index + 1} failed to store:`, errorReason);
+            }
+          });
 
+          console.log(`📊 Storage summary: ${validStorageUrls.length}/${urls.length} images stored successfully`);
+          
+          // Require ALL images to be successfully stored in Supabase
           if (validStorageUrls.length === 0) {
-            // If no images were successfully stored, mark the prediction as failed
+            // No images were successfully stored
+            console.error(`🚨 CRITICAL: No images could be stored for prediction ${replicate_id}`);
+            
             const { error: failedStorageError } = await supabase
               .from('predictions')
               .update({
                 status: 'failed',
-                error: 'Failed to store any images',
+                error: 'Failed to store any images in Supabase storage',
                 completed_at: completedAt || now.toISOString()
               })
               .eq('id', prediction.id);
@@ -543,15 +605,44 @@ export async function POST(request: Request) {
               console.error('Error updating prediction after storage failure:', failedStorageError);
             }
 
-            return NextResponse.json({ error: 'Failed to store images' }, { status: 500 });
+            return NextResponse.json({ 
+              error: 'Failed to store images in Supabase storage',
+              details: `All ${urls.length} images failed to transfer to Supabase`
+            }, { status: 500 });
+          }
+          
+          if (validStorageUrls.length < urls.length) {
+            // Some images failed to store
+            console.warn(`⚠️ PARTIAL SUCCESS: Only ${validStorageUrls.length}/${urls.length} images stored for prediction ${replicate_id}`);
+            console.warn(`⚠️ Failed images: ${failedImages.join(', ')}`);
+            
+            const { error: partialFailureError } = await supabase
+              .from('predictions')
+              .update({
+                status: 'failed',
+                error: `Only ${validStorageUrls.length}/${urls.length} images could be stored in Supabase storage`,
+                completed_at: completedAt || now.toISOString()
+              })
+              .eq('id', prediction.id);
+
+            if (partialFailureError) {
+              console.error('Error updating prediction after partial storage failure:', partialFailureError);
+            }
+
+            return NextResponse.json({ 
+              error: 'Partial image storage failure',
+              details: `Only ${validStorageUrls.length}/${urls.length} images stored successfully`
+            }, { status: 500 });
           }
 
-          // Update the prediction with storage URLs, status, and timing information
+          // All images successfully stored - update prediction with Supabase URLs only
+          console.log(`🎉 SUCCESS: All ${validStorageUrls.length} images stored successfully in Supabase for prediction ${replicate_id}`);
+          
           const { error: successError } = await supabase
             .from('predictions')
             .update({
               status: webhookData.status,
-              storage_urls: validStorageUrls,
+              storage_urls: validStorageUrls, // Only Supabase URLs
               started_at: startedAt,
               completed_at: completedAt || now.toISOString(),
               predict_time: predictTime,
@@ -563,9 +654,30 @@ export async function POST(request: Request) {
             console.error('Error updating prediction on success:', successError);
             return NextResponse.json({ error: 'Error updating prediction' }, { status: 500 });
           }
+          
+          console.log(`✅ Prediction ${replicate_id} completed successfully with all images in Supabase`);
+          
         } catch (error) {
-          console.error('Error storing images:', error);
-          return NextResponse.json({ error: 'Error storing images' }, { status: 500 });
+          console.error('🚨 CRITICAL ERROR in image storage process:', error);
+          
+          // Mark prediction as failed due to storage error
+          const { error: criticalError } = await supabase
+            .from('predictions')
+            .update({
+              status: 'failed',
+              error: `Critical error during image storage: ${error instanceof Error ? error.message : 'Unknown error'}`,
+              completed_at: completedAt || now.toISOString()
+            })
+            .eq('id', prediction.id);
+
+          if (criticalError) {
+            console.error('Error updating prediction after critical storage error:', criticalError);
+          }
+
+          return NextResponse.json({ 
+            error: 'Critical error during image storage',
+            details: error instanceof Error ? error.message : 'Unknown error'
+          }, { status: 500 });
         }
         break;
         
