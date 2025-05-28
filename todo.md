@@ -84,7 +84,7 @@
 - ✅ Stripe portal
 - Buy more coins
 - Change plan / upgrade / downgrade
-- Add feedback form
+- ✅ Add feedback form
 - ✅ Migrate all model versions
 
 # Improvements

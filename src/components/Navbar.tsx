@@ -10,7 +10,16 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Textarea } from "@/components/ui/textarea";
 import { 
   LogOut, 
   Heart, 
@@ -22,11 +31,13 @@ import {
   Moon,
   Sun,
   Coins,
-  ArrowRight
+  ArrowRight,
+  MessageSquare
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePathname, useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
+import { useState } from "react";
 import CryptoJS from 'crypto-js';
 
 type NavbarProps = {
@@ -73,10 +84,59 @@ export function Navbar({
   const isHomePage = pathname === '/';
   const isPlansPage = pathname === '/plans';
   
+  // Feedback form state
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const [feedback, setFeedback] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  
   // Derived state for cleaner code
   const subscriptionActive = credits?.subscription_active || false;
   const creditsRemaining = credits?.credits_remaining || 0;
   
+  const handleSubmitFeedback = async () => {
+    if (!feedback.trim() || !user) return;
+    
+    setSubmitting(true);
+    try {
+      const response = await fetch('/api/feedback', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          feedback: feedback.trim(),
+          user_id: user.id,
+        }),
+      });
+      
+      if (response.ok) {
+        setFeedback('');
+        setFeedbackOpen(false);
+      }
+    } catch (error) {
+      console.error('Error submitting feedback:', error);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleOpenFeedback = () => {
+    setDropdownOpen(false); // Close dropdown first
+    setTimeout(() => {
+      setFeedbackOpen(true);
+    }, 100); // Small delay to ensure dropdown closes properly
+  };
+
+  const handleCloseFeedback = (open: boolean) => {
+    setFeedbackOpen(open);
+    if (!open) {
+      // Reset form when closing
+      setFeedback('');
+      setSubmitting(false);
+    }
+  };
+
   const handleSignOut = async () => {
     await signOut();
     router.push('/');
@@ -272,7 +332,7 @@ export function Navbar({
                   )}
 
                   {/* User Menu Dropdown */}
-                  <DropdownMenu>
+                  <DropdownMenu open={dropdownOpen} onOpenChange={setDropdownOpen}>
                     <DropdownMenuTrigger asChild>
                       <Button variant="ghost" className="relative h-9 w-9 rounded-full">
                         <Avatar className="h-8 w-8">
@@ -362,6 +422,11 @@ export function Navbar({
                           <Mail className="mr-2 h-4 w-4" />
                           Contact
                         </a>
+                      </DropdownMenuItem>
+                      
+                      <DropdownMenuItem onClick={handleOpenFeedback}>
+                        <MessageSquare className="mr-2 h-4 w-4" />
+                        Feedback
                       </DropdownMenuItem>
                       
                       {/* Theme toggle */}
@@ -495,6 +560,35 @@ export function Navbar({
           )}
         </div>
       </div>
+      
+      {/* Feedback Dialog */}
+      <Dialog open={feedbackOpen} onOpenChange={handleCloseFeedback}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Send Feedback</DialogTitle>
+            <DialogDescription>
+              Help us improve PhotomateAI by sharing your thoughts and suggestions.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <Textarea
+              placeholder="Your feedback..."
+              value={feedback}
+              onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setFeedback(e.target.value)}
+              className="min-h-[100px]"
+            />
+          </div>
+          <DialogFooter>
+            <Button 
+              type="submit" 
+              onClick={handleSubmitFeedback}
+              disabled={!feedback.trim() || submitting}
+            >
+              {submitting ? "Sending..." : "Send Feedback"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </header>
   );
 } 
