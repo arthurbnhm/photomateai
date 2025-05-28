@@ -669,7 +669,14 @@ export function ModelListTable({ newTraining, onClearNewTraining }: ModelListTab
           <TableHeader>
             <TableRow className="bg-muted/50">
               <TableHead className="font-semibold">Model Name</TableHead>
-              <TableHead className="font-semibold hidden sm:table-cell">Attributes</TableHead>
+              <TableHead className="font-semibold hidden sm:table-cell">
+                <div className="flex items-center gap-2">
+                  Attributes
+                  <Badge variant="secondary" className="text-xs px-1.5 py-0.5 bg-purple-100 text-purple-800 border-purple-200 dark:bg-purple-950/50 dark:text-purple-300 dark:border-purple-800">
+                    BETA
+                  </Badge>
+                </div>
+              </TableHead>
               <TableHead className="font-semibold">Status</TableHead>
               <TableHead className="font-semibold hidden sm:table-cell">Created</TableHead>
               <TableHead className="text-right font-semibold">Actions</TableHead>
@@ -819,6 +826,9 @@ export function ModelListTable({ newTraining, onClearNewTraining }: ModelListTab
             <DialogTitle className="flex items-center gap-2">
               <Tag className="w-5 h-5 text-primary" />
               Model Attributes
+              <Badge variant="secondary" className="text-xs px-1.5 py-0.5 bg-purple-100 text-purple-800 border-purple-200 dark:bg-purple-950/50 dark:text-purple-300 dark:border-purple-800">
+                BETA
+              </Badge>
             </DialogTitle>
             <DialogDescription className="text-sm leading-relaxed">
               Add details that help your model remember what makes your subject unique.
@@ -964,6 +974,9 @@ export function ModelListTable({ newTraining, onClearNewTraining }: ModelListTab
               <SheetTitle className="flex items-center justify-center gap-2 text-xl font-semibold">
                 <Tag className="w-5 h-5 text-primary" />
                 Model Attributes
+                <Badge variant="secondary" className="text-xs px-1.5 py-0.5 bg-purple-100 text-purple-800 border-purple-200 dark:bg-purple-950/50 dark:text-purple-300 dark:border-purple-800">
+                  BETA
+                </Badge>
               </SheetTitle>
               <SheetDescription className="text-base text-muted-foreground mt-2 leading-relaxed">
                 Add details that help your model remember what makes your subject unique.
