@@ -12,6 +12,7 @@
     "build:clean": "npm run clean && next build"
   },
   "dependencies": {
+    "@getbrevo/brevo": "^2.2.0",
     "@hookform/resolvers": "^4.1.2",
     "@radix-ui/react-alert-dialog": "^1.1.6",
     "@radix-ui/react-aspect-ratio": "^1.1.2",

@@ -113,9 +113,9 @@
 # Caching
 
 - ✅ Images
-- Coins
-- Models
-- Form values
+- ✅ Coins
+- ✅ Models
+- ✅ Form values
 
 
 # Advanced 
@@ -128,9 +128,13 @@
 
 # Have a look
 
-- It orders them with newest first and limits to 50 images (to keep things fast)
+- ✅ It orders them with newest first and limits to 50 images (to keep things fast)
 
 # References
 
-- Use samples
+- ✅ Use samples
 - Once webhook on model training is ready, it sends a request to generate the image reference examples
+- remove middleware complexity
+- explore page
+- no connection page
+- language switcher
