@@ -174,7 +174,9 @@ async function checkResourceLimits(
   }
   
   // For train endpoint, check models_remaining (it's a decrementing counter)
-  if (pathname.startsWith('/api/model/train') || pathname.startsWith('/api/training')) {
+  // But don't check for status endpoints - they're read-only operations
+  if (pathname.startsWith('/api/model/train') || 
+      (pathname.startsWith('/api/training') && !pathname.includes('/status'))) {
     // Simply check if there are models remaining - no need to count existing models
     // since models_remaining is decremented by the webhook when training succeeds
     if (subscription.models_remaining <= 0) {

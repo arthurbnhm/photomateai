@@ -138,3 +138,5 @@
 - explore page
 - no connection page
 - language switcher
+- add download listenener for analytics purposes
+- add sign to show text

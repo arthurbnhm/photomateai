@@ -13,11 +13,19 @@ export async function GET(request: Request) {
     // Initialize Supabase client
     const supabase = await createSupabaseServerClient();
     
-    // Query the trainings table instead of Replicate
+    // Get the authenticated user
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    
+    if (authError || !user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    
+    // Query the trainings table with user authorization
     const { data: training, error } = await supabase
       .from('trainings')
-      .select('training_id, status, error, started_at, completed_at, predict_time, cost')
+      .select('training_id, status, error, started_at, completed_at, predict_time, cost, user_id')
       .eq('training_id', trainingId)
+      .eq('user_id', user.id) // Ensure user can only access their own trainings
       .single();
 
     if (error || !training) {
