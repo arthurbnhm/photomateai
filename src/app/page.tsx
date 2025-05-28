@@ -11,6 +11,7 @@ import { Navbar } from "@/components/Navbar";
 import { motion } from "framer-motion";
 import { useTheme } from "next-themes";
 import { Card, CardDescription, CardFooter, CardHeader } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 
 export default function Home() {
   // Create a fixed array of 4 images from the available ones
@@ -350,6 +351,10 @@ export default function Home() {
                       <Check className="h-4 w-4 text-green-500 flex-shrink-0" />
                       <span>Image Reference</span>
                     </li>
+                    <li className="flex items-center gap-2">
+                      <Check className="h-4 w-4 text-green-500 flex-shrink-0" />
+                      <span>Priority support</span>
+                    </li>
                   </ul>
                 </div>
                 <div className="mt-auto p-6">
@@ -387,11 +392,12 @@ export default function Home() {
                     </li>
                     <li className="flex items-center gap-2">
                       <Check className="h-4 w-4 text-green-500 flex-shrink-0" />
-                      <span>Upscaler (coming soon)</span>
+                      <span>Upscaler</span>
+                      <Badge variant="indigo" className="ml-1">coming soon</Badge>
                     </li>
                     <li className="flex items-center gap-2">
                       <Check className="h-4 w-4 text-green-500 flex-shrink-0" />
-                      <span>Multiple professional styles</span>
+                      <span>Priority support</span>
                     </li>
                   </ul>
                 </div>
@@ -427,10 +433,11 @@ export default function Home() {
                     <li className="flex items-center gap-2">
                       <Check className="h-4 w-4 text-green-500 flex-shrink-0" />
                       <span>Upscaler</span>
+                      <Badge variant="indigo" className="ml-1">coming soon</Badge>
                     </li>
                     <li className="flex items-center gap-2">
                       <Check className="h-4 w-4 text-green-500 flex-shrink-0" />
-                      <span>Multiple professional styles</span>
+                      <span>Train your product</span>
                     </li>
                     <li className="flex items-center gap-2">
                       <Check className="h-4 w-4 text-green-500 flex-shrink-0" />

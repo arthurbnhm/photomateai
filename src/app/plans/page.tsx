@@ -4,6 +4,7 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import SubscriptionButton from "./SubscriptionButton";
 import { AnimatedTrainingImages } from "@/components/AnimatedTrainingImages";
+import { Badge } from "@/components/ui/badge";
 
 export default async function PlansPage() {
   const supabase = await createSupabaseServerClient();
@@ -66,6 +67,10 @@ export default async function PlansPage() {
                       <Check className="h-4 w-4 text-green-500" />
                       <span>Image Reference</span>
                     </span>
+                    <span className="flex items-center gap-x-2">
+                      <Check className="h-4 w-4 text-green-500" />
+                      <span>Priority support</span>
+                    </span>
                   </span>
                 </CardDescription>
               </CardHeader>
@@ -97,11 +102,12 @@ export default async function PlansPage() {
                     </span>
                     <span className="flex items-center gap-x-2">
                       <Check className="h-4 w-4 text-green-500" />
-                      <span>Upscaler (coming soon)</span>
+                      <span>Upscaler</span>
+                      <Badge variant="indigo" className="ml-1">coming soon</Badge>
                     </span>
                     <span className="flex items-center gap-x-2">
                       <Check className="h-4 w-4 text-green-500" />
-                      <span>Multiple professional styles</span>
+                      <span>Priority support</span>
                     </span>
                   </span>
                 </CardDescription>
@@ -135,10 +141,11 @@ export default async function PlansPage() {
                     <span className="flex items-center gap-x-2">
                       <Check className="h-4 w-4 text-green-500" />
                       <span>Upscaler</span>
+                      <Badge variant="indigo" className="ml-1">coming soon</Badge>
                     </span>
                     <span className="flex items-center gap-x-2">
                       <Check className="h-4 w-4 text-green-500" />
-                      <span>Multiple professional styles</span>
+                      <span>Train your product</span>
                     </span>
                     <span className="flex items-center gap-x-2">
                       <Check className="h-4 w-4 text-green-500" />
