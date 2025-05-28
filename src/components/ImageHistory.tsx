@@ -996,13 +996,13 @@ export function ImageHistory({
                               )}
                             </button>
                           </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="w-48">
+                          <DropdownMenuContent align="end" className="w-32">
                             <DropdownMenuItem 
                               onClick={() => copyPromptToClipboard(generation.prompt, generation.id)}
                               className="cursor-pointer"
                             >
                               <Copy className="h-4 w-4" />
-                              Copy Prompt
+                              Copy
                             </DropdownMenuItem>
                             <DropdownMenuItem 
                               onClick={() => handleDelete(generation.id)}
