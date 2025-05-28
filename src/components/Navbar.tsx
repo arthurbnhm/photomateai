@@ -414,6 +414,11 @@ export function Navbar({
                               Billing
                             </Link>
                           </DropdownMenuItem>
+                          
+                          <DropdownMenuItem onClick={handleOpenFeedback}>
+                            <MessageSquare className="mr-2 h-4 w-4" />
+                            Feedback
+                          </DropdownMenuItem>
                         </>
                       )}
                       
@@ -422,11 +427,6 @@ export function Navbar({
                           <Mail className="mr-2 h-4 w-4" />
                           Contact
                         </a>
-                      </DropdownMenuItem>
-                      
-                      <DropdownMenuItem onClick={handleOpenFeedback}>
-                        <MessageSquare className="mr-2 h-4 w-4" />
-                        Feedback
                       </DropdownMenuItem>
                       
                       {/* Theme toggle */}
