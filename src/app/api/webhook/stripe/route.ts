@@ -154,6 +154,50 @@ export async function POST(req: NextRequest) {
           .select('*')
           .eq('stripe_subscription_id', invoiceSubscriptionId)
           .single();
+
+        // Find user ID for payment logging
+        let paymentUserId: string | null = null;
+        if (existingSubscription) {
+          paymentUserId = existingSubscription.user_id;
+        } else {
+          // Try to find user ID from customer metadata if subscription doesn't exist yet
+          const customer = await stripe.customers.retrieve(invoiceCustomerId);
+          if (!customer.deleted && customer.metadata && customer.metadata.userId) {
+            paymentUserId = customer.metadata.userId;
+          } else if (!customer.deleted && customer.email) {
+            const { data: userByEmail } = await supabase
+              .from('users')
+              .select('id')
+              .eq('email', customer.email)
+              .single();
+            if (userByEmail) {
+              paymentUserId = userByEmail.id;
+            }
+          }
+        }
+
+        // Log the payment for analytics
+        if (paymentUserId && invoice.amount_paid && invoice.amount_paid > 0) {
+          try {
+            await supabase
+              .from('payments')
+              .insert({
+                user_id: paymentUserId,
+                stripe_invoice_id: invoice.id,
+                stripe_subscription_id: invoiceSubscriptionId,
+                stripe_customer_id: invoiceCustomerId,
+                amount_dollars: invoice.amount_paid / 100,
+                plan: invoicePlan,
+                is_recurring: isRecurring,
+                payment_date: new Date(invoice.created * 1000).toISOString(),
+                created_at: new Date().toISOString()
+              });
+            
+            console.log(`💰 Payment logged: ${invoicePlan} plan, $${invoice.amount_paid / 100}, user: ${paymentUserId}, recurring: ${isRecurring}`);
+          } catch (paymentLogError) {
+            console.error('❌ Error logging payment:', paymentLogError);
+          }
+        }
         
         if (existingSubscription) {
           // Update the existing subscription
