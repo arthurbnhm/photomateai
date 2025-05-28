@@ -7,6 +7,7 @@ import { SpeedInsights } from "@vercel/speed-insights/next";
 import { Toaster } from "@/components/ui/sonner";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { AuthProvider } from "@/contexts/AuthContext";
+import { BrevoChat } from "@/components/BrevoChat";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -60,10 +61,29 @@ export default function RootLayout({
             <Toaster />
             <Analytics />
             <SpeedInsights />
+            <BrevoChat />
           </AuthProvider>
         </ThemeProvider>
         
         {/* Brevo Conversations Chat Widget */}
+        <Script
+          id="brevo-conversations-setup"
+          strategy="afterInteractive"
+          dangerouslySetInnerHTML={{
+            __html: `
+              window.BrevoConversationsSetup = {
+                chatWidth: 400,
+                chatHeight: 600,
+                buttonPosition: 'br',
+                zIndex: 9999,
+                colors: {
+                  buttonText: '#ffffff',
+                  buttonBg: '#007bff'
+                }
+              };
+            `,
+          }}
+        />
         <Script
           id="brevo-conversations"
           strategy="afterInteractive"
