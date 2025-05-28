@@ -43,8 +43,8 @@ export default async function PlansPage() {
           </p>
         </div>
 
-        <div className="max-w-xl mx-auto">
-          <div className="grid gap-6 md:grid-cols-2 mb-12">
+        <div className="max-w-4xl mx-auto">
+          <div className="grid gap-6 md:grid-cols-3 mb-12">
             {/* Basic Plan */}
             <Card className="flex flex-col">
               <CardHeader>
@@ -56,16 +56,12 @@ export default async function PlansPage() {
                   <span className="block space-y-2">
                     <span className="flex items-center gap-x-2">
                       <Check className="h-4 w-4 text-green-500" />
-                      <span>Take 50 AI Photos (credits)</span>
+                      <span>Generate 50 AI images</span>
                     </span>
                     <span className="flex items-center gap-x-2">
                       <Check className="h-4 w-4 text-green-500" />
-                      <span>Create 1 AI Model per month</span>
+                      <span>Create 1 AI avatar model</span>
                     </span>
-                    {/* <span className="flex items-center gap-x-2">
-                      <Check className="h-4 w-4 text-green-500" />
-                      <span>Photorealistic</span>
-                    </span> */}
                     <span className="flex items-center gap-x-2">
                       <Check className="h-4 w-4 text-green-500" />
                       <span>Image Reference</span>
@@ -89,16 +85,12 @@ export default async function PlansPage() {
                   <span className="block space-y-2">
                     <span className="flex items-center gap-x-2">
                       <Check className="h-4 w-4 text-green-500" />
-                      <span>Take 200 AI Photos (credits)</span>
+                      <span>Generate 150 AI images</span>
                     </span>
                     <span className="flex items-center gap-x-2">
                       <Check className="h-4 w-4 text-green-500" />
-                      <span>Create 3 AI Models per month</span>
+                      <span>Create 2 AI avatar models</span>
                     </span>
-                    {/* <span className="flex items-center gap-x-2">
-                      <Check className="h-4 w-4 text-green-500" />
-                      <span>Photorealistic</span>
-                    </span> */}
                     <span className="flex items-center gap-x-2">
                       <Check className="h-4 w-4 text-green-500" />
                       <span>Image Reference</span>
@@ -109,7 +101,7 @@ export default async function PlansPage() {
                     </span>
                     <span className="flex items-center gap-x-2">
                       <Check className="h-4 w-4 text-green-500" />
-                      <span>Animate Images (coming soon)</span>
+                      <span>Multiple professional styles</span>
                     </span>
                   </span>
                 </CardDescription>
@@ -119,10 +111,46 @@ export default async function PlansPage() {
               </CardFooter>
             </Card>
 
-            {/* Executive Plan - Temporarily simplified for debugging */}
-            {/*
-              <div>Executive Plan Content Placeholder</div>
-            */}
+            {/* Executive Plan */}
+            <Card className="flex flex-col">
+              <CardHeader>
+                <CardTitle className="flex items-baseline gap-x-2">
+                  <span className="text-2xl font-bold">$99</span>
+                  <span className="text-sm text-muted-foreground">• Executive</span>
+                </CardTitle>
+                <CardDescription className="space-y-2">
+                  <span className="block space-y-2">
+                    <span className="flex items-center gap-x-2">
+                      <Check className="h-4 w-4 text-green-500" />
+                      <span>Generate 500 AI images</span>
+                    </span>
+                    <span className="flex items-center gap-x-2">
+                      <Check className="h-4 w-4 text-green-500" />
+                      <span>Create 6 AI avatar models</span>
+                    </span>
+                    <span className="flex items-center gap-x-2">
+                      <Check className="h-4 w-4 text-green-500" />
+                      <span>Image Reference</span>
+                    </span>
+                    <span className="flex items-center gap-x-2">
+                      <Check className="h-4 w-4 text-green-500" />
+                      <span>Upscaler</span>
+                    </span>
+                    <span className="flex items-center gap-x-2">
+                      <Check className="h-4 w-4 text-green-500" />
+                      <span>Multiple professional styles</span>
+                    </span>
+                    <span className="flex items-center gap-x-2">
+                      <Check className="h-4 w-4 text-green-500" />
+                      <span>Priority support</span>
+                    </span>
+                  </span>
+                </CardDescription>
+              </CardHeader>
+              <CardFooter className="mt-auto flex justify-end">
+                <SubscriptionButton plan="executive" className="w-full sm:w-32" variant="default" />
+              </CardFooter>
+            </Card>
           </div>
         </div>
 

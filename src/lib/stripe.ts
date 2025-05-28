@@ -10,7 +10,7 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
 export const PRICE_IDS = {
   basic: 'price_1R2INxIrYxGc1sVMBYxciEI4',
   professional: 'price_1R2INvIrYxGc1sVM9YvoxVjv',
-  executive: 'price_1R2INsIrYxGc1sVMzPna3T3I'
+  executive: 'price_1RTlxoIrYxGc1sVMAuAlI7FI'
 };
 
 // Get or create a Stripe customer for a user

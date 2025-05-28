@@ -321,7 +321,7 @@ export default function Home() {
               Choose your plan
             </h2>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-4xl mx-auto">
               {/* Basic Plan */}
               <div className="border rounded-lg bg-card overflow-hidden flex flex-col">
                 <div className="p-6 pb-0">
@@ -371,11 +371,11 @@ export default function Home() {
                   <ul className="space-y-3">
                     <li className="flex items-center gap-2">
                       <Check className="h-4 w-4 text-green-500 flex-shrink-0" />
-                      <span>Generate 200 AI portraits</span>
+                      <span>Generate 150 AI images</span>
                     </li>
                     <li className="flex items-center gap-2">
                       <Check className="h-4 w-4 text-green-500 flex-shrink-0" />
-                      <span>Create 3 AI avatar models</span>
+                      <span>Create 2 AI avatar models</span>
                     </li>
                     {/* <li className="flex items-center gap-2">
                       <Check className="h-4 w-4 text-green-500 flex-shrink-0" />
@@ -392,6 +392,49 @@ export default function Home() {
                     <li className="flex items-center gap-2">
                       <Check className="h-4 w-4 text-green-500 flex-shrink-0" />
                       <span>Multiple professional styles</span>
+                    </li>
+                  </ul>
+                </div>
+                <div className="mt-auto p-6">
+                  <Button className="w-full" onClick={handleStartNow}>Buy Now</Button>
+                </div>
+              </div>
+
+              {/* Executive Plan */}
+              <div className="border rounded-lg bg-card overflow-hidden flex flex-col">
+                <div className="p-6 pb-0">
+                  <h3 className="text-2xl font-bold mb-2">Executive</h3>
+                  <div className="flex items-baseline gap-1 mb-4">
+                    <span className="text-3xl md:text-4xl font-bold">$99</span>
+                    <span className="text-muted-foreground">/month</span>
+                  </div>
+                  <p className="mb-4">For businesses and high-volume users</p>
+                  <hr className="mb-4" />
+
+                  <ul className="space-y-3">
+                    <li className="flex items-center gap-2">
+                      <Check className="h-4 w-4 text-green-500 flex-shrink-0" />
+                      <span>Generate 500 AI images</span>
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <Check className="h-4 w-4 text-green-500 flex-shrink-0" />
+                      <span>Create 6 AI avatar models</span>
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <Check className="h-4 w-4 text-green-500 flex-shrink-0" />
+                      <span>Image Reference</span>
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <Check className="h-4 w-4 text-green-500 flex-shrink-0" />
+                      <span>Upscaler</span>
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <Check className="h-4 w-4 text-green-500 flex-shrink-0" />
+                      <span>Multiple professional styles</span>
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <Check className="h-4 w-4 text-green-500 flex-shrink-0" />
+                      <span>Priority support</span>
                     </li>
                   </ul>
                 </div>

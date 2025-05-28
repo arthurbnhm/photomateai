@@ -10,9 +10,9 @@ function getPlanLimits(plan: string): { credits: number; models: number } {
     case 'basic':
       return { credits: 50, models: 1 };
     case 'professional':
-      return { credits: 200, models: 3 };
+      return { credits: 150, models: 2 };
     case 'executive':
-      return { credits: 3000, models: 10 };
+      return { credits: 500, models: 6 };
     default:
       return { credits: 50, models: 1 }; // Default to basic
   }
@@ -59,9 +59,9 @@ export async function POST(req: NextRequest) {
         
         // Determine plan based on price ID
         let plan = 'basic';
-        if (priceId === 'price_1R1VuRIvAcEHQuzpHBcYDBfN') {
+        if (priceId === 'price_1R2INvIrYxGc1sVM9YvoxVjv') {
           plan = 'professional';
-        } else if (priceId === 'price_1R1VucIvAcEHQuzpk38ptDFA') {
+        } else if (priceId === 'price_1RTlxoIrYxGc1sVMAuAlI7FI') {
           plan = 'executive';
         }
         
@@ -139,9 +139,9 @@ export async function POST(req: NextRequest) {
         
         // Determine plan based on price ID
         let invoicePlan = 'basic';
-        if (invoicePriceId === 'price_1R1VuRIvAcEHQuzpHBcYDBfN') {
+        if (invoicePriceId === 'price_1R2INvIrYxGc1sVM9YvoxVjv') {
           invoicePlan = 'professional';
-        } else if (invoicePriceId === 'price_1R1VucIvAcEHQuzpk38ptDFA') {
+        } else if (invoicePriceId === 'price_1RTlxoIrYxGc1sVMAuAlI7FI') {
           invoicePlan = 'executive';
         }
         
@@ -268,9 +268,9 @@ async function handleSubscriptionChange(supabase: SupabaseClient, subscription: 
   
   // Determine plan based on price ID
   let plan = 'basic';
-  if (priceId === 'price_1R1VuRIvAcEHQuzpHBcYDBfN') {
+  if (priceId === 'price_1R2INvIrYxGc1sVM9YvoxVjv') {
     plan = 'professional';
-  } else if (priceId === 'price_1R1VucIvAcEHQuzpk38ptDFA') {
+  } else if (priceId === 'price_1RTlxoIrYxGc1sVMAuAlI7FI') {
     plan = 'executive';
   }
   
