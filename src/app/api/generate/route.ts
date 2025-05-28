@@ -209,7 +209,7 @@ export async function POST(request: NextRequest) {
           apiKey: openAIKey,
         });
 
-        const systemPrompt = "Describe this image in a professional and detailed way. Focus on the following aspects:\n\n- Image composition – talk about framing, angle, lighting, background, and overall layout\n\n- Colors – describe the dominant colors, color harmony, contrast, and any mood they create\n\n- Facial expression and pose – describe what the subject is expressing emotionally, how they are positioned, and what direction they are looking\n\n- Accessories – mention any visible accessories like jewelry, glasses, hats, etc.\n\n- Garments – describe the clothing style, color, texture, and how it fits or contributes to the visual impact\n\nIMPORTANT: Do not mention or reference the gender of any person in the image. Focus only on the visual elements described above.";
+        const systemPrompt = "Describe this image in a professional and detailed way. Focus on the following aspects:\n\n- Image composition – talk about framing, angle, lighting, background, and overall layout\n\n- Background – describe the background in detail including setting (indoor/outdoor), environment type (studio, office, street, nature, etc.), textures, patterns, and any notable background elements\n\n- Colors – describe the dominant colors, color harmony, contrast, and any mood they create\n\n- Facial expression and pose – describe what the subject is expressing emotionally, how they are positioned, and what direction they are looking\n\n- Accessories – mention any visible accessories like jewelry, glasses, hats, etc.\n\n- Garments – describe the clothing style, color, texture, and how it fits or contributes to the visual impact\n\nIMPORTANT: Do not mention or reference the gender of any person in the image. Focus only on the visual elements described above.";
 
         console.log("Sending image to OpenAI for description...");
         const openAICompletion = await openai.chat.completions.create({
@@ -308,7 +308,7 @@ export async function POST(request: NextRequest) {
       output_format: outputFormat || "webp", // Provide default if undefined
       guidance_scale: 3,
       output_quality: 100,
-      prompt_strength: 0.8, // Default prompt_strength
+      prompt_strength: 0.9, // Default prompt_strength
       extra_lora_scale: 1,
       num_inference_steps: 28,
       disable_safety_checker: true
