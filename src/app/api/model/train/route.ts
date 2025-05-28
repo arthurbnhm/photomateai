@@ -12,7 +12,7 @@ const replicate = new Replicate({
 const TRAINING_PARAMS = {
   lora_type: "subject",
   trigger_word: "TOK",
-  training_steps: 100
+  training_steps: 2500
 };
 
 export async function POST(request: NextRequest) {
