@@ -4,7 +4,7 @@ import { useConnection } from '@/contexts/ConnectionContext';
 import { useCallback } from 'react';
 
 export function useConnectionAwareFetch() {
-  const { isConnected, checkConnection } = useConnection();
+  const { isConnected } = useConnection();
 
   const fetchWithConnectionCheck = useCallback(async (
     url: string, 
@@ -12,12 +12,7 @@ export function useConnectionAwareFetch() {
   ) => {
     // Check connection before making the request
     if (!isConnected) {
-      await checkConnection();
-      
-      // If still not connected after check, throw an error
-      if (!isConnected) {
-        throw new Error('No internet connection available');
-      }
+      throw new Error('No internet connection available');
     }
 
     try {
@@ -27,14 +22,12 @@ export function useConnectionAwareFetch() {
         signal: AbortSignal.timeout(10000),
       });
 
-      // If we get a response, connection is good
       return response;
     } catch (error) {
-      // If fetch fails, check connection again
-      await checkConnection();
+      // If fetch fails, it might be a connection issue
       throw error;
     }
-  }, [isConnected, checkConnection]);
+  }, [isConnected]);
 
   return {
     fetch: fetchWithConnectionCheck,

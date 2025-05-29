@@ -23,43 +23,21 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
   const [isConnected, setIsConnected] = useState(true);
 
   const checkConnection = async () => {
-    try {
-      // Check if browser reports online
-      if (!navigator.onLine) {
-        setIsOnline(false);
-        setIsConnected(false);
-        return;
-      }
-
-      // Try to reach a reliable endpoint
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 5000);
-
-      const response = await fetch('/api/health', {
-        method: 'HEAD',
-        cache: 'no-cache',
-        signal: controller.signal,
-      });
-
-      clearTimeout(timeoutId);
-
-      const connected = response.ok;
-      setIsOnline(true);
-      setIsConnected(connected);
-    } catch {
-      setIsOnline(navigator.onLine);
-      setIsConnected(false);
-    }
+    // For most cases, navigator.onLine is sufficient
+    const online = navigator.onLine;
+    setIsOnline(online);
+    setIsConnected(online);
   };
 
   useEffect(() => {
     // Initial check
-    checkConnection();
+    setIsOnline(navigator.onLine);
+    setIsConnected(navigator.onLine);
 
     // Listen to online/offline events
     const handleOnline = () => {
       setIsOnline(true);
-      checkConnection();
+      setIsConnected(true);
     };
 
     const handleOffline = () => {
@@ -70,13 +48,12 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
 
-    // Periodic check every 30 seconds
-    const interval = setInterval(checkConnection, 30000);
-
     // Check when page becomes visible (user returns from sleep/background)
     const handleVisibilityChange = () => {
       if (!document.hidden) {
-        checkConnection();
+        const online = navigator.onLine;
+        setIsOnline(online);
+        setIsConnected(online);
       }
     };
 
@@ -86,7 +63,6 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
-      clearInterval(interval);
     };
   }, []);
 
