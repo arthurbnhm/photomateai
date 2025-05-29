@@ -7,6 +7,8 @@ import { SpeedInsights } from "@vercel/speed-insights/next";
 import { Toaster } from "@/components/ui/sonner";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { AuthProvider } from "@/contexts/AuthContext";
+import { ConnectionProvider } from "@/contexts/ConnectionContext";
+import { ConnectionGuard } from "@/components/ConnectionGuard";
 import { BrevoChat } from "@/components/BrevoChat";
 
 const inter = Inter({ subsets: ["latin"] });
@@ -54,15 +56,19 @@ export default function RootLayout({
           disableTransitionOnChange
           storageKey="photomate-theme"
         >
-          <AuthProvider>
-            <main className="min-h-screen">
-              {children}
-            </main>
-            <Toaster />
-            <Analytics />
-            <SpeedInsights />
-            <BrevoChat />
-          </AuthProvider>
+          <ConnectionProvider>
+            <AuthProvider>
+              <ConnectionGuard>
+                <main className="min-h-screen">
+                  {children}
+                </main>
+              </ConnectionGuard>
+              <Toaster />
+              <Analytics />
+              <SpeedInsights />
+              <BrevoChat />
+            </AuthProvider>
+          </ConnectionProvider>
         </ThemeProvider>
         
         {/* Brevo Conversations Chat Widget */}

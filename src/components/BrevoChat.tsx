@@ -3,6 +3,7 @@
 import { useEffect } from 'react'
 import Script from 'next/script'
 import { useAuth } from '@/contexts/AuthContext'
+import { useConnection } from '@/contexts/ConnectionContext'
 
 declare global {
   interface Window {
@@ -23,10 +24,11 @@ declare global {
 
 export function BrevoChat() {
   const { user, credits, isAuthenticated } = useAuth()
+  const { isConnected } = useConnection()
 
   // Update user data when auth state changes
   useEffect(() => {
-    if (typeof window !== 'undefined' && window.BrevoConversations && isAuthenticated && user) {
+    if (typeof window !== 'undefined' && window.BrevoConversations && isAuthenticated && user && isConnected) {
       // Generate a safe visitor ID based on user ID (hashed for security)
       const visitorId = btoa(user.id).replace(/[^a-zA-Z0-9]/g, '').substring(0, 32)
       
@@ -49,7 +51,25 @@ export function BrevoChat() {
         window.BrevoConversationsSetup.visitorId = visitorId
       }
     }
-  }, [user, credits, isAuthenticated])
+  }, [user, credits, isAuthenticated, isConnected])
+
+  // Hide/show chat widget based on connection
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.BrevoConversations) {
+      if (isConnected) {
+        // Show the chat widget
+        window.BrevoConversations('show')
+      } else {
+        // Hide the chat widget
+        window.BrevoConversations('hide')
+      }
+    }
+  }, [isConnected])
+
+  // Don't render scripts if not connected
+  if (!isConnected) {
+    return null
+  }
 
   return (
     <>
