@@ -61,7 +61,7 @@ export default async function PlansPage() {
                     </span>
                     <span className="flex items-center gap-x-2">
                       <Check className="h-4 w-4 text-green-500" />
-                      <span>Create 1 AI avatar model</span>
+                      <span>Create 1 AI model</span>
                     </span>
                     <span className="flex items-center gap-x-2">
                       <Check className="h-4 w-4 text-green-500" />
@@ -94,7 +94,7 @@ export default async function PlansPage() {
                     </span>
                     <span className="flex items-center gap-x-2">
                       <Check className="h-4 w-4 text-green-500" />
-                      <span>Create 2 AI avatar models</span>
+                      <span>Create 2 AI models</span>
                     </span>
                     <span className="flex items-center gap-x-2">
                       <Check className="h-4 w-4 text-green-500" />
@@ -132,7 +132,7 @@ export default async function PlansPage() {
                     </span>
                     <span className="flex items-center gap-x-2">
                       <Check className="h-4 w-4 text-green-500" />
-                      <span>Create 6 AI avatar models</span>
+                      <span>Create 6 AI models</span>
                     </span>
                     <span className="flex items-center gap-x-2">
                       <Check className="h-4 w-4 text-green-500" />

@@ -12,6 +12,7 @@ import { motion } from "framer-motion";
 import { useTheme } from "next-themes";
 import { Card, CardDescription, CardFooter, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { ImageReferenceShowcase } from "@/components/ImageReferenceShowcase";
 
 export default function Home() {
   // Create a fixed array of 4 images from the available ones
@@ -315,6 +316,9 @@ export default function Home() {
           </div>
         </section>
 
+        {/* Image Reference Feature Section */}
+        <ImageReferenceShowcase />
+
         {/* Pricing Section */}
         <section id="pricing" className="py-16 md:py-20 px-4 bg-background">
           <div className="max-w-6xl mx-auto">
@@ -552,6 +556,112 @@ export default function Home() {
           </div>
         </section>
         {/* Testimonials Section END */}
+
+        {/* FAQ Section */}
+        <section id="faq" className="py-16 md:py-20 px-4 bg-muted/30">
+          <div className="max-w-4xl mx-auto">
+            <motion.h2 
+              className="text-3xl md:text-4xl font-bold text-center mb-8 md:mb-12"
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6 }}
+              viewport={{ once: true }}
+            >
+              Frequently Asked Questions
+            </motion.h2>
+            
+            <motion.div 
+              className="space-y-6"
+              initial={{ opacity: 0, y: 30 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.8, delay: 0.2 }}
+              viewport={{ once: true }}
+            >
+              {/* FAQ Item 1 */}
+              <div className="bg-background rounded-lg p-6 shadow-sm border">
+                <h3 className="text-lg font-semibold mb-3">How long does it take to train my AI model?</h3>
+                <p className="text-muted-foreground">
+                  Training your personalized AI model typically takes 2-4 minutes. You&apos;ll receive an email notification once your model is ready to use. The training time may vary slightly depending on the number of photos you upload and current server load.
+                </p>
+              </div>
+
+              {/* FAQ Item 2 */}
+              <div className="bg-background rounded-lg p-6 shadow-sm border">
+                <h3 className="text-lg font-semibold mb-3">How many photos do I need to upload to train my model?</h3>
+                <p className="text-muted-foreground">
+                  We recommend uploading 12-20 high-quality photos of yourself from different angles and with good lighting. More variety in your training photos will result in better and more diverse AI-generated portraits. Make sure the photos clearly show your face and are well-lit.
+                </p>
+              </div>
+
+              {/* FAQ Item 3 */}
+              <div className="bg-background rounded-lg p-6 shadow-sm border">
+                <h3 className="text-lg font-semibold mb-3">What is Background Customization and how does it work?</h3>
+                <p className="text-muted-foreground">
+                  Background Customization allows you to choose from various professional backgrounds for your portraits. Our AI will place your trained model in different settings and environments to create the perfect professional look for any context.
+                </p>
+              </div>
+
+              {/* FAQ Item 4 */}
+              <div className="bg-background rounded-lg p-6 shadow-sm border">
+                <h3 className="text-lg font-semibold mb-3">Can I use the generated images commercially?</h3>
+                <p className="text-muted-foreground">
+                  Yes! You have full commercial rights to use the AI-generated portraits of yourself for business purposes, including LinkedIn profiles, company websites, marketing materials, and professional portfolios. The images are yours to use as you see fit.
+                </p>
+              </div>
+
+              {/* FAQ Item 5 */}
+              <div className="bg-background rounded-lg p-6 shadow-sm border">
+                <h3 className="text-lg font-semibold mb-3">How realistic do the AI portraits look?</h3>
+                <p className="text-muted-foreground">
+                  Our AI generates photorealistic portraits that closely resemble your actual appearance. The quality is professional-grade and suitable for business use. The more diverse and high-quality photos you provide during training, the better and more accurate your AI portraits will be.
+                </p>
+              </div>
+
+              {/* FAQ Item 6 */}
+              <div className="bg-background rounded-lg p-6 shadow-sm border">
+                <h3 className="text-lg font-semibold mb-3">What happens to my uploaded photos?</h3>
+                <p className="text-muted-foreground">
+                  Your privacy is our priority. Training images are deleted immediately after your AI model is trained. We never share your photos with third parties or use them for any other purpose. You can delete your model and any remaining data at any time from your account settings.
+                </p>
+              </div>
+
+              {/* FAQ Item 7 */}
+              <div className="bg-background rounded-lg p-6 shadow-sm border">
+                <h3 className="text-lg font-semibold mb-3">Can I create multiple AI models?</h3>
+                <p className="text-muted-foreground">
+                  Yes! Depending on your plan, you can create multiple AI models. Basic plan includes 1 model, Professional includes 2 models, and Executive includes up to 6 models. This is useful if you want different styles or if you&apos;re managing portraits for a team.
+                </p>
+              </div>
+
+              {/* FAQ Item 8 */}
+              <div className="bg-background rounded-lg p-6 shadow-sm border">
+                <h3 className="text-lg font-semibold mb-3">Can I train models on products instead of people?</h3>
+                <p className="text-muted-foreground">
+                  Absolutely! You can train AI models on any product - glasses, jewelry, clothing, electronics, or your own products. This is perfect for creating professional packshot images, product photography, and marketing materials. Simply upload 12-20 photos of your product from different angles and lighting conditions, and our AI will learn to generate stunning product images in various styles and settings.
+                </p>
+              </div>
+            </motion.div>
+
+            {/* CTA */}
+            <motion.div 
+              className="text-center mt-12"
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.4 }}
+              viewport={{ once: true }}
+            >
+              <p className="text-muted-foreground mb-4">Still have questions?</p>
+              <Button 
+                variant="outline" 
+                size="lg" 
+                className="rounded-full px-6"
+                onClick={() => window.open('mailto:arthurbnhm@gmail.com', '_blank')}
+              >
+                Contact Support
+              </Button>
+            </motion.div>
+          </div>
+        </section>
 
         {/* Footer */}
         <footer className="py-12 px-4 bg-background border-t">

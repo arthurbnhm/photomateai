@@ -256,6 +256,11 @@ export function Navbar({
                       Pricing
                     </a>
                   </Button>
+              <Button variant="ghost" size="sm" asChild>
+                <a href="#faq" onClick={(e) => handleAnchorClick(e, '#faq')}>
+                      FAQ
+                    </a>
+                  </Button>
             </nav>
           )}
 
