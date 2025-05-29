@@ -36,8 +36,17 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
 
     // Listen to online/offline events
     const handleOnline = () => {
+      const wasOffline = !isOnline || !isConnected;
       setIsOnline(true);
       setIsConnected(true);
+      
+      // Emit connection restored event if we were previously offline
+      if (wasOffline) {
+        // Small delay to ensure state is updated
+        setTimeout(() => {
+          window.dispatchEvent(new CustomEvent('connection-restored'));
+        }, 100);
+      }
     };
 
     const handleOffline = () => {
@@ -52,8 +61,16 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
     const handleVisibilityChange = () => {
       if (!document.hidden) {
         const online = navigator.onLine;
+        const wasOffline = !isOnline || !isConnected;
         setIsOnline(online);
         setIsConnected(online);
+        
+        // Emit connection restored event if connection was restored
+        if (online && wasOffline) {
+          setTimeout(() => {
+            window.dispatchEvent(new CustomEvent('connection-restored'));
+          }, 100);
+        }
       }
     };
 
@@ -64,7 +81,7 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
       window.removeEventListener('offline', handleOffline);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, []);
+  }, [isOnline, isConnected]);
 
   return (
     <ConnectionContext.Provider value={{ isOnline, isConnected, checkConnection }}>

@@ -125,6 +125,22 @@ function useAuthImplementation() {
     SimpleCache.clear();
   }, []);
 
+  // Auth action handlers with memoization for performance
+  const signOut = useCallback(async () => {
+    await supabase.auth.signOut()
+    setUser(null)
+    setCredits(null)
+    SimpleCache.clear()
+    
+    // Delete the session cookie
+    await fetch('/api/auth/logout', { method: 'POST' })
+    
+    router.refresh()
+    if (!isHomePage) {
+      router.push('/auth/login')
+    }
+  }, [supabase, router, isHomePage])
+
   // Initialize authentication state
   useEffect(() => {
     setMounted(true)
@@ -201,10 +217,71 @@ function useAuthImplementation() {
       refreshCredits();
     };
 
+    // Handle connection restoration - check session and refresh data
+    const handleConnectionRestored = async () => {
+      if (!user) return;
+      
+      try {
+        // First, check if the current session is still valid
+        const { data: { session }, error } = await supabase.auth.getSession();
+        
+        if (error || !session) {
+          console.log('Session invalid after connection restoration, signing out...');
+          await signOut();
+          return;
+        }
+        
+        // If session is valid, refresh credits data
+        console.log('Connection restored, refreshing user data...');
+        await refreshCredits();
+      } catch (error) {
+        console.error('Error handling connection restoration:', error);
+        // If there's an error, try to refresh the session
+        try {
+          await supabase.auth.refreshSession();
+          await refreshCredits();
+        } catch (refreshError) {
+          console.error('Failed to refresh session after connection restoration:', refreshError);
+          // If refresh fails, sign out to prevent stuck state
+          await signOut();
+        }
+      }
+    };
+
+    // Handle authentication errors from API calls
+    const handleAuthError = async (event: Event) => {
+      if (!user) return;
+      
+      const customEvent = event as CustomEvent;
+      const { url, status } = customEvent.detail;
+      console.log(`Authentication error on ${url}: ${status}`);
+      
+      // If we get a 401 error, the session is likely invalid
+      if (status === 401) {
+        try {
+          // Try to refresh the session first
+          const { error } = await supabase.auth.refreshSession();
+          if (error) {
+            console.log('Session refresh failed, signing out...');
+            await signOut();
+          } else {
+            console.log('Session refreshed successfully');
+            // Optionally refresh credits after successful session refresh
+            await refreshCredits();
+          }
+        } catch (refreshError) {
+          console.error('Failed to refresh session:', refreshError);
+          await signOut();
+        }
+      }
+    };
+
     // Listen for generation completion events
     window.addEventListener('generation-completed', handleCreditsRefresh);
     window.addEventListener('training-completed', handleCreditsRefresh);
     window.addEventListener('subscription-changed', handleCreditsRefresh);
+    window.addEventListener('connection-restored', handleConnectionRestored);
+    window.addEventListener('auth-error', handleAuthError);
     
     // Refresh when window becomes visible (user comes back to tab)
     const handleVisibilityChange = () => {
@@ -222,25 +299,11 @@ function useAuthImplementation() {
       window.removeEventListener('generation-completed', handleCreditsRefresh);
       window.removeEventListener('training-completed', handleCreditsRefresh);
       window.removeEventListener('subscription-changed', handleCreditsRefresh);
+      window.removeEventListener('connection-restored', handleConnectionRestored);
+      window.removeEventListener('auth-error', handleAuthError);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [user, fetchCreditsData, refreshCredits]);
-
-  // Auth action handlers with memoization for performance
-  const signOut = useCallback(async () => {
-    await supabase.auth.signOut()
-    setUser(null)
-    setCredits(null)
-    SimpleCache.clear()
-    
-    // Delete the session cookie
-    await fetch('/api/auth/logout', { method: 'POST' })
-    
-    router.refresh()
-    if (!isHomePage) {
-      router.push('/auth/login')
-    }
-  }, [supabase, router, isHomePage])
+  }, [user, fetchCreditsData, refreshCredits, supabase, signOut]);
 
   const signIn = useCallback((email: string, password: string) => {
     return supabase.auth.signInWithPassword({ email, password })
