@@ -142,3 +142,8 @@
 - add sign to show text
 - cat photo
 - add a swticher to the examples
+
+
+- once model is done, create a page with buttons, examples, (images of the user? and guidelines)
+
+- better loading page 

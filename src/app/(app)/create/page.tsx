@@ -228,7 +228,6 @@ function CreatePageContent() {
           
           if (cacheMap.size > 0) {
             setPredictionsCache(cacheMap);
-            console.log(`💾 Restored ${cacheMap.size} cached pages from localStorage`);
           }
         }
       } catch (error) {
@@ -243,7 +242,6 @@ function CreatePageContent() {
       try {
         const cacheObject = Object.fromEntries(predictionsCache);
         localStorage.setItem('photomate_predictions_cache', JSON.stringify(cacheObject));
-        console.log(`💾 Saved ${predictionsCache.size} pages to localStorage cache`);
       } catch (error) {
         console.warn('Failed to save cache to localStorage:', error);
       }
@@ -257,13 +255,7 @@ function CreatePageContent() {
     const key = getCacheKey(page, isDeleted);
     const cached = predictionsCache.get(key);
     if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
-      console.log(`🎯 Cache HIT for page ${page} (${Math.round((Date.now() - cached.timestamp) / 1000)}s old)`);
       return cached;
-    }
-    if (cached) {
-      console.log(`⏰ Cache EXPIRED for page ${page} (${Math.round((Date.now() - cached.timestamp) / 1000)}s old)`);
-    } else {
-      console.log(`❌ Cache MISS for page ${page}`);
     }
     return null;
   }, [predictionsCache, CACHE_TTL]);
@@ -277,7 +269,6 @@ function CreatePageContent() {
     hasPreviousPage: boolean;
   }, isDeleted = false) => {
     const key = getCacheKey(page, isDeleted);
-    console.log(`💾 Caching page ${page} with ${data.length} predictions`);
     setPredictionsCache(prev => new Map(prev).set(key, {
       data,
       timestamp: Date.now(),
@@ -287,7 +278,6 @@ function CreatePageContent() {
   
   // Remove a specific prediction from all cached pages
   const removePredictionFromCache = useCallback((predictionId: string) => {
-    console.log(`🗑️ Removing prediction ${predictionId} from cache`);
     setPredictionsCache(prev => {
       const newCache = new Map(prev);
       let cacheUpdated = false;
@@ -318,7 +308,6 @@ function CreatePageContent() {
 
   // Update favorite status in cache without clearing
   const updateFavoriteInCache = useCallback((predictionId: string, imageUrl: string, isLiked: boolean) => {
-    console.log(`💖 Updating favorite status in cache: ${predictionId}, ${imageUrl}, ${isLiked}`);
     setPredictionsCache(prev => {
       const newCache = new Map(prev);
       let cacheUpdated = false;
@@ -371,7 +360,7 @@ function CreatePageContent() {
 
   // State for user models
   const [userModels, setUserModels] = useState<Model[]>([]);
-  const [isLoadingUserModels, setIsLoadingUserModels] = useState(true); // Initialize to true
+  const [isLoadingUserModels, setIsLoadingUserModels] = useState(true);
   const [userModelsError, setUserModelsError] = useState<string | null>(null);
 
   // State to control the initial model loading screen
@@ -397,7 +386,9 @@ function CreatePageContent() {
   const isFetchingPredictions = useRef(false);
   const isFetchingModels = useRef(false);
   const isFetchingPending = useRef(false);
-  
+  const lastPendingFetchTimestamp = useRef<number>(0); // Added for debounce
+  const initialDataFetched = useRef(false); // Added to prevent double initial fetch
+
   // Add ref to track ongoing handleCompletedPrediction calls
   const processingCompletedPredictions = useRef<Set<string>>(new Set());
 
@@ -413,27 +404,35 @@ function CreatePageContent() {
 
   // NEW: Separate function to fetch only pending predictions
   const fetchPendingPredictions = useCallback(async () => {
-    if (isFetchingPending.current) return;
-    
+    const now = Date.now();
+    // Prevent concurrent fetches or fetching too rapidly (e.g., within 2 seconds of last attempt that got a response)
+    if (isFetchingPending.current || (now - lastPendingFetchTimestamp.current < 2000)) {
+      // console.log(`Skipping pending fetch: isFetchingPending=${isFetchingPending.current}, timeSinceLast=${now - lastPendingFetchTimestamp.current}`);
+      return;
+    }
+
     isFetchingPending.current = true;
     const abortController = new AbortController();
-    const timeoutId = setTimeout(() => abortController.abort(), 5000);
+    const timeoutId = setTimeout(() => abortController.abort(), 5000); // 5s timeout
+    let responseReceived = false;
 
     try {
       const response = await fetch('/api/predictions/pending', {
         signal: abortController.signal
       });
-      
       clearTimeout(timeoutId);
-      
+      responseReceived = true; // A response (good or bad) was received
+
       if (!response.ok) {
         throw new Error(`Failed to fetch pending predictions: ${response.status} ${response.statusText}`);
       }
       
-      const { success, predictions, error } = await response.json();
+      const { success, predictions, error: apiError } = await response.json();
       
       if (!success) {
-        throw new Error(error || 'Failed to fetch pending predictions');
+        console.error('API error fetching pending predictions:', apiError || 'Failed to fetch pending predictions');
+        setPendingGenerations([]); // Or handle error as per application logic
+        return; // Exit if API reported not successful
       }
       
       if (predictions) {
@@ -452,21 +451,26 @@ function CreatePageContent() {
       }
       
     } catch (fetchError: unknown) {
-      clearTimeout(timeoutId);
-      if (!(fetchError instanceof Error && fetchError.name === 'AbortError')) {
+      clearTimeout(timeoutId); // Ensure timeout is cleared on any catch
+      if (fetchError instanceof Error && fetchError.name === 'AbortError') {
+        console.warn('Fetch pending predictions aborted due to timeout.');
+        // For AbortError or true network errors, responseReceived remains false, so timestamp isn't updated below.
+      } else {
         console.error('Error fetching pending predictions:', fetchError);
       }
+      // Optionally clear or maintain previous state on error
+      // setPendingGenerations([]); 
     } finally {
+      if (responseReceived) { // Update timestamp if a response was received from the server
+        lastPendingFetchTimestamp.current = Date.now();
+      }
       isFetchingPending.current = false;
     }
-  }, []);
+  }, [setPendingGenerations]);
 
   // NEW: Separate function to fetch only completed predictions (with caching)
   const fetchCompletedPredictions = useCallback(async (page: number = currentPage, append: boolean = false) => {
-    console.log(`🔍 fetchCompletedPredictions called: page=${page}, append=${append}`);
-    
     if (isFetchingPredictions.current) {
-      console.log(`⏸️ Already fetching, skipping page ${page}`);
       return;
     }
     
@@ -481,8 +485,6 @@ function CreatePageContent() {
     // Always check cache for completed predictions (no bypassing!)
     const cachedData = getCachedData(page, false);
     if (cachedData) {
-      console.log(`🎯 Using cached data for page ${page}, returning early`);
-      
       // Process cached data
       const processedData: ImageGeneration[] = cachedData.data.map((item: PredictionData) => {
         const modelDisplayName = item.models?.display_name || 'Default Model';
@@ -518,7 +520,6 @@ function CreatePageContent() {
       return; // Use cached data, no need to fetch
     }
     
-    console.log(`🌐 Making API call for completed predictions page ${page}`);
     isFetchingPredictions.current = true;
     const abortController = new AbortController();
     const timeoutId = setTimeout(() => abortController.abort(), 10000);
@@ -596,20 +597,14 @@ function CreatePageContent() {
 
   // NEW: Function to invalidate cache and refetch page 1 when a prediction completes
   const handleCompletedPrediction = useCallback(async (replicateId: string) => {
-    console.log(`🎯 Handling completed prediction: ${replicateId}`);
-    
-    // Check if already processing this replicate_id
     if (processingCompletedPredictions.current.has(replicateId)) {
-      console.log(`⏸️ Already processing completed prediction ${replicateId}, skipping`);
       return;
     }
-    
-    // Add to processing set
     processingCompletedPredictions.current.add(replicateId);
-    
+    let pendingRefreshed = false;
+
     try {
       // Step 1: Invalidate the cache for page 1 to ensure consistency
-      console.log(`🗑️ Invalidating cache for page 1`);
       setPredictionsCache(prev => {
         const newCache = new Map(prev);
         const key = getCacheKey(1, false);
@@ -629,11 +624,9 @@ function CreatePageContent() {
       });
       
       // Step 2: Add a small delay to ensure the API has the updated data
-      console.log(`⏱️ Waiting briefly for API consistency...`);
       await new Promise(resolve => setTimeout(resolve, 1000));
       
       // Step 3: Fetch page 1 data and update UI state directly
-      console.log(`🔄 Fetching page 1 data to update UI`);
       let retryCount = 0;
       const maxRetries = 3;
       let predictionFound = false;
@@ -654,12 +647,6 @@ function CreatePageContent() {
             const foundInResponse = predictions.some((pred: PredictionData) => pred.replicate_id === replicateId);
             
             if (foundInResponse || retryCount === maxRetries) {
-              if (foundInResponse) {
-                console.log(`✅ Found completed prediction ${replicateId} in API response`);
-              } else {
-                console.warn(`⚠️ Prediction ${replicateId} not found, but using API response anyway after ${maxRetries} retries`);
-              }
-              
               predictionFound = true;
               
               // Update cache with fresh data
@@ -680,16 +667,14 @@ function CreatePageContent() {
                 };
               });
               
-              // Update pagination state
-              setHasNextPage(pagination.hasNextPage);
-              setCurrentPage(pagination.page);
-              
               // Update generations state (replace, not append)
-              console.log(`🎨 Updating UI with ${processedData.length} generations from handleCompletedPrediction`);
               setGenerations(processedData);
+
+              // Successfully updated completed predictions, now refresh pending list
+              await fetchPendingPredictions();
+              pendingRefreshed = true;
               
             } else if (retryCount < maxRetries) {
-              console.log(`⚠️ Prediction ${replicateId} not found in API response, retrying... (${retryCount + 1}/${maxRetries})`);
               retryCount++;
               await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2s before retry
             }
@@ -703,37 +688,30 @@ function CreatePageContent() {
             await new Promise(resolve => setTimeout(resolve, 2000));
           } else {
             // Final fallback: call the original fetchCompletedPredictions
-            console.log('🔄 Final fallback in handleCompletedPrediction: calling fetchCompletedPredictions...');
-            isFetchingPredictions.current = false;
-            await fetchCompletedPredictions(1, false); // Call fetchCompletedPredictions here
+            isFetchingPredictions.current = false; // Reset flag before calling
+            await fetchCompletedPredictions(1, false);
             break;
           }
         }
       }
       
-      if (!predictionFound) {
-        console.warn(`Could not confirm prediction ${replicateId} in API after retries. UI might not be perfectly up-to-date immediately.`);
-      }
-      console.log(`✅ Successfully finished handleCompletedPrediction for ${replicateId}`);
-      
     } catch (fetchError: unknown) {
-      console.error('Error in handleCompletedPrediction:', fetchError);
+      console.error('Error in handleCompletedPrediction (outer try):', fetchError);
       // Fallback: call the original fetchCompletedPredictions
-      console.log('🔄 Top-level fallback in handleCompletedPrediction: calling fetchCompletedPredictions...');
-      isFetchingPredictions.current = false;
-      await fetchCompletedPredictions(1, false); // Call fetchCompletedPredictions here
+      isFetchingPredictions.current = false; // Reset flag before calling
+      await fetchCompletedPredictions(1, false);
     } finally {
+      if (!pendingRefreshed) {
+        // Ensure pending list is refreshed if not done in the success path
+        await fetchPendingPredictions();
+      }
       // Remove from processing set
       processingCompletedPredictions.current.delete(replicateId);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [setPredictionsCache, getCacheKey, itemsPerPage, setCachedData, processOutput, setHasNextPage, setCurrentPage, setGenerations, isFetchingPredictions]); // Removed fetchCompletedPredictions
+  }, [setPredictionsCache, getCacheKey, itemsPerPage, setCachedData, processOutput, setHasNextPage, setCurrentPage, setGenerations, isFetchingPredictions, fetchPendingPredictions]);
 
   // UPDATED: Combined function that calls both separate functions
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const fetchAllPredictions = useCallback(async (silentUpdate: boolean = false, page: number = currentPage, append: boolean = false) => {
-    console.log(`🔍 fetchAllPredictions called: page=${page}, silentUpdate=${silentUpdate}, append=${append}`);
-    
     // For initial loads and page changes, fetch completed predictions
     if (!silentUpdate || page > 1) {
       await fetchCompletedPredictions(page, append);
@@ -791,30 +769,28 @@ function CreatePageContent() {
 
   // Cleanup effect for processing state
   useEffect(() => {
+    const currentProcessingRef = processingCompletedPredictions.current;
     return () => {
       // Clear processing state on unmount
-      processingCompletedPredictions.current.clear();
-      console.log('🧹 Cleared processing state on component unmount');
+      currentProcessingRef.clear();
     };
   }, []);
-
-  // Debug logging for processing state
-  useEffect(() => {
-    if (processingCompletedPredictions.current.size > 0) {
-      console.log(`🔄 Currently processing completed predictions: [${Array.from(processingCompletedPredictions.current).join(', ')}]`);
-    }
-  }, [handleCompletedPrediction]); // Trigger when handleCompletedPrediction changes
 
   // Initial data fetching effect - only runs once when user and mounted state are ready
   useEffect(() => {
     if (isMounted && user) {
-      // Fetch both predictions and models in parallel on initial load
-      Promise.all([
-        fetchAllPredictions(false, 1), // Always start with page 1
-        fetchUserModels()
-      ]).catch(error => {
-        console.error('Error during initial data fetch:', error);
-      });
+      if (!initialDataFetched.current) {
+        initialDataFetched.current = true; // Set immediately to prevent re-entry
+        // Fetch both predictions and models in parallel on initial load
+        Promise.all([
+          fetchAllPredictions(false, 1), // Always start with page 1
+          fetchUserModels()
+        ]).catch(error => {
+          console.error('Error during initial data fetch:', error);
+          // Optionally reset initialDataFetched.current = false here if retries are desired
+          // For now, to prevent potential loops on persistent errors, we don't reset it.
+        });
+      }
     } else if (!user && isMounted) {
       // Clear data when user signs out
       setPendingGenerations([]);
@@ -831,8 +807,9 @@ function CreatePageContent() {
         localStorage.removeItem('photomate_hasShownModelsOnce');
       }
       setAllowModelLoadingScreen(true);
+      initialDataFetched.current = false; // Reset for next login
     }
-  }, [isMounted, user]); // Only depend on mount state and user, not the fetch functions
+  }, [isMounted, user, fetchAllPredictions, fetchUserModels]); // Only depend on mount state and user, not the fetch functions
 
   // Load generations from Supabase (wrapper for compatibility with ImageHistory)
   const loadGenerations = useCallback(async (silentUpdate: boolean = false) => {
@@ -917,19 +894,7 @@ function CreatePageContent() {
     return DEFAULT_HEADER_IMAGES;
   }, [generations, isLoadingHistory, isLoadingUserModels, allowModelLoadingScreen, user?.id]);
 
-
-  // Conditional rendering for the initial model loading screen
-  if (isLoadingUserModels && allowModelLoadingScreen) {
-    return null;
-  }
-
-  // Early return if user is not authenticated (prevents flash on logout)
-  if (!user) {
-    return null;
-  }
-
   // Conditional rendering for "no models" screen
-  // This shows if loading is complete AND there are no models AND no error (genuine no models case).
   if (!isLoadingUserModels && !userModelsError && (!userModels || userModels.length === 0)) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[calc(100vh-200px)] sm:min-h-[60vh] p-4 text-center">
@@ -955,8 +920,8 @@ function CreatePageContent() {
                   style={{
                     animationDelay: `${index * 100}ms`,
                     animationFillMode: 'both',
-                    borderColor: 'rgba(255, 255, 255, 0.9)', // Explicit white border override
-                    outline: 'none' // Remove any outline
+                    borderColor: 'rgba(255, 255, 255, 0.9)',
+                    outline: 'none'
                   }}
                 >
                   {/* Shimmer effect overlay */}
@@ -993,11 +958,17 @@ function CreatePageContent() {
     );
   }
 
+  // Conditional rendering for the initial model loading screen
+  if (isLoadingUserModels && allowModelLoadingScreen) {
+    return null;
+  }
+
+  // Early return if user is not authenticated (layout will handle this)
+  if (!user || !isMounted) {
+    return null;
+  }
+
   // Main content (PromptForm, ImageHistory)
-  // This is reached if:
-  // 1. !isLoadingUserModels && userModels.length > 0 (models loaded and exist)
-  // 2. isLoadingUserModels && !allowModelLoadingScreen (models loading in background after initial check)
-  // 3. !isLoadingUserModels && userModelsError (error loading models, but show interface anyway)
   return (
     <div className="max-w-4xl mx-auto p-4 sm:p-8 md:p-12">
       {/* Error message for model fetching */}
@@ -1011,7 +982,7 @@ function CreatePageContent() {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => fetchUserModels()}
+              onClick={() => {/* TODO: Add retry logic */}}
               disabled={isLoadingUserModels}
             >
               {isLoadingUserModels ? 'Retrying...' : 'Retry'}
@@ -1020,13 +991,14 @@ function CreatePageContent() {
         </div>
       )}
       
+      {/* Header with dynamic images */}
       <div className="mb-8 hidden sm:flex items-center justify-center space-x-4">
         <div className="flex items-center cursor-default relative">
           {/* Subtle background glow effect */}
           <div className="absolute inset-0 bg-gradient-to-r from-primary/5 via-primary/10 to-primary/5 rounded-full blur-3xl scale-150 opacity-60 animate-pulse" />
           
           { /* Loading state for header images based on selectedHeaderImages logic */ }
-          {selectedHeaderImages === DEFAULT_HEADER_IMAGES && (isLoadingHistory || (isLoadingUserModels && allowModelLoadingScreen)) ? (
+          {selectedHeaderImages === DEFAULT_HEADER_IMAGES && (isLoadingHistory || isLoadingUserModels) ? (
             <>
               <div className="relative w-8 h-8 rounded-md overflow-hidden shadow-sm border-2 border-white transform -rotate-6 mr-[-10px] animate-pulse">
                 <div className="w-full h-full bg-gradient-to-br from-gray-200 to-gray-300 animate-pulse"></div>
@@ -1084,7 +1056,7 @@ function CreatePageContent() {
       </div>
       
       {/* No credits banner - shown prominently but allows access to other features */}
-      {!has_credits && userModels && userModels.length > 0 && (
+      {!has_credits && (
         <div className="mb-6 p-6 bg-gradient-to-br from-orange-50/80 via-orange-50/60 to-background/80 dark:from-orange-900/20 dark:via-orange-900/10 dark:to-background/80 border border-orange-200/60 dark:border-orange-800/40 rounded-xl backdrop-blur-sm">
           <div className="flex flex-col sm:flex-row sm:items-center gap-4">
             <div className="flex items-start gap-3 flex-1">
@@ -1126,6 +1098,7 @@ function CreatePageContent() {
       )}
       
       <PromptForm 
+        key={user ? user.id : 'promptform-nouser'}
         pendingGenerations={pendingGenerations}
         setPendingGenerations={setPendingGenerations}
         promptValue={promptValue}
@@ -1140,7 +1113,7 @@ function CreatePageContent() {
         <ImageHistory 
           generations={generations}
           setGenerations={setGenerations}
-          isLoading={isLoadingHistory} // This is for ImageHistory's own loading state
+          isLoading={isLoadingHistory}
           error={errorHistory}
           loadGenerations={loadGenerations}
           pendingGenerations={pendingGenerations}

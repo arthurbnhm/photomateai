@@ -15,6 +15,45 @@ const TRAINING_PARAMS = {
   training_steps: 2500
 };
 
+// Helper function to check if user has enough models remaining
+async function checkModelLimits(supabase: SupabaseClient, userId: string): Promise<{ canTrain: boolean; error?: string }> {
+  try {
+    // Check user's subscription and models remaining
+    const { data: subscription, error: subError } = await supabase
+      .from('subscriptions')
+      .select('models_remaining, is_active, subscription_end_date')
+      .eq('user_id', userId)
+      .eq('is_active', true)
+      .single();
+
+    if (subError && subError.code !== 'PGRST116') { // PGRST116 = no rows found
+      console.error('Subscription check error:', subError);
+      return { canTrain: false, error: 'Unable to verify subscription status' };
+    }
+
+    if (!subscription) {
+      return { canTrain: false, error: 'No active subscription found. Please upgrade your plan to train models.' };
+    }
+
+    // Check if subscription is expired
+    const now = new Date();
+    const endDate = new Date(subscription.subscription_end_date);
+    if (now > endDate) {
+      return { canTrain: false, error: 'Your subscription has expired. Please renew to continue training models.' };
+    }
+
+    // Check models remaining
+    if (subscription.models_remaining <= 0) {
+      return { canTrain: false, error: 'No model training slots remaining. Please upgrade your plan to train more models.' };
+    }
+
+    return { canTrain: true };
+  } catch (error) {
+    console.error('Error checking model limits:', error);
+    return { canTrain: false, error: 'Unable to verify model training eligibility' };
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     // Initialize Supabase client with user session
@@ -74,6 +113,15 @@ export async function POST(request: NextRequest) {
           return NextResponse.json(
             { error: 'Missing required parameters: modelOwner, modelName, and zipUrl are required', success: false },
             { status: 400 }
+          );
+        }
+        
+        // Check model limits before training
+        const limitCheck = await checkModelLimits(supabase, user.id);
+        if (!limitCheck.canTrain) {
+          return NextResponse.json(
+            { error: limitCheck.error, success: false },
+            { status: 403 }
           );
         }
         

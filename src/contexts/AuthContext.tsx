@@ -69,12 +69,7 @@ function useAuthImplementation() {
         if (cachedData) {
           setCredits(cachedData);
           setCreditsLoading(false);
-          
-          // If cache is not stale, use it and return
-          if (!SimpleCache.isStale(SimpleCache.KEYS.CREDITS)) {
-            return;
-          }
-          // If stale, continue to fetch fresh data in background
+          return;
         }
       }
 
@@ -140,16 +135,51 @@ function useAuthImplementation() {
         setUser(newUser)
         setIsLoading(false)
         
-        // Clear auth-related cache when user changes
-        if (event === 'SIGNED_OUT') {
+        // Handle auth errors and token refresh issues
+        if (event === 'TOKEN_REFRESHED') {
+          console.log('Token refreshed successfully')
+        } else if (event === 'SIGNED_OUT') {
           SimpleCache.clear();
           setCredits(null);
+          console.log('User signed out')
         } else if (newUser && event === 'SIGNED_IN') {
-          // Fetch credits data for newly signed in user
-          setTimeout(() => fetchCreditsData(false), 100); // Slight delay to ensure state is set
+          // Fetch credits data for newly signed in user, respecting the cache.
+          // If it's a true new sign-in, cache would have been cleared on SIGNED_OUT.
+          // If it's a tab-focus re-validation emitting SIGNED_IN, we want to use cache.
+          setTimeout(() => fetchCreditsData(true), 100); // Changed from fetchCreditsData(false)
         }
       }
     )
+
+    // Initial session check with error handling
+    const checkInitialSession = async () => {
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession()
+        
+        if (error) {
+          console.error('Initial session check error:', error.message)
+          
+          // Handle refresh token errors
+          if (error.message.includes('refresh_token_not_found') || 
+              error.message.includes('Invalid Refresh Token')) {
+            console.log('Invalid refresh token detected, signing out...')
+            await supabase.auth.signOut()
+            SimpleCache.clear()
+            setCredits(null)
+            setUser(null)
+          }
+        } else if (session?.user) {
+          setUser(session.user)
+        }
+      } catch (error) {
+        console.error('Unexpected error during initial session check:', error)
+        setUser(null)
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    checkInitialSession()
 
     return () => {
       subscription.unsubscribe()
@@ -180,7 +210,7 @@ function useAuthImplementation() {
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible' && user) {
         // Check if cache is stale and refresh if needed
-        if (SimpleCache.isStale(SimpleCache.KEYS.CREDITS, 60 * 1000)) { // 1 minute threshold
+        if (SimpleCache.isStale(SimpleCache.KEYS.CREDITS, 5 * 60 * 1000)) { // 5 minute threshold
           fetchCreditsData();
         }
       }
@@ -202,6 +232,10 @@ function useAuthImplementation() {
     setUser(null)
     setCredits(null)
     SimpleCache.clear()
+    
+    // Delete the session cookie
+    await fetch('/api/auth/logout', { method: 'POST' })
+    
     router.refresh()
     if (!isHomePage) {
       router.push('/auth/login')

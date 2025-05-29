@@ -171,7 +171,6 @@ export default function Home() {
               <Button size="lg" className="rounded-full px-6" onClick={handleStartNow}>
                 Start Now
               </Button>
-              <Button size="lg" variant="outline" className="rounded-full px-6">Demo (soon)</Button>
             </motion.div>
           </motion.div>
           

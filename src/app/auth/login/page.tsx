@@ -32,7 +32,23 @@ export default function LoginPage() {
         return
       }
 
-      router.push("/create")
+      // Create session with subscription status
+      const sessionResponse = await fetch('/api/auth/session', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      })
+
+      if (!sessionResponse.ok) {
+        setError('Failed to create session')
+        return
+      }
+
+      const sessionData = await sessionResponse.json()
+      
+      // Redirect based on subscription status
+      router.push(sessionData.redirectTo)
       router.refresh()
     } catch (error) {
       setError("An unexpected error occurred")

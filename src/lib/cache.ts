@@ -13,7 +13,7 @@ export class SimpleCache {
   static readonly DURATIONS = {
     USER: 5 * 60 * 1000,      // 5 minutes (rarely changes)
     SUBSCRIPTION: 5 * 60 * 1000, // 5 minutes (rarely changes)
-    CREDITS: 1 * 60 * 1000,    // 1 minute (changes often)
+    CREDITS: 1 * 60 * 1000,    // 5 minutes (can change, but fetched on demand for critical ops)
     MODELS: 10 * 60 * 1000,    // 10 minutes (rarely changes)
   } as const;
 

@@ -1,4 +1,5 @@
 import { createSupabaseServerClient } from '@/lib/supabase/server'
+import { createSession } from '@/lib/session'
 import { NextResponse } from 'next/server'
 
 export async function GET(request: Request) {
@@ -17,18 +18,33 @@ export async function GET(request: Request) {
       // Check if user has an active subscription
       const { data: subscription } = await supabase
         .from('subscriptions')
-        .select('*')
+        .select('is_active, subscription_end_date')
         .eq('user_id', user.id)
         .eq('is_active', true)
         .single()
 
-      // If they have an active subscription, redirect to create page
+      // Determine subscription status
+      let subscriptionActive = false
       if (subscription) {
-        return NextResponse.redirect(new URL('/create', requestUrl.origin))
+        const now = new Date()
+        const endDate = new Date(subscription.subscription_end_date)
+        subscriptionActive = subscription.is_active && now <= endDate
       }
-      
-      // Otherwise redirect to plans page to choose a plan
-      return NextResponse.redirect(new URL('/plans', requestUrl.origin))
+
+      // Create session with subscription status
+      await createSession({
+        userId: user.id,
+        email: user.email || '',
+        subscriptionActive,
+        expiresAt: Date.now() + (7 * 24 * 60 * 60 * 1000) // 7 days
+      })
+
+      // Redirect based on subscription status
+      if (subscriptionActive) {
+        return NextResponse.redirect(new URL('/create', requestUrl.origin))
+      } else {
+        return NextResponse.redirect(new URL('/plans', requestUrl.origin))
+      }
     }
   }
 

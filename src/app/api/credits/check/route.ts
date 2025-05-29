@@ -25,7 +25,26 @@ export async function GET() {
       .eq('is_active', true)
       .single();
     
-    if (subscriptionError || !subscription) {
+    if (subscriptionError) {
+      if (subscriptionError.code === 'PGRST116') {
+        // No rows found - user has no active subscription
+        return NextResponse.json({
+          has_credits: false,
+          credits_remaining: 0,
+          models_remaining: 0,
+          plan: 'none',
+          subscription_active: false
+        });
+      } else {
+        // Other database error
+        return NextResponse.json(
+          { error: 'Database error while checking subscription' },
+          { status: 500 }
+        );
+      }
+    }
+    
+    if (!subscription) {
       return NextResponse.json({
         has_credits: false,
         credits_remaining: 0,

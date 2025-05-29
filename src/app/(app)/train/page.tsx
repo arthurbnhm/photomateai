@@ -5,6 +5,7 @@ import { TrainForm, TrainingStatus } from "@/components/TrainForm";
 import { TrainingInProgressOverlay } from "@/components/TrainingInProgressOverlay";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
+import { SimpleCache } from "@/lib/cache";
 
 const ACTIVE_TRAINING_DETAILS_KEY = 'photomate_activeTrainingDetails';
 
@@ -13,7 +14,7 @@ const ACTIVE_TRAINING_DETAILS_KEY = 'photomate_activeTrainingDetails';
 // --- End Debug Configuration ---
 
 function TrainPageContent() {
-  const { user, isLoading: isAuthLoading } = useAuth();
+  const { user, isLoading: isAuthLoading, refreshCredits } = useAuth();
   const [activeTraining, setActiveTraining] = useState<TrainingStatus | null>(null); // Initialized to null
   const [internalTrainingStatus, setInternalTrainingStatus] = useState<TrainingStatus | null>(null); // Initialized to null
 
@@ -96,6 +97,10 @@ function TrainPageContent() {
               setActiveTraining(null);
               setInternalTrainingStatus(null); 
               localStorage.removeItem(ACTIVE_TRAINING_DETAILS_KEY);
+              SimpleCache.invalidate(SimpleCache.KEYS.CREDITS);
+              if (typeof refreshCredits === 'function') {
+                refreshCredits();
+              }
               if (intervalId) clearInterval(intervalId);
             }
           }
@@ -116,7 +121,7 @@ function TrainPageContent() {
         clearInterval(intervalId);
       }
     };
-  }, [activeTraining]);
+  }, [activeTraining, refreshCredits]);
 
   useEffect(() => {
     const handleGenericTrainingStatusUpdate = (event: CustomEvent<TrainingStatus>) => {
@@ -138,6 +143,10 @@ function TrainPageContent() {
             if (isTerminal) {
                 setActiveTraining(null); // Clear active training
                 localStorage.removeItem(ACTIVE_TRAINING_DETAILS_KEY);
+                SimpleCache.invalidate(SimpleCache.KEYS.CREDITS);
+                if (typeof refreshCredits === 'function') {
+                  refreshCredits();
+                }
             }
         } else if (!activeTraining && detail && ["succeeded", "failed", "canceled"].includes(detail.status.toLowerCase())) {
             // If there's no activeTraining (e.g. page reloaded after completion)
@@ -151,7 +160,7 @@ function TrainPageContent() {
     return () => {
       window.removeEventListener('training-status-update', handleGenericTrainingStatusUpdate as EventListener);
     };
-  }, [activeTraining, internalTrainingStatus]); // Added internalTrainingStatus dependency
+  }, [activeTraining, internalTrainingStatus, refreshCredits]); // Added internalTrainingStatus dependency
 
   // Use local variable for clarity in JSX, `activeTraining` state is the source of truth
   const currentDisplayTraining = activeTraining;

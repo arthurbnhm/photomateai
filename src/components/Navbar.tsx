@@ -39,6 +39,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
 import { useState } from "react";
 import CryptoJS from 'crypto-js';
+import { SimpleCache } from '@/lib/cache';
 
 type NavbarProps = {
   /**
@@ -75,7 +76,8 @@ export function Navbar({
     signOut, 
     mounted, 
     credits, 
-    creditsLoading
+    creditsLoading,
+    refreshCredits
   } = useAuth();
   
   const { setTheme, resolvedTheme } = useTheme();
@@ -135,6 +137,19 @@ export function Navbar({
       setFeedback('');
       setSubmitting(false);
     }
+  };
+
+  // Handle dropdown open/close and refresh credits if stale
+  const handleDropdownOpenChange = (open: boolean) => {
+    if (open && user) {
+      // Refresh credits if they are stale (e.g., older than 1 minute)
+      // This provides a "fresher" view when user explicitly opens the menu,
+      // but avoids an API call if data was fetched recently.
+      if (SimpleCache.isStale(SimpleCache.KEYS.CREDITS, 60 * 1000)) { // 1 minute stale threshold
+        refreshCredits();
+      }
+    }
+    setDropdownOpen(open);
   };
 
   const handleSignOut = async () => {
@@ -337,7 +352,7 @@ export function Navbar({
                   )}
 
                   {/* User Menu Dropdown */}
-                  <DropdownMenu open={dropdownOpen} onOpenChange={setDropdownOpen}>
+                  <DropdownMenu open={dropdownOpen} onOpenChange={handleDropdownOpenChange}>
                     <DropdownMenuTrigger asChild>
                       <Button variant="ghost" className="relative h-9 w-9 rounded-full">
                         <Avatar className="h-8 w-8">
