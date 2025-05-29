@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
@@ -53,6 +53,24 @@ export function ImageReferenceShowcase() {
   const { user } = useAuth();
   const router = useRouter();
 
+  // Auto-rotation effect
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setSelectedExample(currentId => {
+        const currentIndex = examples.findIndex(ex => ex.id === currentId);
+        const nextIndex = (currentIndex + 1) % examples.length;
+        return examples[nextIndex].id;
+      });
+    }, 3000); // Switch every 3 seconds
+
+    return () => clearInterval(interval);
+  }, []);
+
+  // Handle manual selection (this will reset the auto-rotation timer)
+  const handleExampleSelect = (exampleId: string) => {
+    setSelectedExample(exampleId);
+  };
+
   // Handle navigation to app or auth
   const handleTryImageReference = () => {
     if (user) {
@@ -63,7 +81,7 @@ export function ImageReferenceShowcase() {
   };
 
   return (
-    <section className="py-12 md:py-20 px-4 bg-gradient-to-b from-background to-muted/20">
+    <section className="py-12 md:py-20 px-4 bg-gradient-to-b from-background to-muted/20 overflow-hidden">
       <div className="max-w-4xl mx-auto">
         {/* Header */}
         <div className="text-center mb-8 md:mb-12">
@@ -104,7 +122,7 @@ export function ImageReferenceShowcase() {
           {examples.map((example, index) => (
             <motion.button
               key={example.id}
-              onClick={() => setSelectedExample(example.id)}
+              onClick={() => handleExampleSelect(example.id)}
               className="relative group cursor-pointer"
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
@@ -148,34 +166,34 @@ export function ImageReferenceShowcase() {
 
         {/* Enhanced Main Demo */}
         <div className="relative">
-          {/* Background decoration */}
-          <div className="absolute inset-0 bg-gradient-to-r from-primary/5 via-transparent to-primary/5 rounded-3xl blur-3xl" />
+          {/* Background decoration - adjusted positioning */}
+          <div className="absolute inset-0 bg-gradient-to-r from-primary/5 via-transparent to-primary/5 rounded-3xl blur-3xl -z-10" />
           
           {/* Main flow container */}
-          <div className="relative bg-background/80 backdrop-blur-sm border border-border/40 rounded-2xl md:rounded-3xl p-6 md:p-8 lg:p-12 shadow-lg">
+          <div className="relative bg-background/80 backdrop-blur-sm border border-border/40 rounded-2xl md:rounded-3xl p-4 md:p-8 lg:p-12 shadow-lg overflow-hidden">
             
             {/* Process flow - horizontal on all screen sizes */}
-            <div className="flex items-center justify-center gap-4 md:gap-8 lg:gap-12">
+            <div className="flex items-center justify-center gap-2 md:gap-8 lg:gap-12">
               
               {/* Reference Image */}
               <div className="flex flex-col items-center space-y-2 md:space-y-4 flex-1">
                 <div className="relative group">
-                  <div className="absolute -inset-3 bg-gradient-to-r from-blue-500/20 to-purple-500/20 rounded-2xl blur-lg opacity-0 group-hover:opacity-100 transition-all duration-500" />
+                  <div className="absolute -inset-2 md:-inset-3 bg-gradient-to-r from-blue-500/20 to-purple-500/20 rounded-2xl blur-lg opacity-0 group-hover:opacity-100 transition-all duration-500" />
                   <AnimatePresence mode="wait">
                     <motion.div
                       key={selectedExample}
-                      initial={{ opacity: 0, scale: 0.8, rotateY: -15 }}
+                      initial={{ opacity: 0, scale: 0.9, rotateY: -5 }}
                       animate={{ opacity: 1, scale: 1, rotateY: 0 }}
-                      exit={{ opacity: 0, scale: 0.8, rotateY: 15 }}
-                      transition={{ duration: 0.6, ease: "easeOut" }}
-                      className="relative w-20 h-20 sm:w-24 sm:h-24 md:w-32 md:h-32 lg:w-40 lg:h-40 rounded-xl md:rounded-2xl overflow-hidden border-4 border-white shadow-xl md:shadow-2xl group-hover:shadow-3xl transition-all duration-500 mx-auto"
+                      exit={{ opacity: 0, scale: 0.9, rotateY: 5 }}
+                      transition={{ duration: 0.4, ease: "easeOut" }}
+                      className="relative w-16 h-16 sm:w-20 sm:h-20 md:w-32 md:h-32 lg:w-40 lg:h-40 rounded-lg md:rounded-2xl overflow-hidden border-2 md:border-4 border-white shadow-lg md:shadow-2xl group-hover:shadow-3xl transition-all duration-500 mx-auto"
                     >
                       <Image
                         src={currentExample.reference}
                         alt="Reference"
                         fill
                         className="object-cover transition-transform duration-700 group-hover:scale-110"
-                        sizes="(max-width: 640px) 80px, (max-width: 768px) 96px, (max-width: 1024px) 128px, 160px"
+                        sizes="(max-width: 640px) 64px, (max-width: 768px) 80px, (max-width: 1024px) 128px, 160px"
                       />
                       <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent" />
                     </motion.div>
@@ -190,8 +208,8 @@ export function ImageReferenceShowcase() {
               {/* Plus symbol */}
               <div className="flex items-center justify-center">
                 <div className="relative">
-                  <div className="w-8 h-8 md:w-12 md:h-12 bg-gradient-to-r from-primary to-primary/80 rounded-full flex items-center justify-center shadow-lg">
-                    <span className="text-white font-bold text-sm md:text-xl">+</span>
+                  <div className="w-6 h-6 md:w-12 md:h-12 bg-gradient-to-r from-primary to-primary/80 rounded-full flex items-center justify-center shadow-lg">
+                    <span className="text-white font-bold text-xs md:text-xl">+</span>
                   </div>
                   <div className="absolute inset-0 bg-primary/30 rounded-full blur-md animate-pulse" />
                 </div>
@@ -200,14 +218,14 @@ export function ImageReferenceShowcase() {
               {/* Your Model */}
               <div className="flex flex-col items-center space-y-2 md:space-y-4 flex-1">
                 <div className="relative group">
-                  <div className="absolute -inset-3 bg-gradient-to-r from-green-500/20 to-emerald-500/20 rounded-2xl blur-lg opacity-0 group-hover:opacity-100 transition-all duration-500" />
-                  <div className="relative w-20 h-20 sm:w-24 sm:h-24 md:w-32 md:h-32 lg:w-40 lg:h-40 rounded-xl md:rounded-2xl overflow-hidden border-4 border-white shadow-xl md:shadow-2xl group-hover:shadow-3xl transition-all duration-500 mx-auto">
+                  <div className="absolute -inset-2 md:-inset-3 bg-gradient-to-r from-green-500/20 to-emerald-500/20 rounded-2xl blur-lg opacity-0 group-hover:opacity-100 transition-all duration-500" />
+                  <div className="relative w-16 h-16 sm:w-20 sm:h-20 md:w-32 md:h-32 lg:w-40 lg:h-40 rounded-lg md:rounded-2xl overflow-hidden border-2 md:border-4 border-white shadow-lg md:shadow-2xl group-hover:shadow-3xl transition-all duration-500 mx-auto">
                     <Image
                       src={modelImage}
                       alt="Your model"
                       fill
                       className="object-cover transition-transform duration-700 group-hover:scale-110"
-                      sizes="(max-width: 640px) 80px, (max-width: 768px) 96px, (max-width: 1024px) 128px, 160px"
+                      sizes="(max-width: 640px) 64px, (max-width: 768px) 80px, (max-width: 1024px) 128px, 160px"
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent" />
                   </div>
@@ -221,8 +239,8 @@ export function ImageReferenceShowcase() {
               {/* Equals symbol */}
               <div className="flex items-center justify-center">
                 <div className="relative">
-                  <div className="w-8 h-8 md:w-12 md:h-12 bg-gradient-to-r from-primary to-primary/80 rounded-full flex items-center justify-center shadow-lg">
-                    <span className="text-white font-bold text-sm md:text-xl">=</span>
+                  <div className="w-6 h-6 md:w-12 md:h-12 bg-gradient-to-r from-primary to-primary/80 rounded-full flex items-center justify-center shadow-lg">
+                    <span className="text-white font-bold text-xs md:text-xl">=</span>
                   </div>
                   <div className="absolute inset-0 bg-primary/30 rounded-full blur-md animate-pulse" />
                 </div>
@@ -231,29 +249,29 @@ export function ImageReferenceShowcase() {
               {/* Result */}
               <div className="flex flex-col items-center space-y-2 md:space-y-4 flex-1">
                 <div className="relative group">
-                  <div className="absolute -inset-4 bg-gradient-to-r from-orange-500/20 via-yellow-500/20 to-orange-500/20 rounded-3xl blur-xl opacity-0 group-hover:opacity-100 transition-all duration-700" />
+                  <div className="absolute -inset-2 md:-inset-4 bg-gradient-to-r from-orange-500/20 via-yellow-500/20 to-orange-500/20 rounded-3xl blur-xl opacity-0 group-hover:opacity-100 transition-all duration-700" />
                   <div className="relative">
                     <AnimatePresence mode="wait">
                       <motion.div
                         key={selectedExample}
-                        initial={{ opacity: 0, scale: 0.8, rotateY: 15 }}
+                        initial={{ opacity: 0, scale: 0.9, rotateY: 5 }}
                         animate={{ opacity: 1, scale: 1, rotateY: 0 }}
-                        exit={{ opacity: 0, scale: 0.8, rotateY: -15 }}
-                        transition={{ duration: 0.6, ease: "easeOut" }}
-                        className="relative w-20 h-20 sm:w-24 sm:h-24 md:w-32 md:h-32 lg:w-40 lg:h-40 rounded-xl md:rounded-2xl overflow-hidden border-4 border-white shadow-xl md:shadow-2xl group-hover:shadow-3xl transition-all duration-500 mx-auto"
+                        exit={{ opacity: 0, scale: 0.9, rotateY: -5 }}
+                        transition={{ duration: 0.4, ease: "easeOut" }}
+                        className="relative w-16 h-16 sm:w-20 sm:h-20 md:w-32 md:h-32 lg:w-40 lg:h-40 rounded-lg md:rounded-2xl overflow-hidden border-2 md:border-4 border-white shadow-lg md:shadow-2xl group-hover:shadow-3xl transition-all duration-500 mx-auto"
                       >
                         <Image
                           src={currentExample.result}
                           alt="AI result"
                           fill
                           className="object-cover transition-transform duration-700 group-hover:scale-105"
-                          sizes="(max-width: 640px) 80px, (max-width: 768px) 96px, (max-width: 1024px) 128px, 160px"
+                          sizes="(max-width: 640px) 64px, (max-width: 768px) 80px, (max-width: 1024px) 128px, 160px"
                         />
                         <div className="absolute inset-0 bg-gradient-to-t from-black/10 via-transparent to-transparent" />
                         
                         {/* Magic sparkle effect */}
-                        <div className="absolute top-1 right-1 md:top-2 md:right-2 w-4 h-4 md:w-6 md:h-6 bg-primary/90 rounded-full flex items-center justify-center">
-                          <Sparkles className="w-2 h-2 md:w-3 md:h-3 text-white" />
+                        <div className="absolute top-1 right-1 md:top-2 md:right-2 w-3 h-3 md:w-6 md:h-6 bg-primary/90 rounded-full flex items-center justify-center">
+                          <Sparkles className="w-1.5 h-1.5 md:w-3 md:h-3 text-white" />
                         </div>
                       </motion.div>
                     </AnimatePresence>
