@@ -265,17 +265,23 @@ export async function POST(request: NextRequest) {
       console.warn("Prompt was empty after OpenAI step (image provided, but no description and no original prompt). Using a generic prompt for Replicate.");
     }
 
-    // Append gender to the prompt if available
+    // PREPEND gender and model attributes to the prompt
+    const prefixParts: string[] = [];
+
     if (modelGender && (modelGender === 'male' || modelGender === 'female')) {
-      const genderText = modelGender === 'male' ? ', the subject is a male' : ', the subject is a female';
-      prompt = prompt.trim() + genderText;
+      const genderText = modelGender === 'male' ? 'A male subject' : 'A female subject';
+      prefixParts.push(genderText);
     }
 
-    // Append model attributes to the prompt if available
     if (modelAttributes && modelAttributes.length > 0) {
-      // Create a more natural description of the attributes
       const attributesText = modelAttributes.join(', ');
-      prompt = prompt.trim() + `, with the following characteristics: ${attributesText}`;
+      prefixParts.push(`with the following characteristics: ${attributesText}`);
+    }
+
+    if (prefixParts.length > 0) {
+      prompt = prefixParts.join(', ') + ".\n\n" + prompt.trim();
+    } else {
+      prompt = prompt.trim(); // Ensure prompt is trimmed if no prefix is added
     }
 
     // Define a type for the Replicate input parameters
