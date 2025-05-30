@@ -1043,8 +1043,6 @@ export default function EditImagePage() {
                       await downloadImageMobileNative({
                         blob,
                         filename,
-                        title: 'PhotomateAI Edited Image',
-                        text: 'Check out this AI-edited image!',
                         showToasts: false // Don't show toasts since this is in a header
                       })
                     } catch (err) {

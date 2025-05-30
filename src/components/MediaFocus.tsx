@@ -307,9 +307,7 @@ export function MediaFocus({
 
       await downloadImageMobileNative({
         blob,
-        filename,
-        title: 'PhotomateAI Image',
-        text: 'Check out this AI-generated image!'
+        filename
       })
 
     } catch (error) {
