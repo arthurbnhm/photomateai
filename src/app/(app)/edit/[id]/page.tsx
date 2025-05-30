@@ -130,8 +130,8 @@ export default function EditImagePage() {
       originalMeta.setAttribute('content', 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no')
     }
     
-    // Lock body scroll and prevent touch actions
-    document.body.style.touchAction = 'none'
+    // Allow vertical scroll, prevent text selection
+    document.body.style.touchAction = 'pan-y'
     document.body.style.userSelect = 'none'
     document.body.style.webkitUserSelect = 'none'
     
@@ -178,21 +178,16 @@ export default function EditImagePage() {
     style.id = 'edit-page-zoom-prevention'
     style.textContent = `
       body.edit-page-open {
-        touch-action: none !important;
-        -webkit-touch-action: none !important;
-        -ms-touch-action: none !important;
-        overscroll-behavior: none !important;
+        touch-action: pan-y !important; /* Allow vertical scrolling */
+        overscroll-behavior: none !important; /* Prevent pull-to-refresh etc. */
       }
-      body.edit-page-open * {
-        touch-action: none !important;
-        -webkit-touch-action: none !important;
-        -ms-touch-action: none !important;
-      }
+      /* The 'body.edit-page-open *' rule that set touch-action: none has been removed 
+         to avoid overly restricting child elements. */
       body.edit-page-open input,
       body.edit-page-open textarea,
       body.edit-page-open select {
-        font-size: 16px !important;
-        touch-action: manipulation !important;
+        font-size: 16px !important; /* Prevent auto-zoom on focus on iOS */
+        touch-action: manipulation !important; /* Allow default touch interactions like scrolling within textareas */
       }
     `
     document.head.appendChild(style)
