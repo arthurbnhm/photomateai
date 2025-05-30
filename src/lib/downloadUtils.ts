@@ -9,7 +9,7 @@ export interface DownloadImageOptions {
 /**
  * Downloads an image with the right approach for each platform:
  * - Desktop: Save as file download
- * - Mobile: Save to photo gallery
+ * - Mobile: Save to photo gallery via Web Share API or fallback
  */
 export async function downloadImageMobileNative({
   blob,
@@ -29,25 +29,62 @@ export async function downloadImageMobileNative({
             lastModified: Date.now()
           })
           
+          // Check if we can share files specifically
           const shareData = { files: [imageFile] }
           
           if (navigator.canShare(shareData)) {
             await navigator.share(shareData)
             if (showToasts) {
-              toast.success('Image ready to save! Choose "Save to Photos" from the share menu.')
+              toast.success('Image shared! Choose "Save to Photos" from the share menu.')
             }
             return true
+          } else {
+            // canShare returned false for files, try with just the blob URL
+            const imageUrl = URL.createObjectURL(blob)
+            const shareDataWithUrl = { 
+              title: 'PhotomateAI Image',
+              text: 'Check out this AI-generated image!',
+              url: imageUrl 
+            }
+            
+            if (navigator.canShare(shareDataWithUrl)) {
+              await navigator.share(shareDataWithUrl)
+              URL.revokeObjectURL(imageUrl) // Clean up
+              if (showToasts) {
+                toast.success('Image shared! You can save it from the shared link.')
+              }
+              return true
+            }
           }
         } catch (shareError) {
           console.log('Share API failed:', shareError)
+          // Continue to fallback
         }
       }
       
-      // Mobile fallback: Show error message
-      if (showToasts) {
-        toast.error('Unable to save to photo gallery. Please try using a different browser or update your device.')
+      // Mobile fallback: Create a download link and show instructions
+      try {
+        const downloadUrl = URL.createObjectURL(blob)
+        const link = document.createElement('a')
+        link.href = downloadUrl
+        link.download = finalFilename
+        link.style.display = 'none'
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+        URL.revokeObjectURL(downloadUrl)
+
+        if (showToasts) {
+          toast.success('Image downloaded! Check your Downloads folder, then save to Photos.')
+        }
+        return true
+      } catch (downloadError) {
+        console.error('Download fallback failed:', downloadError)
+        if (showToasts) {
+          toast.error('Unable to save image. Please try using a different browser or update your device.')
+        }
+        return false
       }
-      return false
     } else {
       // Desktop: Traditional file download
       const downloadUrl = URL.createObjectURL(blob)
