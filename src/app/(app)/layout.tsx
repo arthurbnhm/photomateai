@@ -3,8 +3,6 @@
 import { useAuth } from '@/contexts/AuthContext'
 import { Navbar } from "@/components/Navbar";
 import { usePathname } from 'next/navigation';
-import { AuthProvider } from '@/contexts/AuthContext'
-import { ConnectionProvider } from '@/contexts/ConnectionContext'
 import { BrevoChat } from '@/components/BrevoChat'
 import { Toaster } from '@/components/ui/sonner'
 
@@ -43,17 +41,13 @@ export default function AppLayout({
 
   // Middleware handles all subscription checks, so just render children
   return (
-    <AuthProvider>
-      <ConnectionProvider>
-        <>
-          {!isEditPage && <Navbar />}
-          <main className="flex-1">
-            {children}
-          </main>
-        </>
-        <Toaster />
-        <BrevoChat forceHide={isEditPage} />
-      </ConnectionProvider>
-    </AuthProvider>
+    <>
+      {!isEditPage && <Navbar />}
+      <main className="flex-1">
+        {children}
+      </main>
+      <Toaster />
+      <BrevoChat forceHide={isEditPage} />
+    </>
   )
 } 

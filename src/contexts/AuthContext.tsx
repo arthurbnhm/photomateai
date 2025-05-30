@@ -1,6 +1,6 @@
 "use client"
 
-import React, { createContext, useContext, ReactNode, useState, useEffect, useCallback } from 'react'
+import React, { createContext, useContext, ReactNode, useState, useEffect, useCallback, useRef } from 'react'
 import { User } from '@supabase/supabase-js'
 import { AuthResponse, OAuthResponse } from '@supabase/supabase-js'
 import { useRouter, usePathname } from 'next/navigation'
@@ -53,13 +53,15 @@ function useAuthImplementation() {
   const [mounted, setMounted] = useState(false)
   const [credits, setCredits] = useState<CreditsData | null>(null)
   const [creditsLoading, setCreditsLoading] = useState(false)
+  const isFetchingCreditsRef = useRef(false)
   const supabase = createSupabaseBrowserClient()
   const isHomePage = pathname === '/'
 
   // Fetch credits data with caching
   const fetchCreditsData = useCallback(async (useCache: boolean = true) => {
-    if (!user?.id) return;
+    if (!user?.id || isFetchingCreditsRef.current) return;
 
+    isFetchingCreditsRef.current = true;
     setCreditsLoading(true);
     
     try {
@@ -69,6 +71,7 @@ function useAuthImplementation() {
         if (cachedData) {
           setCredits(cachedData);
           setCreditsLoading(false);
+          isFetchingCreditsRef.current = false; 
           return;
         }
       }
@@ -112,8 +115,9 @@ function useAuthImplementation() {
       });
     } finally {
       setCreditsLoading(false);
+      isFetchingCreditsRef.current = false;
     }
-  }, [user?.id]);
+  }, [user?.id, setCredits, setCreditsLoading]);
 
   // Manual refresh function
   const refreshCredits = useCallback(async () => {
@@ -159,10 +163,8 @@ function useAuthImplementation() {
           setCredits(null);
           console.log('User signed out')
         } else if (newUser && event === 'SIGNED_IN') {
-          // Fetch credits data for newly signed in user, respecting the cache.
-          // If it's a true new sign-in, cache would have been cleared on SIGNED_OUT.
-          // If it's a tab-focus re-validation emitting SIGNED_IN, we want to use cache.
-          setTimeout(() => fetchCreditsData(true), 100); // Changed from fetchCreditsData(false)
+          // Credits will be fetched by the dedicated useEffect if they are null.
+          console.log('User SIGNED_IN event received.');
         }
       }
     )
@@ -202,14 +204,15 @@ function useAuthImplementation() {
     }
   }, [supabase, fetchCreditsData])
 
-  // Fetch credits data when user is available and mounted
+  // Fetch credits data when user is available and mounted, and credits are not yet loaded
   useEffect(() => {
-    if (mounted && user && !isLoading) {
-      // Fetch credits data for authenticated users, including on homepage
-      // (needed for "Go to App" button)
+    if (mounted && user && !isLoading && credits === null) {
+      // Fetch credits data for authenticated users if credits are not already loaded.
+      // This will use the cache by default.
+      console.log('Attempting initial credits fetch.');
       fetchCreditsData();
     }
-  }, [mounted, user, isLoading, fetchCreditsData]);
+  }, [mounted, user, isLoading, credits, fetchCreditsData]);
 
   // Listen for events that should refresh credits
   useEffect(() => {
