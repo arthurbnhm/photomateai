@@ -308,7 +308,7 @@ export async function POST(request: NextRequest) {
       output_format: outputFormat || "webp", // Provide default if undefined
       guidance_scale: 3,
       output_quality: 100,
-      prompt_strength: 0.9, // Default prompt_strength
+      prompt_strength: 0.88,
       extra_lora_scale: 1,
       num_inference_steps: 28,
       disable_safety_checker: true
@@ -371,7 +371,6 @@ export async function POST(request: NextRequest) {
         }
         
         inputParams.image = imageBuffer;
-        inputParams.prompt_strength = 0.8;
         delete inputParams.aspect_ratio;
         
         console.log('✅ Image processing completed successfully');
