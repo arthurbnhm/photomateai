@@ -22,7 +22,11 @@ declare global {
   }
 }
 
-export function BrevoChat() {
+export interface BrevoChatProps {
+  forceHide?: boolean;
+}
+
+export function BrevoChat({ forceHide }: BrevoChatProps) {
   const { user, credits, isAuthenticated } = useAuth()
   const { isConnected } = useConnection()
 
@@ -56,7 +60,7 @@ export function BrevoChat() {
   // Hide/show chat widget based on connection
   useEffect(() => {
     if (typeof window !== 'undefined' && window.BrevoConversations) {
-      if (isConnected) {
+      if (isConnected && !forceHide) {
         // Show the chat widget
         window.BrevoConversations('show')
       } else {
@@ -64,10 +68,10 @@ export function BrevoChat() {
         window.BrevoConversations('hide')
       }
     }
-  }, [isConnected])
+  }, [isConnected, forceHide])
 
-  // Don't render scripts if not connected
-  if (!isConnected) {
+  // Don't render scripts if not connected or if forceHide is true
+  if (!isConnected || forceHide) {
     return null
   }
 

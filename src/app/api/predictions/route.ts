@@ -1,6 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 
+interface EditData {
+  id: string;
+  replicate_id: string;
+  prompt: string;
+  storage_urls: string[] | null;
+  status: string;
+  created_at: string;
+  source_image_url: string;
+  error?: string | null;
+  source_prediction_id?: string;
+}
+
 export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
@@ -9,7 +21,10 @@ export async function GET(request: NextRequest) {
     const isDeleted = searchParams.get('is_deleted') === 'true';
     const isCancelled = searchParams.get('is_cancelled');
     const hasLikedImages = searchParams.get('has_liked_images') === 'true';
+    const isEditParam = searchParams.get('is_edit');
+    const isEdit = isEditParam === 'true' ? true : isEditParam === 'false' ? false : null;
     const replicateId = searchParams.get('replicate_id');
+    const includeEdits = searchParams.get('include_edits') === 'true';
 
     // Calculate offset for pagination
     const offset = (page - 1) * limit;
@@ -58,9 +73,36 @@ export async function GET(request: NextRequest) {
         );
       }
 
+      // If includeEdits is true, fetch edits for the single prediction
+      const predictionWithEdits = singlePrediction ? { ...singlePrediction, edits: [] as EditData[] } : null;
+      if (includeEdits && singlePrediction && predictionWithEdits) {
+        const { data: edits, error: editsError } = await supabase
+          .from('predictions')
+          .select(`
+            id,
+            replicate_id,
+            prompt,
+            storage_urls,
+            status,
+            created_at,
+            source_image_url,
+            error
+          `)
+          .eq('source_prediction_id', singlePrediction.id)
+          .eq('is_edit', true)
+          .order('created_at', { ascending: false });
+
+        if (editsError) {
+          console.error('Error fetching edits for single prediction:', editsError);
+          // Decide if you want to return an error or just the prediction without edits
+        } else {
+          predictionWithEdits.edits = edits || [];
+        }
+      }
+
       return NextResponse.json({
         success: true,
-        predictions: singlePrediction ? [singlePrediction] : [],
+        predictions: predictionWithEdits ? [predictionWithEdits] : [],
         pagination: {
           page: 1,
           limit: 1,
@@ -88,6 +130,10 @@ export async function GET(request: NextRequest) {
 
     if (hasLikedImages) {
       countQuery = countQuery.not('liked_images', 'is', null);
+    }
+
+    if (isEdit !== null) {
+      countQuery = countQuery.eq('is_edit', isEdit);
     }
 
     const { count, error: countError } = await countQuery;
@@ -125,6 +171,11 @@ export async function GET(request: NextRequest) {
       completedQuery = completedQuery.not('liked_images', 'is', null);
     }
 
+    // Filter for edit predictions
+    if (isEdit !== null) {
+      completedQuery = completedQuery.eq('is_edit', isEdit);
+    }
+
     const { data: completedPredictions, error: predictionsError } = await completedQuery;
 
     if (predictionsError) {
@@ -135,11 +186,44 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    let processedPredictions = completedPredictions || [];
+
+    if (includeEdits && processedPredictions.length > 0) {
+      const predictionIds = processedPredictions.map(p => p.id);
+      
+      const { data: allEdits, error: allEditsError } = await supabase
+        .from('predictions')
+        .select(`
+          id,
+          replicate_id,
+          prompt,
+          storage_urls,
+          status,
+          created_at,
+          source_image_url,
+          error,
+          source_prediction_id 
+        `)
+        .in('source_prediction_id', predictionIds)
+        .eq('is_edit', true)
+        .order('created_at', { ascending: false });
+
+      if (allEditsError) {
+        console.error('Error fetching all edits:', allEditsError);
+        // Proceed with predictions without edits if fetching edits fails
+      } else if (allEdits) {
+        processedPredictions = processedPredictions.map(prediction => {
+          const editsForPrediction: EditData[] = allEdits.filter(edit => edit.source_prediction_id === prediction.id);
+          return { ...prediction, edits: editsForPrediction };
+        });
+      }
+    }
+
     const totalPages = Math.ceil((count || 0) / limit);
 
     return NextResponse.json({
       success: true,
-      predictions: completedPredictions || [],
+      predictions: processedPredictions,
       pagination: {
         page,
         limit,

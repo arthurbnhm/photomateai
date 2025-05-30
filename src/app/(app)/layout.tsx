@@ -2,6 +2,11 @@
 
 import { useAuth } from '@/contexts/AuthContext'
 import { Navbar } from "@/components/Navbar";
+import { usePathname } from 'next/navigation';
+import { AuthProvider } from '@/contexts/AuthContext'
+import { ConnectionProvider } from '@/contexts/ConnectionContext'
+import { BrevoChat } from '@/components/BrevoChat'
+import { Toaster } from '@/components/ui/sonner'
 
 export default function AppLayout({
   children,
@@ -9,12 +14,16 @@ export default function AppLayout({
   children: React.ReactNode
 }) {
   const { user, isLoading: authLoading } = useAuth()
+  const pathname = usePathname();
+
+  // Determine if the current path is the edit page
+  const isEditPage = pathname?.includes('/edit/');
 
   // Show loading while auth is loading
   if (authLoading) {
     return (
       <>
-        <Navbar />
+        {!isEditPage && <Navbar />}
         <main className="flex-1">
           <div className="flex items-center justify-center min-h-[50vh]">
             <div className="flex flex-col items-center space-y-4">
@@ -34,11 +43,17 @@ export default function AppLayout({
 
   // Middleware handles all subscription checks, so just render children
   return (
-    <>
-      <Navbar />
-      <main className="flex-1">
-        {children}
-      </main>
-    </>
+    <AuthProvider>
+      <ConnectionProvider>
+        <>
+          {!isEditPage && <Navbar />}
+          <main className="flex-1">
+            {children}
+          </main>
+        </>
+        <Toaster />
+        <BrevoChat forceHide={isEditPage} />
+      </ConnectionProvider>
+    </AuthProvider>
   )
 } 

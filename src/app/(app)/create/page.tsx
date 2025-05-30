@@ -18,6 +18,7 @@ type PendingGeneration = {
   startTime?: string
   format?: string
   modelDisplayName?: string
+  is_edit?: boolean
 }
 
 // Define the type for image generation (moved from ImageHistory)
@@ -30,6 +31,20 @@ type ImageGeneration = {
   aspectRatio: string
   format?: string
   modelDisplayName?: string
+  is_edit?: boolean
+  edits?: EditData[]
+}
+
+// Define type for edit data
+type EditData = {
+  id: string
+  replicate_id: string
+  prompt: string
+  storage_urls: string[] | null
+  status: string
+  created_at: string
+  source_image_url: string
+  error?: string | null
 }
 
 // Define a type for image with status (moved from ImageHistory)
@@ -55,6 +70,7 @@ type PredictionData = {
   completed_at: string | null
   is_deleted: boolean
   is_cancelled: boolean
+  is_edit?: boolean
   format?: string
   input?: {
     output_format?: string
@@ -63,6 +79,7 @@ type PredictionData = {
   models?: {
     display_name: string
   } | null
+  edits?: EditData[]
 }
 
 // Define the Model interface (similar to PromptForm)
@@ -443,7 +460,8 @@ function CreatePageContent() {
           aspectRatio: item.aspect_ratio || '1:1',
           startTime: item.created_at,
           format: item.format || item.input?.output_format || 'webp',
-          modelDisplayName: item.models?.display_name || 'Unknown Model'
+          modelDisplayName: item.models?.display_name || 'Unknown Model',
+          is_edit: item.is_edit,
         }));
         setPendingGenerations(pendingGens);
       } else {
@@ -496,7 +514,9 @@ function CreatePageContent() {
           images: processOutput(item.storage_urls, item.liked_images),
           aspectRatio: item.aspect_ratio,
           format: item.format || item.input?.output_format || 'webp',
-          modelDisplayName: modelDisplayName
+          modelDisplayName: modelDisplayName,
+          is_edit: item.is_edit,
+          edits: item.edits || [] // Include cached edits data
         };
       });
 
@@ -525,7 +545,7 @@ function CreatePageContent() {
     const timeoutId = setTimeout(() => abortController.abort(), 10000);
 
     try {
-      const response = await fetch(`/api/predictions?is_deleted=false&limit=${itemsPerPage}&page=${page}`, {
+      const response = await fetch(`/api/predictions?is_deleted=false&is_edit=false&limit=${itemsPerPage}&page=${page}&include_edits=true`, {
         signal: abortController.signal
       });
       
@@ -542,7 +562,7 @@ function CreatePageContent() {
       }
       
       if (predictions && pagination) {
-        // Cache the completed predictions
+        // Cache the completed predictions with their edits
         setCachedData(page, predictions, pagination, false);
 
         // Update pagination state
@@ -560,7 +580,9 @@ function CreatePageContent() {
             images: processOutput(item.storage_urls, item.liked_images),
             aspectRatio: item.aspect_ratio,
             format: item.format || item.input?.output_format || 'webp',
-            modelDisplayName: modelDisplayName
+            modelDisplayName: modelDisplayName,
+            is_edit: item.is_edit,
+            edits: item.edits || [] // Include fetched edits data
           };
         });
         
@@ -601,7 +623,6 @@ function CreatePageContent() {
       return;
     }
     processingCompletedPredictions.current.add(replicateId);
-    let pendingRefreshed = false;
 
     try {
       // Step 1: Invalidate the cache for page 1 to ensure consistency
@@ -634,7 +655,7 @@ function CreatePageContent() {
       while (retryCount <= maxRetries && !predictionFound) {
         try {
           // Make API call to get fresh page 1 data
-          const response = await fetch(`/api/predictions?is_deleted=false&limit=${itemsPerPage}&page=1`);
+          const response = await fetch(`/api/predictions?is_deleted=false&is_edit=false&limit=${itemsPerPage}&page=1`);
           
           if (!response.ok) {
             throw new Error(`API call failed: ${response.status} ${response.statusText}`);
@@ -663,7 +684,8 @@ function CreatePageContent() {
                   images: processOutput(item.storage_urls, item.liked_images),
                   aspectRatio: item.aspect_ratio,
                   format: item.format || item.input?.output_format || 'webp',
-                  modelDisplayName: modelDisplayName
+                  modelDisplayName: modelDisplayName,
+                  is_edit: item.is_edit
                 };
               });
               
@@ -672,7 +694,6 @@ function CreatePageContent() {
 
               // Successfully updated completed predictions, now refresh pending list
               await fetchPendingPredictions();
-              pendingRefreshed = true;
               
             } else if (retryCount < maxRetries) {
               retryCount++;
@@ -701,14 +722,10 @@ function CreatePageContent() {
       isFetchingPredictions.current = false; // Reset flag before calling
       await fetchCompletedPredictions(1, false);
     } finally {
-      if (!pendingRefreshed) {
-        // Ensure pending list is refreshed if not done in the success path
-        await fetchPendingPredictions();
-      }
       // Remove from processing set
       processingCompletedPredictions.current.delete(replicateId);
     }
-  }, [setPredictionsCache, getCacheKey, itemsPerPage, setCachedData, processOutput, setHasNextPage, setCurrentPage, setGenerations, isFetchingPredictions, fetchPendingPredictions]);
+  }, [setPredictionsCache, getCacheKey, itemsPerPage, setCachedData, processOutput, setGenerations, fetchPendingPredictions]);
 
   // UPDATED: Combined function that calls both separate functions
   const fetchAllPredictions = useCallback(async (silentUpdate: boolean = false, page: number = currentPage, append: boolean = false) => {

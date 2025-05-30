@@ -9,7 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Badge } from "@/components/ui/badge"
 import { createSupabaseBrowserClient } from "@/lib/supabase/client"
 import { MediaFocus } from "@/components/MediaFocus"
-import { AlertTriangle, MoreHorizontal, Copy, Trash2, Camera } from 'lucide-react';
+import { AlertTriangle, MoreHorizontal, Copy, Trash2, Camera, Sparkles } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -17,6 +17,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { PostgrestError } from '@supabase/supabase-js';
+import { useRouter } from 'next/navigation';
 
 // Define the type for image generation (now passed as prop)
 export type ImageGeneration = {
@@ -28,6 +29,20 @@ export type ImageGeneration = {
   aspectRatio: string
   format?: string
   modelDisplayName?: string
+  is_edit?: boolean
+  edits?: EditData[]
+}
+
+// Define type for edit data
+export type EditData = {
+  id: string
+  replicate_id: string
+  prompt: string
+  storage_urls: string[] | null
+  status: string
+  created_at: string
+  source_image_url: string
+  error?: string | null
 }
 
 // Define the type for pending generations (already passed as prop)
@@ -39,6 +54,7 @@ export type PendingGeneration = {
   startTime?: string
   format?: string
   modelDisplayName?: string
+  is_edit?: boolean
 }
 
 // Define a type for image with status (now passed as prop)
@@ -151,6 +167,8 @@ export function ImageHistory({
     currentGeneration: null,
     currentImageIndex: 0
   })
+
+  const router = useRouter();
 
   // Function to play success sound
   const playSuccessSound = useCallback(() => {
@@ -802,11 +820,15 @@ export function ImageHistory({
     
     // Then, add pending generations only if they don't exist as completed ones
     pendingGenerations.forEach(pending => {
+      if (pending.is_edit) {
+        return; // Don't add pending edits to the history display
+      }
+
       const existingGeneration = generationsMap.get(pending.id);
       
       if (!existingGeneration) {
         // This is a truly new pending generation
-        const virtualGeneration: ImageGeneration & { isPending?: boolean } = {
+        const virtualGeneration: ImageGeneration & { isPending?: boolean, is_edit?: boolean } = {
           id: pending.id,
           replicate_id: pending.replicate_id || '',
           prompt: pending.prompt,
@@ -815,7 +837,8 @@ export function ImageHistory({
           aspectRatio: pending.aspectRatio,
           format: pending.format,
           modelDisplayName: pending.modelDisplayName,
-          isPending: true
+          isPending: true,
+          is_edit: pending.is_edit
         };
         generationsMap.set(pending.id, virtualGeneration);
       } else if (existingGeneration.images.length === 0) {
@@ -867,7 +890,7 @@ export function ImageHistory({
           })
         }}
       />
-      
+
       {isLoading && generations.length === 0 && pendingGenerations.length === 0 ? (
         // Show skeleton loaders only when initially loading and no data at all
         <div className="space-y-8">
@@ -925,9 +948,14 @@ export function ImageHistory({
                             {generation.format.toUpperCase()}
                           </Badge>
                         )}
-                        {generation.modelDisplayName && (
+                        {generation.modelDisplayName && !generation.is_edit && (
                           <Badge variant="outline" className="!bg-purple-200 !text-purple-800 hover:!bg-purple-300 !border-purple-300 max-w-[150px] truncate dark:bg-purple-900/30 dark:text-purple-300 dark:hover:bg-purple-900/40 dark:border-purple-800/30">
                             {generation.modelDisplayName}
+                          </Badge>
+                        )}
+                        {generation.is_edit && (
+                          <Badge variant="outline" className="!bg-indigo-200 !text-indigo-800 hover:!bg-indigo-300 !border-indigo-300 max-w-[150px] truncate dark:bg-indigo-900/30 dark:text-indigo-300 dark:hover:bg-indigo-900/40 dark:border-indigo-800/30">
+                            Magic Edit
                           </Badge>
                         )}
                       </div>
@@ -1133,7 +1161,48 @@ export function ImageHistory({
                                 <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
                               </svg>
                             </button>
-                            
+
+                            {/* Edit Icon - Bottom Right */}
+                            <button
+                              className="absolute bottom-2 right-2 z-20 p-2 transition-all duration-300 group-hover:scale-110 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 rounded-lg backdrop-blur-sm shadow-lg hover:shadow-xl border bg-black/20 hover:bg-black/40 border-white/20 hover:border-white/40"
+                              onClick={(e) => {
+                                e.stopPropagation(); // Prevent opening the viewer
+                                
+                                const sessionStorageKey = `edit_data_${generation.id}`;
+                                let existingEdits: EditData[] = [];
+
+                                try {
+                                  const existingCachedString = sessionStorage.getItem(sessionStorageKey);
+                                  if (existingCachedString) {
+                                    const existingCachedData = JSON.parse(existingCachedString);
+                                    if (existingCachedData && Array.isArray(existingCachedData.edits)) {
+                                      existingEdits = existingCachedData.edits;
+                                    }
+                                  }
+                                } catch (err) {
+                                  console.warn("Error reading existing edit data from sessionStorage:", err);
+                                }
+                                
+                                const editDataToStore = {
+                                  id: generation.id,
+                                  prompt: generation.prompt,
+                                  storage_urls: generation.images.map(img => img.url),
+                                  selectedImageUrl: image.url,
+                                  selectedImageIndex: index,
+                                  // Use existing edits from sessionStorage if available and non-empty,
+                                  // otherwise use edits known to this generation object.
+                                  edits: existingEdits.length > 0 ? existingEdits : (generation.edits || []),
+                                };
+                                sessionStorage.setItem(sessionStorageKey, JSON.stringify(editDataToStore));
+                                
+                                router.push(`/edit/${generation.id}?source_image_index=${index}`);
+                              }}
+                              aria-label="Magic Edit this image"
+                              title="Magic Edit this image with AI"
+                            >
+                              <Sparkles className="h-3.5 w-3.5 text-white hover:text-purple-300 transition-colors duration-300" />
+                            </button>
+
                             {image.isExpired ? (
                               <div className="w-full h-full flex items-center justify-center bg-muted/30">
                                 <p className="text-sm text-muted-foreground">Image unavailable</p>

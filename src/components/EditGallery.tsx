@@ -6,29 +6,32 @@ import { Button } from "@/components/ui/button"
 import { Toaster } from "@/components/ui/sonner"
 import { Skeleton } from "@/components/ui/skeleton"
 import { MediaFocus } from "@/components/MediaFocus"
-import { AlertTriangle, Heart } from 'lucide-react'
+import { AlertTriangle, Sparkles } from 'lucide-react'
 import { useAuth } from "@/contexts/AuthContext"
 
-// Define the type for image generation with liked images
-export type FavoriteImageGeneration = {
+// Define the type for edit image generation with edited images
+export type EditImageGeneration = {
   id: string
   replicate_id: string
   prompt: string
   timestamp: string
-  likedImages: FavoriteImage[]
-  images: FavoriteImage[]
+  editedImages: EditImage[]
+  images: EditImage[]
   aspectRatio: string
   format?: string
   modelDisplayName?: string
+  sourceImageUrl?: string
+  sourcePredictionId?: string
 }
 
-// Define a type for favorite image
-export type FavoriteImage = {
+// Define a type for edit image
+export type EditImage = {
   url: string
   isExpired: boolean
   loadError?: boolean
   isLiked?: boolean
   generationId?: string // Add generation ID for proper tracking
+  editPrompt?: string // Store the edit prompt for this image
 }
 
 // Define a type for prediction data from Supabase
@@ -46,26 +49,26 @@ type PredictionData = {
   completed_at: string | null
   is_deleted: boolean
   is_cancelled: boolean
+  is_edit: boolean
+  source_image_url?: string
+  source_prediction_id?: string
   format?: string
   input?: {
     output_format?: string
   }
-  model_id: string
-  models?: {
-    display_name: string
-  } | null
+  model_id: string | null
 }
 
 // Define the type for image viewing
 type ImageViewerState = {
   isOpen: boolean
-  currentGeneration: FavoriteImageGeneration | null
+  currentGeneration: EditImageGeneration | null
   currentImageIndex: number
-  allFavoriteImages: FavoriteImage[]
+  allEditedImages: EditImage[]
 }
 
-export function FavoritesHistory() {
-  const [favoriteGenerations, setFavoriteGenerations] = useState<FavoriteImageGeneration[]>([])
+export function EditGallery() {
+  const [editGenerations, setEditGenerations] = useState<EditImageGeneration[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [isMounted, setIsMounted] = useState(false)
@@ -76,7 +79,7 @@ export function FavoritesHistory() {
     isOpen: false,
     currentGeneration: null,
     currentImageIndex: 0,
-    allFavoriteImages: []
+    allEditedImages: []
   })
 
   useEffect(() => {
@@ -97,26 +100,25 @@ export function FavoritesHistory() {
     }
   }, [imageViewer.isOpen])
 
-  // Process favorite images from prediction data
-  const processFavoriteImages = (storageUrls: string[] | null, likedImages: string[] | null): FavoriteImage[] => {
-    if (!storageUrls || !likedImages || !Array.isArray(storageUrls) || !Array.isArray(likedImages)) {
+  // Process edit images from prediction data
+  const processEditImages = (storageUrls: string[] | null, likedImages: string[] | null, editPrompt: string): EditImage[] => {
+    if (!storageUrls || !Array.isArray(storageUrls)) {
       return []
     }
     
-    // Only return images that are in the liked images array
-    return storageUrls
-      .filter(url => likedImages.includes(url))
-      .map(url => ({
-        url,
-        isExpired: false
-      }))
+    return storageUrls.map(url => ({
+      url,
+      isExpired: false,
+      isLiked: likedImages?.includes(url) || false,
+      editPrompt: editPrompt
+    }))
   }
 
-  // Fetch favorite images from Supabase
-  const loadFavoriteGenerations = useCallback(async (silentUpdate: boolean = false) => {
+  // Fetch edit images from Supabase
+  const loadEditGenerations = useCallback(async (silentUpdate: boolean = false) => {
     if (!user) {
       setIsLoading(false)
-      setFavoriteGenerations([])
+      setEditGenerations([])
       return
     }
 
@@ -129,59 +131,60 @@ export function FavoritesHistory() {
     }
 
     try {
-      const response = await fetch('/api/predictions?is_deleted=false&status=succeeded&has_liked_images=true&is_edit=false&limit=50', {
+      const response = await fetch('/api/predictions?is_deleted=false&status=succeeded&is_edit=true&limit=50', {
         signal: abortController.signal
       });
       
       clearTimeout(timeoutId);
       
       if (!response.ok) {
-        throw new Error(`Failed to fetch predictions: ${response.status} ${response.statusText}`);
+        throw new Error(`Failed to fetch edit predictions: ${response.status} ${response.statusText}`);
       }
       
       const { success, predictions, error: apiError } = await response.json();
       
       if (!success) {
-        throw new Error(apiError || 'Failed to fetch predictions');
+        throw new Error(apiError || 'Failed to fetch edit predictions');
       }
       
       if (predictions) {
-        const processedData: FavoriteImageGeneration[] = predictions
+        const processedData: EditImageGeneration[] = predictions
           .filter((item: PredictionData) => {
-            const likedImages = processFavoriteImages(item.storage_urls, item.liked_images || null)
-            return likedImages.length > 0 // Only include generations that actually have liked images
+            const editImages = processEditImages(item.storage_urls, item.liked_images || null, item.prompt)
+            return editImages.length > 0 // Only include edits that have images
           })
           .map((item: PredictionData) => {
-            const likedImages = processFavoriteImages(item.storage_urls, item.liked_images || null)
-            const modelDisplayName = item.models?.display_name || 'Default Model'
+            const editImages = processEditImages(item.storage_urls, item.liked_images || null, item.prompt)
             return {
               id: item.id,
               replicate_id: item.replicate_id,
               prompt: item.prompt,
               timestamp: item.created_at,
-              likedImages: likedImages,
-              images: likedImages,
+              editedImages: editImages,
+              images: editImages,
               aspectRatio: item.aspect_ratio,
               format: item.format || item.input?.output_format || 'webp',
-              modelDisplayName: modelDisplayName
+              modelDisplayName: 'flux-kontext-pro', // Edit model is always flux-kontext-pro
+              sourceImageUrl: item.source_image_url,
+              sourcePredictionId: item.source_prediction_id
             }
           })
         
-        setFavoriteGenerations(processedData)
+        setEditGenerations(processedData)
       }
       
     } catch (fetchError: unknown) { 
       clearTimeout(timeoutId)
-      console.error("Error fetching favorite generations:", fetchError)
+      console.error("Error fetching edit generations:", fetchError)
 
       if (fetchError instanceof Error) {
         if (fetchError.name === 'AbortError') {
-          console.warn('Fetch favorites aborted due to timeout')
+          console.warn('Fetch edits aborted due to timeout')
         } else {
-          setError(`Failed to load favorites: ${fetchError.message}`)
+          setError(`Failed to load edits: ${fetchError.message}`)
         }
       } else {
-        setError('An unknown error occurred while loading favorites.')
+        setError('An unknown error occurred while loading edits.')
       }
     } finally {
       if (!silentUpdate) {
@@ -193,24 +196,32 @@ export function FavoritesHistory() {
   // Initial data load
   useEffect(() => {
     if (isMounted) {
-      loadFavoriteGenerations(false)
+      loadEditGenerations(false)
     }
-  }, [isMounted, loadFavoriteGenerations])
+  }, [isMounted, loadEditGenerations])
 
-  // Remove from favorites
-  const removeFavorite = async (generationId: string, imageUrl: string) => {
+  // Toggle favorite status
+  const toggleImageFavorite = async (generationId: string, imageUrl: string, currentLikedStatus: boolean) => {
     try {
-      // Optimistic update - remove the image from local state
-      setFavoriteGenerations(prevGens =>
+      const newLikedStatus = !currentLikedStatus;
+      
+      // Optimistic update
+      setEditGenerations(prevGens =>
         prevGens.map(gen => {
           if (gen.id !== generationId) {
-            return gen
+            return gen;
           }
           
-          const newLikedImages = gen.likedImages.filter(img => img.url !== imageUrl)
-          return { ...gen, likedImages: newLikedImages }
-        }).filter(gen => gen.likedImages.length > 0) // Remove generations with no liked images
-      )
+          const newEditedImages = gen.editedImages.map(img => {
+            if (img.url === imageUrl) {
+              return { ...img, isLiked: newLikedStatus };
+            }
+            return img;
+          });
+          
+          return { ...gen, editedImages: newEditedImages, images: newEditedImages };
+        })
+      );
 
       // API call
       const response = await fetch('/api/favorite', {
@@ -221,34 +232,45 @@ export function FavoritesHistory() {
         body: JSON.stringify({
           predictionId: generationId,
           imageUrl: imageUrl,
-          isLiked: false,
+          isLiked: newLikedStatus,
         }),
-      })
+      });
 
       if (!response.ok) {
-        throw new Error('Failed to remove from favorites')
+        throw new Error('Failed to update favorite status')
       }
 
-      // toast.success('Removed from favorites')
-
     } catch (error) {
-      console.error('Error removing favorite:', error)
+      console.error('Error toggling favorite:', error)
       
-      // Reload data to restore correct state
-      loadFavoriteGenerations(true)
-      
-      // toast.error('Failed to remove from favorites')
+      // Revert optimistic update on error
+      setEditGenerations(prevGens =>
+        prevGens.map(gen => {
+          if (gen.id !== generationId) {
+            return gen;
+          }
+          
+          const newEditedImages = gen.editedImages.map(img => {
+            if (img.url === imageUrl) {
+              return { ...img, isLiked: currentLikedStatus };
+            }
+            return img;
+          });
+          
+          return { ...gen, editedImages: newEditedImages, images: newEditedImages };
+        })
+      );
     }
-  }
+  };
 
   const handleImageError = (generationId: string, imageIndex: number) => {
-    setFavoriteGenerations(prevGens =>
+    setEditGenerations(prevGens =>
       prevGens.map(gen => {
         if (gen.id !== generationId) {
           return gen
         }
 
-        const newLikedImages = gen.likedImages.map((img, idx) => {
+        const newEditedImages = gen.editedImages.map((img, idx) => {
           if (idx !== imageIndex) {
             return img
           }
@@ -268,36 +290,35 @@ export function FavoritesHistory() {
           return { ...img, loadError: true }
         })
 
-        return { ...gen, likedImages: newLikedImages }
+        return { ...gen, editedImages: newEditedImages, images: newEditedImages }
       })
     )
   }
 
-  const openImageViewer = (generation: FavoriteImageGeneration, imageIndex: number) => {
-    // Create a flattened array of all favorite images with isLiked: true and generation ID
-    const allFavoriteImages = favoriteGenerations.flatMap(gen => 
-      gen.likedImages.map(img => ({
+  const openImageViewer = (generation: EditImageGeneration, imageIndex: number) => {
+    // Create a flattened array of all edited images with generation ID and edit prompt
+    const allEditedImages = editGenerations.flatMap(gen => 
+      gen.editedImages.map(img => ({
         ...img,
-        isLiked: true, // Ensure all favorite images are marked as liked
         generationId: gen.id // Add generation ID so MediaFocus knows which generation this image belongs to
       }))
     )
     
     // Calculate the correct index in the flattened array
     let flattenedIndex = 0
-    for (const gen of favoriteGenerations) {
+    for (const gen of editGenerations) {
       if (gen.id === generation.id) {
         flattenedIndex += imageIndex
         break
       }
-      flattenedIndex += gen.likedImages.length
+      flattenedIndex += gen.editedImages.length
     }
     
     setImageViewer({
       isOpen: true,
       currentGeneration: generation,
       currentImageIndex: flattenedIndex,
-      allFavoriteImages: allFavoriteImages
+      allEditedImages: allEditedImages
     })
   }
 
@@ -319,53 +340,52 @@ export function FavoritesHistory() {
         currentImageIndex={imageViewer.currentImageIndex}
         onClose={closeImageViewer}
         onNavigate={handleNavigate}
-        allImages={imageViewer.allFavoriteImages}
+        allImages={imageViewer.allEditedImages}
         onUpdateGeneration={(updatedGeneration) => {
-          // Convert ImageGeneration to FavoriteImageGeneration and update state
-          setFavoriteGenerations(prevGens =>
+          // Convert ImageGeneration to EditImageGeneration and update state
+          setEditGenerations(prevGens =>
             prevGens.map(gen => {
               if (gen.id === updatedGeneration.id) {
-                // Create a new FavoriteImageGeneration with updated images
-                const updatedFavoriteGen: FavoriteImageGeneration = {
+                // Create a new EditImageGeneration with updated images
+                const updatedEditGen: EditImageGeneration = {
                   ...gen,
                   images: updatedGeneration.images,
-                  likedImages: updatedGeneration.images.filter(img => img.isLiked) as FavoriteImage[]
+                  editedImages: updatedGeneration.images as EditImage[]
                 }
-                return updatedFavoriteGen
+                return updatedEditGen
               }
               return gen
-            }).filter(gen => gen.likedImages.length > 0) // Remove generations with no liked images
+            })
           )
           
           // Also update the imageViewer if this is the currently viewed generation
           setImageViewer(prev => {
             if (prev.currentGeneration?.id === updatedGeneration.id) {
-              // Convert to FavoriteImageGeneration for the viewer
-              const updatedFavoriteGen: FavoriteImageGeneration = {
+              // Convert to EditImageGeneration for the viewer
+              const updatedEditGen: EditImageGeneration = {
                 ...prev.currentGeneration,
                 images: updatedGeneration.images,
-                likedImages: updatedGeneration.images.filter(img => img.isLiked) as FavoriteImage[]
+                editedImages: updatedGeneration.images as EditImage[]
               }
               
-              // Also update the allFavoriteImages array
-              const updatedAllFavorites = favoriteGenerations.flatMap(gen => 
+              // Also update the allEditedImages array
+              const updatedAllEdited = editGenerations.flatMap(gen => 
                 gen.id === updatedGeneration.id 
-                  ? updatedGeneration.images.filter(img => img.isLiked).map(img => ({
+                  ? updatedGeneration.images.map(img => ({
                       ...img,
-                      isLiked: true, // Ensure all favorite images are marked as liked
-                      generationId: gen.id // Add generation ID
-                    })) as FavoriteImage[]
-                  : gen.likedImages.map(img => ({
+                      generationId: gen.id, // Add generation ID
+                      editPrompt: gen.prompt // Add edit prompt
+                    })) as EditImage[]
+                  : gen.editedImages.map(img => ({
                       ...img,
-                      isLiked: true, // Ensure all favorite images are marked as liked
                       generationId: gen.id // Add generation ID
                     }))
               )
               
               return {
                 ...prev,
-                currentGeneration: updatedFavoriteGen,
-                allFavoriteImages: updatedAllFavorites
+                currentGeneration: updatedEditGen,
+                allEditedImages: updatedAllEdited
               }
             }
             return prev
@@ -373,24 +393,24 @@ export function FavoritesHistory() {
         }}
       />
       
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-red-50 via-pink-50 to-rose-50 dark:from-red-950/20 dark:via-pink-950/20 dark:to-rose-950/20 border border-red-100 dark:border-red-900/20 p-8 mb-8">
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-purple-50 via-indigo-50 to-violet-50 dark:from-purple-950/20 dark:via-indigo-950/20 dark:to-violet-950/20 border border-purple-100 dark:border-purple-900/20 p-8 mb-8">
         {/* Background decoration */}
-        <div className="absolute inset-0 bg-gradient-to-br from-red-500/5 via-pink-500/5 to-rose-500/5"></div>
-        <div className="absolute -top-4 -right-4 w-24 h-24 bg-gradient-to-br from-red-500/10 to-pink-500/10 rounded-full blur-xl"></div>
-        <div className="absolute -bottom-4 -left-4 w-32 h-32 bg-gradient-to-br from-pink-500/10 to-rose-500/10 rounded-full blur-xl"></div>
+        <div className="absolute inset-0 bg-gradient-to-br from-purple-500/5 via-indigo-500/5 to-violet-500/5"></div>
+        <div className="absolute -top-4 -right-4 w-24 h-24 bg-gradient-to-br from-purple-500/10 to-indigo-500/10 rounded-full blur-xl"></div>
+        <div className="absolute -bottom-4 -left-4 w-32 h-32 bg-gradient-to-br from-indigo-500/10 to-violet-500/10 rounded-full blur-xl"></div>
         
         {/* Content */}
         <div className="relative z-10">
           <div className="flex items-center gap-4 mb-3">
-            <div className="p-3 rounded-xl bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm shadow-lg border border-red-200/50 dark:border-red-800/50">
-              <Heart className="h-8 w-8 text-red-500 fill-current" />
+            <div className="p-3 rounded-xl bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm shadow-lg border border-purple-200/50 dark:border-purple-800/50">
+              <Sparkles className="h-8 w-8 text-purple-500" />
             </div>
             <div>
-              <h1 className="text-3xl font-bold bg-gradient-to-r from-red-600 via-pink-600 to-rose-600 bg-clip-text text-transparent">
-                Your Favorite Images
+              <h1 className="text-3xl font-bold bg-gradient-to-r from-purple-600 via-indigo-600 to-violet-600 bg-clip-text text-transparent">
+                Your AI Edits
               </h1>
               <p className="text-muted-foreground mt-1">
-                Your curated collection of beloved AI-generated artwork
+                Your collection of AI-transformed and enhanced images
               </p>
             </div>
           </div>
@@ -419,22 +439,22 @@ export function FavoritesHistory() {
       ) : error ? (
         <div className="bg-destructive/10 border border-destructive/30 rounded-lg p-4">
           <p className="text-destructive">{error}</p>
-          <Button onClick={() => loadFavoriteGenerations(false)} variant="link" className="mt-2">Try again</Button>
+          <Button onClick={() => loadEditGenerations(false)} variant="link" className="mt-2">Try again</Button>
         </div>
-      ) : favoriteGenerations.length === 0 ? (
+      ) : editGenerations.length === 0 ? (
         <div className="bg-muted/50 border border-border rounded-lg p-6 text-center">
-          <Heart className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-          <p className="text-muted-foreground">No favorite images yet.</p>
+          <Sparkles className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+          <p className="text-muted-foreground">No edited images yet.</p>
           <p className="text-sm text-muted-foreground/80 mt-2">
-            Click the heart icon on any image to add it to your favorites!
+            Start creating AI edits to see them here!
           </p>
         </div>
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-          {favoriteGenerations.flatMap((generation) =>
-            generation.likedImages.map((image, index) => (
+          {editGenerations.flatMap((generation) =>
+            generation.editedImages.map((image, index) => (
               <div 
-                key={`${generation.id}-liked-img-${index}`}
+                key={`${generation.id}-edited-img-${index}`}
                 className="aspect-square relative overflow-hidden rounded-lg shadow-sm hover:shadow-md transition-all duration-300 group cursor-pointer"
                 onClick={() => {
                   if (!image.isExpired) { 
@@ -444,27 +464,35 @@ export function FavoritesHistory() {
               >
                 <div className="absolute inset-0 bg-gradient-to-br from-primary/10 to-primary/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-10"></div>
                 
-                {/* Remove from Favorites Button */}
+                {/* Heart Icon for Favorite */}
                 <button
-                  className={`absolute top-2 right-2 z-20 p-2 transition-all duration-300 group-hover:scale-110 rounded-lg backdrop-blur-sm shadow-lg hover:shadow-xl border bg-red-500/90 hover:bg-red-500 border-red-400/50 hover:border-red-300`}
+                  className={`absolute top-2 right-2 z-20 p-2 transition-all duration-300 group-hover:scale-110 rounded-lg backdrop-blur-sm shadow-lg hover:shadow-xl border ${
+                    image.isLiked 
+                      ? "bg-red-500/90 hover:bg-red-500 border-red-400/50 hover:border-red-300" 
+                      : "bg-black/20 hover:bg-black/40 border-white/20 hover:border-white/40"
+                  }`}
                   onClick={(e) => {
                     e.stopPropagation()
-                    removeFavorite(generation.id, image.url)
+                    toggleImageFavorite(generation.id, image.url, image.isLiked || false)
                   }}
-                  aria-label="Remove from favorites"
-                  title="Remove from favorites"
+                  aria-label={image.isLiked ? "Remove from favorites" : "Add to favorites"}
+                  title={image.isLiked ? "Remove from favorites" : "Add to favorites"}
                 >
                   <svg 
                     xmlns="http://www.w3.org/2000/svg" 
                     width="14" 
                     height="14" 
                     viewBox="0 0 24 24" 
-                    fill="currentColor" 
+                    fill={image.isLiked ? "currentColor" : "none"} 
                     stroke="currentColor" 
                     strokeWidth="2.5" 
                     strokeLinecap="round" 
                     strokeLinejoin="round" 
-                    className="text-white transition-all duration-300"
+                    className={`transition-all duration-300 ${
+                      image.isLiked 
+                        ? "text-white" 
+                        : "text-white hover:text-red-300 hover:fill-red-300/20"
+                    }`}
                   >
                     <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
                   </svg>
@@ -482,7 +510,7 @@ export function FavoritesHistory() {
                 ) : (
                   <Image 
                     src={image.url} 
-                    alt={`Favorite image ${index + 1} for "${generation.prompt}"`}
+                    alt={`AI Edit: ${image.editPrompt || 'Edited image'}`}
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300 animate-fade-in"
                     fill
                     sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"

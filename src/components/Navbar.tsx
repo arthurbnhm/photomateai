@@ -1,3 +1,4 @@
+
 "use client"
 
 import Link from "next/link";
@@ -415,6 +416,12 @@ export function Navbar({
                                     }`} 
                                   />
                                   Favorites
+                                </Link>
+                              </DropdownMenuItem>
+                              <DropdownMenuItem asChild>
+                                <Link href="/edit" className="w-full">
+                                  <Sparkles className="mr-2 h-4 w-4" />
+                                  Edit
                                 </Link>
                               </DropdownMenuItem>
                               

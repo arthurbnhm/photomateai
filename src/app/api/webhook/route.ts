@@ -191,11 +191,11 @@ export async function POST(request: Request) {
     // Parse the webhook data
     const webhookData = JSON.parse(bodyText);
     
-    // 🚨 TEMPORARY: Log ALL webhook payloads for debugging
-    console.log('='.repeat(80));
-    console.log(`🔔 WEBHOOK RECEIVED - ID: ${webhookData.id}, Status: ${webhookData.status}`);
-    console.log('📦 Full Payload:', JSON.stringify(webhookData, null, 2));
-    console.log('='.repeat(80));
+    // 🚨 TEMPORARY: Log ALL webhook payloads for debugging - REMOVE THIS BLOCK
+    // console.log('='.repeat(80));
+    // console.log(`🔔 WEBHOOK RECEIVED - ID: ${webhookData.id}, Status: ${webhookData.status}`);
+    // console.log('📦 Full Payload:', JSON.stringify(webhookData, null, 2));
+    // console.log('='.repeat(80));
 
     // For webhook handling, we need to use the service role key
     // This is one of the few legitimate cases where we need admin access
@@ -248,26 +248,26 @@ export async function POST(request: Request) {
 
     // If found in trainings table, handle as a training webhook
     if (training) {
-      // Add comprehensive logging for debugging the new trainer's payload
-      console.log(`🔍 Training webhook received for training ID: ${replicate_id}`);
-      console.log(`📋 Webhook status: ${webhookData.status}`);
-      console.log(`📄 Full webhook payload:`, JSON.stringify(webhookData, null, 2));
-      console.log(`🎯 Webhook output:`, JSON.stringify(webhookData.output, null, 2));
-      console.log(`⏱️ Webhook metrics:`, JSON.stringify(webhookData.metrics, null, 2));
+      // Add comprehensive logging for debugging the new trainer's payload - REMOVE/REDUCE THESE LOGS
+      // console.log(`🔍 Training webhook received for training ID: ${replicate_id}`); 
+      // console.log(`📋 Webhook status: ${webhookData.status}`); 
+      // console.log(`📄 Full webhook payload:`, JSON.stringify(webhookData, null, 2)); 
+      // console.log(`🎯 Webhook output:`, JSON.stringify(webhookData.output, null, 2)); 
+      // console.log(`⏱️ Webhook metrics:`, JSON.stringify(webhookData.metrics, null, 2)); 
       
       // Extract timing information from webhook payload
       const startedAt = webhookData.started_at || null;
       const completedAt = webhookData.completed_at || null;
       const predictTime = webhookData.metrics?.predict_time || null;
       
-      console.log(`⏰ Timing info - started_at: ${startedAt}, completed_at: ${completedAt}, predict_time: ${predictTime}`);
+      // console.log(`⏰ Timing info - started_at: ${startedAt}, completed_at: ${completedAt}, predict_time: ${predictTime}`); 
       
       // Calculate cost based on predict time (if available)
       // Cost rate is $0.0122 per second for training
       const costPerSecond = 0.0122;
       const cost = predictTime ? predictTime * costPerSecond : null;
       
-      console.log(`💰 Calculated cost: ${cost}`);
+      // console.log(`💰 Calculated cost: ${cost}`); 
 
       // Extract the newly created model version identifier from the webhook.
       // For fast-flux-trainer, check multiple possible locations
@@ -278,62 +278,62 @@ export async function POST(request: Request) {
         // Check output.version first (ostris format)
         if (webhookData.output.version && typeof webhookData.output.version === 'string') {
           rawModelVersionIdentifier = webhookData.output.version;
-          console.log(`✅ Found version in output.version: ${rawModelVersionIdentifier}`);
+          // console.log(`✅ Found version in output.version: ${rawModelVersionIdentifier}`); 
         }
         // Check if output itself is a string (might be the version for fast-flux-trainer)
         else if (typeof webhookData.output === 'string') {
           rawModelVersionIdentifier = webhookData.output;
-          console.log(`✅ Found version in output (string): ${rawModelVersionIdentifier}`);
+          // console.log(`✅ Found version in output (string): ${rawModelVersionIdentifier}`); 
         }
         // Check output.model_version (alternative field name)
         else if (webhookData.output.model_version && typeof webhookData.output.model_version === 'string') {
           rawModelVersionIdentifier = webhookData.output.model_version;
-          console.log(`✅ Found version in output.model_version: ${rawModelVersionIdentifier}`);
+          // console.log(`✅ Found version in output.model_version: ${rawModelVersionIdentifier}`); 
         }
         // Check output.destination (destination field)
         else if (webhookData.output.destination && typeof webhookData.output.destination === 'string') {
           rawModelVersionIdentifier = webhookData.output.destination;
-          console.log(`✅ Found version in output.destination: ${rawModelVersionIdentifier}`);
+          // console.log(`✅ Found version in output.destination: ${rawModelVersionIdentifier}`); 
         }
       }
       
       // Fallback to top-level version if output checks didn't work
       if (!rawModelVersionIdentifier && webhookData.version && typeof webhookData.version === 'string') {
         rawModelVersionIdentifier = webhookData.version;
-        console.log(`⚠️ Using top-level version field: ${rawModelVersionIdentifier} (might be trainer version)`);
+        // console.log(`⚠️ Using top-level version field: ${rawModelVersionIdentifier} (might be trainer version)`); 
       }
       
       // Check model field as another fallback
       if (!rawModelVersionIdentifier && webhookData.model && typeof webhookData.model === 'string') {
         rawModelVersionIdentifier = webhookData.model;
-        console.log(`⚠️ Using model field: ${rawModelVersionIdentifier}`);
+        // console.log(`⚠️ Using model field: ${rawModelVersionIdentifier}`); 
       }
       
       if (!rawModelVersionIdentifier) {
         console.error(`❌ Could not determine model version from webhook for training ${replicate_id}`);
-        console.error(`Available fields:`, Object.keys(webhookData));
-        if (webhookData.output) {
-          console.error(`Available output fields:`, Object.keys(webhookData.output));
-        }
+        console.error(`Available fields:`, Object.keys(webhookData)); 
+        // if (webhookData.output) {
+        //   console.error(`Available output fields:`, Object.keys(webhookData.output));
+        // }
       }
 
       // Parse the raw identifier to get just the version hash.
       let finalModelVersionToStore: string | null = null;
       if (rawModelVersionIdentifier) {
-        console.log(`🔄 Processing raw model version identifier: ${rawModelVersionIdentifier}`);
+        // console.log(`🔄 Processing raw model version identifier: ${rawModelVersionIdentifier}`); 
         
         const parts = rawModelVersionIdentifier.split(':');
         if (parts.length === 2) {
           finalModelVersionToStore = parts[1]; // Assumes "owner/model:hash" format
-          console.log(`✅ Extracted version hash from owner/model:hash format: ${finalModelVersionToStore}`);
+          // console.log(`✅ Extracted version hash from owner/model:hash format: ${finalModelVersionToStore}`); 
         } else if (parts.length === 1 && !rawModelVersionIdentifier.includes('/')) {
           // If it's already just a hash (no owner/model and no colon)
           finalModelVersionToStore = rawModelVersionIdentifier;
-          console.log(`✅ Using raw identifier as version hash: ${finalModelVersionToStore}`);
+          // console.log(`✅ Using raw identifier as version hash: ${finalModelVersionToStore}`); 
         } else {
           // It's an unexpected format, but store it anyway
           finalModelVersionToStore = rawModelVersionIdentifier;
-          console.warn(`⚠️ Unexpected version format, storing as-is: ${finalModelVersionToStore}`);
+          // console.warn(`⚠️ Unexpected version format, storing as-is: ${finalModelVersionToStore}`); 
         }
       }
 
@@ -354,7 +354,7 @@ export async function POST(request: Request) {
         cost: cost,
       };
 
-      console.log(`📝 About to update training record with:`, updateData);
+      // console.log(`📝 About to update training record with:`, updateData); 
 
       // Update the training record
       const { error: updateError } = await supabase
@@ -370,24 +370,24 @@ export async function POST(request: Request) {
       } else {
         console.log(`✅ Successfully updated training record for training ID: ${replicate_id}`);
         
-        // Verify the update by fetching the record again
-        const { data: verifyData, error: verifyError } = await supabase
-          .from('trainings')
-          .select('status, started_at, completed_at, predict_time, cost')
-          .eq('training_id', replicate_id)
-          .single();
+        // Verify the update by fetching the record again - REMOVE THIS BLOCK
+        // const { data: verifyData, error: verifyError } = await supabase
+        //   .from('trainings')
+        //   .select('status, started_at, completed_at, predict_time, cost')
+        //   .eq('training_id', replicate_id)
+        //   .single();
           
-        if (verifyError) {
-          console.error('❌ Error verifying training update:', verifyError);
-        } else {
-          console.log('✅ Verified training record after update:', verifyData);
-        }
+        // if (verifyError) {
+        //   console.error('❌ Error verifying training update:', verifyError);
+        // } else {
+        //   console.log('✅ Verified training record after update:', verifyData);
+        // }
       }
 
       // If training succeeded and we have a model ID and the new version,
       // update the corresponding record in the 'models' table.
       if (webhookData.status === 'succeeded' && training.model_id && finalModelVersionToStore) {
-        console.log(`🎯 Updating model ${training.model_id} with version: ${finalModelVersionToStore}`);
+        console.log(`🎯 Updating model ${training.model_id} with version: ${finalModelVersionToStore}`); 
         
         const { error: modelUpdateError } = await supabase
           .from('models')
@@ -402,33 +402,30 @@ export async function POST(request: Request) {
         } else {
           console.log(`✅ Successfully updated model ${training.model_id} to version ${finalModelVersionToStore}`);
           
-          // Verify the model update by fetching the record again
-          const { data: verifyModelData, error: verifyModelError } = await supabase
-            .from('models')
-            .select('version, user_id')
-            .eq('id', training.model_id)
-            .single();
-            
-          if (verifyModelError) {
-            console.error('❌ Error verifying model update:', verifyModelError);
-          } else {
-            console.log('✅ Verified model record after update:', verifyModelData);
+          // Verify the model update by fetching the record again - REMOVE THIS BLOCK
+          // const { data: verifyModelData, error: verifyModelError } = await supabase
+          //   .from('models')
+          //   .select('version, user_id')
+          //   .eq('id', training.model_id)
+          //   .single();
             
             // Decrement models_remaining from user's subscription
-            if (verifyModelData.user_id) {
-              console.log(`💳 Decrementing models_remaining for user: ${verifyModelData.user_id}`);
+            if (training.user_id) {
+              console.log(`💳 Decrementing models_remaining for user: ${training.user_id}`);
               
               try {
                 // Get the user's active subscription
                 const { data: subscription, error: subscriptionError } = await supabase
                   .from('subscriptions')
                   .select('models_remaining')
-                  .eq('user_id', verifyModelData.user_id)
+                  .eq('user_id', training.user_id)
                   .eq('is_active', true)
                   .single();
 
-                if (subscriptionError || !subscription) {
-                  console.error(`❌ Error fetching subscription for user ${verifyModelData.user_id}:`, subscriptionError);
+                if (subscriptionError) {
+                  console.error(`❌ Error fetching subscription for user ${training.user_id}:`, subscriptionError);
+                } else if (!subscription) {
+                  console.warn(`⚠️ No active subscription found for user ${training.user_id} to decrement models_remaining.`);
                 } else if (subscription.models_remaining > 0) {
                   // Decrement models_remaining
                   const { error: decrementError } = await supabase
@@ -437,33 +434,32 @@ export async function POST(request: Request) {
                       models_remaining: subscription.models_remaining - 1,
                       updated_at: new Date().toISOString()
                     })
-                    .eq('user_id', verifyModelData.user_id)
+                    .eq('user_id', training.user_id)
                     .eq('is_active', true);
 
                   if (decrementError) {
-                    console.error(`❌ Error decrementing models_remaining for user ${verifyModelData.user_id}:`, decrementError);
+                    console.error(`❌ Error decrementing models_remaining for user ${training.user_id}:`, decrementError);
                   } else {
-                    console.log(`✅ Successfully decremented models_remaining for user ${verifyModelData.user_id} from ${subscription.models_remaining} to ${subscription.models_remaining - 1}`);
+                    console.log(`✅ Successfully decremented models_remaining for user ${training.user_id} from ${subscription.models_remaining} to ${subscription.models_remaining - 1}`);
                   }
                 } else {
-                  console.warn(`⚠️ User ${verifyModelData.user_id} has no models_remaining to decrement (current: ${subscription.models_remaining})`);
+                  console.warn(`⚠️ User ${training.user_id} has no models_remaining to decrement (current: ${subscription.models_remaining})`);
                 }
               } catch (error) {
-                console.error(`❌ Unexpected error while decrementing models_remaining for user ${verifyModelData.user_id}:`, error);
+                console.error(`❌ Unexpected error while decrementing models_remaining for user ${training.user_id}:`, error);
               }
             } else {
-              console.error('❌ No user_id found in model record, cannot decrement models_remaining');
+              console.error('❌ No user_id found in training record, cannot decrement models_remaining'); // This should ideally not happen if training.user_id is guaranteed
             }
           }
+        } else if (webhookData.status === 'succeeded' && !finalModelVersionToStore && training.model_id) {
+          console.error(
+              `❌ Training succeeded for ${replicate_id} (model ${training.model_id}) ` +
+              `but no valid model version could be determined. Raw identifier: ${rawModelVersionIdentifier}`
+          );
+        } else if (webhookData.status === 'succeeded' && !training.model_id) {
+          console.error(`❌ Training succeeded but no model_id found in training record: ${replicate_id}`);
         }
-      } else if (webhookData.status === 'succeeded' && !finalModelVersionToStore && training.model_id) {
-        console.error(
-            `❌ Training succeeded for ${replicate_id} (model ${training.model_id}) ` +
-            `but no valid model version could be determined. Raw identifier: ${rawModelVersionIdentifier}`
-        );
-      } else if (webhookData.status === 'succeeded' && !training.model_id) {
-        console.error(`❌ Training succeeded but no model_id found in training record: ${replicate_id}`);
-      }
 
       return NextResponse.json({ success: true, type: 'training' });
     }
@@ -533,9 +529,18 @@ export async function POST(request: Request) {
         return NextResponse.json({ success: true, type: 'prediction_started' });
         
       case 'succeeded':
-        const urls = webhookData.output;
-        if (!Array.isArray(urls)) {
-          console.error('Invalid output format:', urls);
+        const output = webhookData.output;
+        
+        // Handle both array (regular generations) and string (edit generations) formats
+        let urls: string[];
+        if (Array.isArray(output)) {
+          // Regular generation with multiple images
+          urls = output;
+        } else if (typeof output === 'string') {
+          // Edit generation with single image
+          urls = [output];
+        } else {
+          console.error('Invalid output format:', output);
           return NextResponse.json({ error: 'Invalid output format' }, { status: 400 });
         }
 
@@ -544,10 +549,14 @@ export async function POST(request: Request) {
         const completedAt = webhookData.completed_at || null;
         const predictTime = webhookData.metrics?.predict_time || null;
         
-        // Calculate cost based on predict time (if available)
-        // Cost rate is $0.001525 per second
-        const costPerSecond = 0.001525;
-        const cost = predictTime ? predictTime * costPerSecond : null;
+        // Calculate cost based on prediction type
+        let costToLog;
+        if (prediction.is_edit) {
+          costToLog = 0.08; // Fixed cost for an edit
+        } else {
+          const costPerSecondForGeneration = 0.001525;
+          costToLog = predictTime ? predictTime * costPerSecondForGeneration : null;
+        }
 
         // Extract and validate userId
         const userId = prediction.user_id || 'anonymous';
@@ -646,13 +655,51 @@ export async function POST(request: Request) {
               started_at: startedAt,
               completed_at: completedAt || now.toISOString(),
               predict_time: predictTime,
-              cost: cost
+              cost: costToLog // Use the new costToLog
             })
             .eq('id', prediction.id);
 
           if (successError) {
             console.error('Error updating prediction on success:', successError);
             return NextResponse.json({ error: 'Error updating prediction' }, { status: 500 });
+          }
+          
+          // If this is an edit, update the original prediction's edited_images array
+          if (prediction.is_edit && prediction.source_prediction_id && validStorageUrls.length > 0) {
+            console.log(`🎨 This is an edit of prediction ${prediction.source_prediction_id}, updating edited_images array`);
+            
+            try {
+              // Get the current edited_images array from the original prediction
+              const { data: originalPrediction, error: fetchOriginalError } = await supabase
+                .from('predictions')
+                .select('edited_images')
+                .eq('id', prediction.source_prediction_id)
+                .single();
+                
+              if (fetchOriginalError) {
+                console.error('❌ Error fetching original prediction for edit tracking:', fetchOriginalError);
+              } else {
+                // Add the new edited image URLs to the existing array
+                const currentEditedImages = originalPrediction.edited_images || [];
+                const updatedEditedImages = [...currentEditedImages, ...validStorageUrls];
+                
+                const { error: updateOriginalError } = await supabase
+                  .from('predictions')
+                  .update({
+                    edited_images: updatedEditedImages
+                  })
+                  .eq('id', prediction.source_prediction_id);
+                  
+                if (updateOriginalError) {
+                  console.error('❌ Error updating original prediction edited_images:', updateOriginalError);
+                } else {
+                  console.log(`✅ Successfully added ${validStorageUrls.length} edited images to original prediction ${prediction.source_prediction_id}`);
+                }
+              }
+            } catch (editTrackingError) {
+              console.error('❌ Exception during edit tracking:', editTrackingError);
+              // Don't fail the entire webhook - edit tracking is not critical
+            }
           }
           
           console.log(`✅ Prediction ${replicate_id} completed successfully with all images in Supabase`);
@@ -688,26 +735,34 @@ export async function POST(request: Request) {
         const failedCompletedAt = webhookData.completed_at || null;
         const failedPredictTime = webhookData.metrics?.predict_time || null;
         
-        // Calculate cost based on predict time (if available)
-        const failedCost = failedPredictTime ? failedPredictTime * 0.001525 : null;
+        // Calculate cost based on prediction type for failed/canceled
+        let costToLogForFailure;
+        if (prediction.is_edit) {
+          costToLogForFailure = 0.08; // Fixed cost for an edit, even if failed (credit was taken)
+        } else {
+          const costPerSecondForGeneration = 0.001525;
+          costToLogForFailure = failedPredictTime ? failedPredictTime * costPerSecondForGeneration : null;
+        }
         
         // Update the prediction with status, error, and timing information
-        const { error: failedError } = await supabase
+        const { error: failedUpdateError } = await supabase
           .from('predictions')
           .update({
             status: webhookData.status,
-            error: webhookData.error,
+            error: webhookData.error || 'Prediction failed or was canceled',
             started_at: failedStartedAt,
             completed_at: failedCompletedAt || now.toISOString(),
             predict_time: failedPredictTime,
-            cost: failedCost
+            cost: costToLogForFailure // Use the new costToLogForFailure
           })
           .eq('id', prediction.id);
-
-        if (failedError) {
-          console.error(`Error updating prediction on ${webhookData.status}:`, failedError);
+  
+        if (failedUpdateError) {
+          console.error(`Error updating prediction on ${webhookData.status}:`, failedUpdateError);
           return NextResponse.json({ error: 'Error updating prediction' }, { status: 500 });
         }
+        
+        console.log(`📝 Prediction ${replicate_id} status updated to ${webhookData.status}`);
         break;
         
       default:
