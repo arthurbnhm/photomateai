@@ -12,6 +12,7 @@ import { createSupabaseBrowserClient } from "@/lib/supabase/client"
 import { useGesture } from "@use-gesture/react"
 import { useSpring, animated, config } from "@react-spring/web"
 import { Badge } from "@/components/ui/badge"
+import { downloadImageMobileNative, extractStoragePathFromUrl, getFilenameFromPath } from "@/lib/downloadUtils"
 
 interface ActiveGenerationState {
   status: 'idle' | 'processing' | 'completed' | 'failed'
@@ -1034,38 +1035,25 @@ export default function EditImagePage() {
               <Button variant="ghost" size="sm" className="items-center" onClick={async () => {
                   if(activeGenerationState.resultImageUrl && activeGenerationState.dbPredictionId && supabase) {
                     try {
-                      const imageUrl = activeGenerationState.resultImageUrl;
-                      const url = new URL(imageUrl);
-                      // Example supabase storage URL: https://<project_ref>.supabase.co/storage/v1/object/sign/images/<user_id>/<prediction_id>/0.png?token=...
-                      // We want to extract the path starting from 'images/...' which is after '/sign/' and one more segment (the bucket name itself)
-                      const pathSegments = url.pathname.split('/');
-                      const signIndex = pathSegments.findIndex(segment => segment === 'sign');
-                      
-                      if (signIndex === -1 || signIndex + 2 >= pathSegments.length) {
-                        throw new Error('Invalid storage URL format for download. Could not find /sign/images/ pattern.');
-                      }
-                      // The path inside the bucket starts after the bucket name itself (which is the segment after 'sign')
-                      const bucketRelativePath = pathSegments.slice(signIndex + 2).join('/');
-                      const filename = `edited_image_${activeGenerationState.dbPredictionId}.png`;
+                      const path = extractStoragePathFromUrl(activeGenerationState.resultImageUrl)
+                      const filename = getFilenameFromPath(path, 'edited')
 
                       const { data: blob, error } = await supabase.storage
-                        .from('images') // Assuming your bucket name is 'images'
-                        .download(bucketRelativePath);
+                        .from('images')
+                        .download(path);
 
                       if (error) throw error;
                       if (!blob) throw new Error("Image blob not found.");
 
-                      const downloadUrl = URL.createObjectURL(blob);
-                      const link = document.createElement('a');
-                      link.href = downloadUrl;
-                      link.download = filename;
-                      document.body.appendChild(link);
-                      link.click();
-                      document.body.removeChild(link);
-                      URL.revokeObjectURL(downloadUrl);
+                      await downloadImageMobileNative({
+                        blob,
+                        filename,
+                        title: 'PhotomateAI Edited Image',
+                        text: 'Check out this AI-edited image!',
+                        showToasts: false // Don't show toasts since this is in a header
+                      })
                     } catch (err) {
                       console.error("Error downloading image:", err);
-                      // Optionally, handle the error in some other way, e.g., set an error state
                     }
                   }
               }}><Download className="w-4 h-4 mr-2" />Download</Button>

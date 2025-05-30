@@ -10,6 +10,7 @@ import { X, Download, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, RotateCcw } fr
 import { createSupabaseBrowserClient } from "@/lib/supabase/client"
 import { useGesture } from "@use-gesture/react"
 import { useSpring, animated, config } from "@react-spring/web"
+import { downloadImageMobileNative, extractStoragePathFromUrl, getFilenameFromPath } from "@/lib/downloadUtils"
 
 // Define the types needed for the component
 export type ImageWithStatus = {
@@ -295,15 +296,8 @@ export function MediaFocus({
     if (!currentImage) return
     
     try {
-      const imageUrl = currentImage.url
-      const url = new URL(imageUrl)
-      const pathSegments = url.pathname.split('/')
-      const bucketIndex = pathSegments.findIndex(segment => segment === 'sign') + 2
-      if (bucketIndex >= pathSegments.length) {
-        throw new Error('Invalid storage URL format')
-      }
-      const path = pathSegments.slice(bucketIndex).join('/')
-      const filename = path.split('/').pop() || 'image'
+      const path = extractStoragePathFromUrl(currentImage.url)
+      const filename = getFilenameFromPath(path)
 
       const { data: blob, error } = await supabase.storage
         .from('images')
@@ -311,37 +305,16 @@ export function MediaFocus({
 
       if (error) throw error
 
-      // Mobile share or download
-      const isMobileDevice = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)
-      if (isMobileDevice && navigator.share && navigator.canShare) {
-        try {
-          const file = new File([blob], filename, { type: blob.type })
-          const shareData = { files: [file] }
-          
-          if (navigator.canShare(shareData)) {
-            await navigator.share(shareData)
-            toast.success('Image shared successfully')
-            return
-          }
-        } catch {
-          // Fallback to download
-        }
-      }
+      await downloadImageMobileNative({
+        blob,
+        filename,
+        title: 'PhotomateAI Image',
+        text: 'Check out this AI-generated image!'
+      })
 
-      // Regular download
-      const downloadUrl = URL.createObjectURL(blob)
-      const link = document.createElement('a')
-      link.href = downloadUrl
-      link.download = filename
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-      URL.revokeObjectURL(downloadUrl)
-
-      toast.success('Image downloaded successfully')
     } catch (error) {
       console.error('Error downloading image:', error)
-      toast.error('Failed to download image')
+      toast.error('Failed to download image. Please try again.')
     }
   }
 
