@@ -895,7 +895,6 @@ export default function EditImagePage() {
       <div className="flex flex-col h-screen">
         <header className="flex items-center justify-between p-4 lg:p-6 border-b border bg-background/80 backdrop-blur-sm sticky top-0 z-10">
            <div className="flex items-center gap-3">
-            <Button variant="ghost" size="icon" onClick={() => router.back()} className="lg:hidden rounded-lg"> <X className="w-5 h-5" /> </Button>
             <div>
               <div className="flex items-center gap-2">
                 <h1 className="text-lg lg:text-xl font-semibold text-foreground">Magic Edit</h1>
@@ -904,7 +903,7 @@ export default function EditImagePage() {
               <p className="text-xs lg:text-sm text-muted-foreground">Loading image details...</p>
             </div>
           </div>
-           <Button variant="ghost" size="icon" onClick={() => router.back()} className="hidden lg:flex rounded-lg"> <X className="w-5 h-5" /> </Button>
+           <Button variant="ghost" size="icon" onClick={() => router.back()} className="rounded-lg"> <X className="w-5 h-5" /> </Button>
         </header>
         <main className="flex-1 flex items-center justify-center"><Loader2 className="w-12 h-12 animate-spin text-primary" /></main>
       </div>
@@ -987,7 +986,6 @@ export default function EditImagePage() {
        <div className="flex flex-col h-screen">
          <header className="flex items-center justify-between p-4 lg:p-6 border-b border bg-background/80 backdrop-blur-sm sticky top-0 z-10">
            <div className="flex items-center gap-3">
-            <Button variant="ghost" size="icon" onClick={() => router.back()} className="lg:hidden rounded-lg"> <X className="w-5 h-5" /> </Button>
             <div>
               <div className="flex items-center gap-2">
                 <h1 className="text-lg lg:text-xl font-semibold text-foreground">Magic Edit</h1>
@@ -996,7 +994,7 @@ export default function EditImagePage() {
               <p className="text-xs lg:text-sm text-red-500">Error loading image</p>
             </div>
           </div>
-           <Button variant="ghost" size="icon" onClick={() => router.back()} className="hidden lg:flex rounded-lg"> <X className="w-5 h-5" /> </Button>
+           <Button variant="ghost" size="icon" onClick={() => router.back()} className="rounded-lg"> <X className="w-5 h-5" /> </Button>
         </header>
         <main className="flex-1 flex flex-col items-center justify-center p-6 text-center max-w-md mx-auto">
           <AlertCircle className="w-16 h-16 text-red-400 mb-4" />
@@ -1012,7 +1010,6 @@ export default function EditImagePage() {
     <div className="flex flex-col min-h-screen bg-background">
       <header className="flex items-center justify-between p-4 lg:p-6 border-b border bg-background/80 backdrop-blur-sm sticky top-0 z-20">
         <div className="flex items-center gap-3">
-          <Button variant="ghost" size="icon" onClick={() => router.back()} className="rounded-lg lg:hidden"><X className="w-5 h-5 text-muted-foreground" /></Button>
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-lg lg:text-xl font-semibold text-foreground">Magic Edit</h1>
@@ -1052,7 +1049,7 @@ export default function EditImagePage() {
               }}><Download className="w-4 h-4 mr-2" />Download</Button>
             </>
           )}
-           <Button variant="ghost" size="icon" onClick={() => router.back()} className="rounded-lg hidden lg:flex"><X className="w-5 h-5 text-muted-foreground" /></Button>
+           <Button variant="ghost" size="icon" onClick={() => router.back()} className="rounded-lg"><X className="w-5 h-5 text-muted-foreground" /></Button>
         </div>
       </header>
 
