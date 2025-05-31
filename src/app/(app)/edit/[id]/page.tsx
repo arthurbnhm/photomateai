@@ -1298,13 +1298,6 @@ export default function EditImagePage() {
                 minRows={3} maxRows={6} 
                 disabled={isGenerating || activeGenerationState.status === 'processing'}
               />
-              {activeGenerationState.promptUsed && (
-                <div className="text-sm text-muted-foreground mt-2">
-                  {activeGenerationState.status === 'processing' && "Attempting Edit: "}
-                  {activeGenerationState.status === 'failed' && "Last Edit Attempt: "}
-                  {activeGenerationState.promptUsed}
-                </div>
-              )}
             </div>
             <div className="mt-6 space-y-3">
               { (activeGenerationState.status === 'idle' || activeGenerationState.status === 'completed' || activeGenerationState.status === 'failed') && (
