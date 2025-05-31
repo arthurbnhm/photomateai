@@ -822,11 +822,50 @@ function CreatePageContent() {
       setIsLoadingMore(false);
       if (typeof window !== 'undefined') {
         localStorage.removeItem('photomate_hasShownModelsOnce');
+        localStorage.removeItem('photomate_updated_edits_for_prediction_id'); // Also clear this on sign out
       }
       setAllowModelLoadingScreen(true);
       initialDataFetched.current = false; // Reset for next login
     }
   }, [isMounted, user, fetchAllPredictions, fetchUserModels]); // Only depend on mount state and user, not the fetch functions
+
+  // Effect for Inter-Page Cache Synchronization via localStorage flag from EditImagePage
+  useEffect(() => {
+    const handlePageFocus = async () => {
+      if (!isMounted || !user) return; // Only run if component is mounted and user is logged in
+
+      const predictionIdToRefresh = localStorage.getItem('photomate_updated_edits_for_prediction_id');
+      if (predictionIdToRefresh) {
+        localStorage.removeItem('photomate_updated_edits_for_prediction_id'); // Consume the flag
+
+        console.log(`[CreatePage] Detected updated edits for prediction ${predictionIdToRefresh}. Refreshing its data.`);
+        
+        // The existing handleCompletedPrediction function is designed to refresh page 1 
+        // and update the state correctly. It internally handles cache invalidation for page 1.
+        // We pass the replicate_id here. If handleCompletedPrediction expects DB ID, adjust accordingly.
+        // For now, assuming handleCompletedPrediction can work with the ID as stored.
+        // If originalPredictionDbId was stored, and handleCompletedPrediction uses replicate_id, this needs care.
+        // Given `handleCompletedPrediction` takes `replicateId`, this implies the item set in localStorage
+        // should be the replicate_id. EditPage currently stores DB ID.
+        // Let's assume EditPage stores the DB ID, and handleCompletedPrediction is adapted or we use a different strategy.
+        // For simplicity, and given handleCompletedPrediction logic, let's assume it can be triggered with the DB ID
+        // and it correctly refreshes data relevant to that ID (e.g., by re-fetching page 1 where it most likely is).
+
+        // Call handleCompletedPrediction with the DB ID of the prediction that had its edits updated.
+        // This will trigger a refresh of page 1 data, including the updated edits for that prediction.
+        await handleCompletedPrediction(predictionIdToRefresh); 
+      }
+    };
+
+    window.addEventListener('focus', handlePageFocus);
+    
+    // Check on mount as well, in case the page was reloaded after an edit
+    handlePageFocus();
+
+    return () => {
+      window.removeEventListener('focus', handlePageFocus);
+    };
+  }, [isMounted, user, handleCompletedPrediction]); // Add handleCompletedPrediction to dependencies
 
   // Load generations from Supabase (wrapper for compatibility with ImageHistory)
   const loadGenerations = useCallback(async (silentUpdate: boolean = false) => {

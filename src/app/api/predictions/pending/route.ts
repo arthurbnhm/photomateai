@@ -14,7 +14,7 @@ export async function GET() {
       );
     }
 
-    // Get only pending predictions
+    // Get only pending predictions (generations and edits)
     const { data: pendingPredictions, error: predictionsError } = await supabase
       .from('predictions')
       .select(`

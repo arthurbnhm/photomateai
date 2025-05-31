@@ -1168,34 +1168,17 @@ export function ImageHistory({
                               onClick={(e) => {
                                 e.stopPropagation(); // Prevent opening the viewer
                                 
-                                const sessionStorageKey = `edit_data_${generation.id}`;
-                                let existingEdits: EditData[] = [];
-
-                                try {
-                                  const existingCachedString = sessionStorage.getItem(sessionStorageKey);
-                                  if (existingCachedString) {
-                                    const existingCachedData = JSON.parse(existingCachedString);
-                                    if (existingCachedData && Array.isArray(existingCachedData.edits)) {
-                                      existingEdits = existingCachedData.edits;
-                                    }
-                                  }
-                                } catch (err) {
-                                  console.warn("Error reading existing edit data from sessionStorage:", err);
-                                }
+                                const sessionStorageKey = `edit_session_data_${generation.id}`;
                                 
-                                const editDataToStore = {
-                                  id: generation.id,
-                                  prompt: generation.prompt,
-                                  storage_urls: generation.images.map(img => img.url),
+                                // Store the full generation object (which includes edits) and selected image info
+                                const editSessionData = {
+                                  originalPrediction: generation, // The full ImageGeneration object
                                   selectedImageUrl: image.url,
                                   selectedImageIndex: index,
-                                  // Use existing edits from sessionStorage if available and non-empty,
-                                  // otherwise use edits known to this generation object.
-                                  edits: existingEdits.length > 0 ? existingEdits : (generation.edits || []),
                                 };
-                                sessionStorage.setItem(sessionStorageKey, JSON.stringify(editDataToStore));
+                                sessionStorage.setItem(sessionStorageKey, JSON.stringify(editSessionData));
                                 
-                                router.push(`/edit/${generation.id}?source_image_index=${index}`);
+                                router.push(`/edit/${generation.id}`); // No longer need source_image_index in query
                               }}
                               aria-label="Magic Edit this image"
                               title="Magic Edit this image with AI"
